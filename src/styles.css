@@ -2379,14 +2379,14 @@ a { color: var(--c-green-500); }
   /* Admin create order — labeled card layout on mobile */
   .admin-create-table { min-width:0 !important; table-layout:auto; }
   .admin-create-table thead { display:none !important; }
-  .admin-create-table tbody { display:flex !important; flex-direction:column; gap:10px; }
-  .admin-create-table tr { position:relative; display:grid !important; grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important; grid-template-rows:auto auto auto !important; grid-template-areas:'item item' 'qty unit' 'rate total' !important; gap:10px 12px !important; padding:14px !important; background:#fff; border:1.5px solid #d1e8d9; border-radius:14px; box-shadow:0 1px 4px rgba(0,50,20,.06); overflow:visible !important; }
+  .admin-create-table tbody { display:flex !important; flex-direction:column; gap:10px; width:100% !important; }
+  .admin-create-table tr { position:relative; display:grid !important; width:100% !important; min-width:0 !important; grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important; grid-template-rows:auto auto auto !important; grid-template-areas:'item item' 'qty unit' 'rate total' !important; gap:10px 12px !important; padding:14px !important; background:#fff; border:1.5px solid #d1e8d9; border-radius:14px; box-shadow:0 1px 4px rgba(0,50,20,.06); overflow:visible !important; }
   .admin-create-table td:nth-child(1) { display:none !important; }
-  .admin-create-table td:nth-child(2) { grid-area:item !important; display:flex !important; flex-direction:column; min-width:0; padding:0 42px 0 0 !important; }
-  .admin-create-table td:nth-child(3) { grid-area:qty !important; display:flex !important; flex-direction:column; min-width:0; padding:0 !important; }
-  .admin-create-table td:nth-child(4) { grid-area:unit !important; display:flex !important; flex-direction:column; min-width:0 !important; padding:0 !important; }
-  .admin-create-table td:nth-child(5) { grid-area:rate !important; display:flex !important; flex-direction:column; min-width:0; padding:0 !important; z-index:2; }
-  .admin-create-table td:nth-child(6) { grid-area:total !important; display:flex !important; flex-direction:column; min-width:0; padding:0 !important; }
+  .admin-create-table td:nth-child(2) { grid-area:item !important; display:flex !important; flex-direction:column; width:100% !important; min-width:0 !important; padding:0 42px 0 0 !important; }
+  .admin-create-table td:nth-child(3) { grid-area:qty !important; display:flex !important; flex-direction:column; width:100% !important; min-width:0 !important; padding:0 !important; }
+  .admin-create-table td:nth-child(4) { grid-area:unit !important; display:flex !important; flex-direction:column; width:100% !important; min-width:0 !important; padding:0 !important; }
+  .admin-create-table td:nth-child(5) { grid-area:rate !important; display:flex !important; flex-direction:column; width:100% !important; min-width:0 !important; padding:0 !important; z-index:2; }
+  .admin-create-table td:nth-child(6) { grid-area:total !important; display:flex !important; flex-direction:column; width:100% !important; min-width:0 !important; padding:0 !important; }
   .admin-create-table td:nth-child(7) { position:absolute; top:12px; right:12px; z-index:4; display:grid !important; width:38px; height:38px; place-items:center; padding:0 !important; background:transparent !important; }
   /* Field labels via ::before */
   .admin-create-table td:nth-child(2)::before { content:'Item Name'; display:block; font-size:10px; font-weight:700; color:#4b7a5f; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
@@ -2396,6 +2396,7 @@ a { color: var(--c-green-500); }
   .admin-create-table td:nth-child(6)::before { content:'Total'; display:block; font-size:10px; font-weight:700; color:#4b7a5f; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
   .admin-create-table td:nth-child(2)::before, .admin-create-table td:nth-child(3)::before, .admin-create-table td:nth-child(4)::before, .admin-create-table td:nth-child(5)::before, .admin-create-table td:nth-child(6)::before { display:none; }
   /* Input sizing */
+  .admin-create-table .item-typeahead, .admin-create-table .cell-input, .admin-create-table .select-wrap, .admin-create-table .cell-select, .admin-create-table .cell-locked { width:100% !important; max-width:none !important; min-width:0 !important; box-sizing:border-box; }
   .admin-create-table .cell-input { width:100% !important; min-width:0 !important; height:44px !important; font-size:14px !important; }
   .admin-create-table td:nth-child(3), .admin-create-table td:nth-child(4), .admin-create-table td:nth-child(5), .admin-create-table td:nth-child(6) { min-height:42px; }
   .admin-create-table td:nth-child(4) .select-wrap { width:100% !important; min-width:0 !important; }
