@@ -2945,7 +2945,7 @@ function AdminCreateOrder({
                       <input className="cell-input" type="number" min="0" step="0.01" value={row.rate} onChange={e => updateRow(row.id, 'rate', e.target.value)} placeholder="Rs" aria-label={`Rate ${index + 1}`} />
                     </td>
                     <td>
-                      <div className="cell-locked">
+                      <div className="cell-locked admin-total-value">
                         <span>{lineTotal > 0 ? `Rs. ${Math.round(lineTotal).toLocaleString('en-PK')}` : '—'}</span>
                       </div>
                     </td>
