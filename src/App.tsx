@@ -322,6 +322,10 @@ type InvoicePayload = {
 const invoiceSubtotal = (items: OrderItem[]) => sumLineTotals(items)
 
 const invoiceNumber = (value: number) => Math.round(Number(value) || 0).toLocaleString('en-PK')
+const invoiceFilename = (customerName: string) => {
+  const safeName = customerName.trim().replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Customer'
+  return `${safeName}_Sales_Invoice.pdf`
+}
 
 // ── Invoice cell style constants (inline = immune to print-CSS cascade) ────────
 const INV_BASE: React.CSSProperties = {
@@ -807,9 +811,12 @@ async function drawInvoice(
   doc.setFontSize(18); doc.setFont('times','bolditalic'); doc.setTextColor(0)
   doc.text('Thank You', PW/2, rY+rH+14, {align:'center'})
 
-  // ── Save PDF ──────────────────────────────────────────────────────────
+  // Resolve the blob before triggering the browser download. This avoids
+  // Safari/Chromium races where save() can run before jsPDF has finished
+  // serialising the document.
+  const blob = doc.output('blob') as Blob
   doc.save(filename)
-  return doc.output('blob') as Blob
+  return blob
 }
 
 // ─── Notify ───────────────────────────────────────────────────────────────────
@@ -2247,7 +2254,7 @@ function AdminPage({
       setOrders(curr => curr.map(o => o.id === selected.id ? nextOrder : o))
 
       try {
-        const pdfName = `${copy[language].pdfName}-${selected.customer_name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`
+        const pdfName = invoiceFilename(selected.customer_name)
         const blob = await drawInvoice(nextOrder, items, finalTotalAmount, {
           totalAmount: finalTotalAmount,
           balance: finalBalance,
@@ -2256,15 +2263,17 @@ function AdminPage({
           remainingBalance: finalRemaining,
         }, pdfName)
         setLastPdf({ blob, name: pdfName })
-        addToast('Invoice saved and PDF downloaded successfully.', 'success')
-      } catch (invoiceErr) {
-        console.error('PDF generation error; switching to browser print:', invoiceErr)
-        setPrintPayload({
+        // Keep the existing native print workflow, but only after a successful
+        // PDF export. No fallback-warning toast is shown.
+        printInvoiceHtml(buildInvoiceHtml({
           order: nextOrder,
           items,
           financials: { totalAmount: finalTotalAmount, balance: finalBalance, totalBalance: finalTotalBalance, deposit: finalDeposit, remainingBalance: finalRemaining },
-        })
-        addToast('PDF download could not be prepared. Opening the invoice in the browser print dialog instead.', 'info')
+        }))
+        addToast('Invoice saved and PDF downloaded successfully.', 'success')
+      } catch (invoiceErr) {
+        console.error('PDF generation error:', invoiceErr)
+        addToast('The invoice could not be exported. Please try again.', 'error')
       }
     } catch (err) {
       const msg = readableError(err)
