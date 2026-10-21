@@ -815,7 +815,15 @@ async function drawInvoice(
   // Safari/Chromium races where save() can run before jsPDF has finished
   // serialising the document.
   const blob = doc.output('blob') as Blob
-  doc.save(filename)
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   return blob
 }
 
@@ -2597,7 +2605,7 @@ function AdminPage({
                                   rows={Math.max(1, (item.name.match(/\n/g) || []).length + 1)}
                                   onChange={e => updateItem(index, 'name', e.target.value)}
                                   aria-label={`${t.item} ${index + 1}`}
-                                  placeholder="Item name"
+                                  placeholder="e.g. Rice, Sugar"
                                 />
                               </div>
                             </td>
@@ -2610,6 +2618,7 @@ function AdminPage({
                                 value={item.quantity_value || ''}
                                 onChange={e => updateItem(index, 'quantity_value', e.target.value)}
                                 aria-label={`${t.quantity} ${index + 1}`}
+                                placeholder="Quantity"
                               />
                             </td>
                             <td>
@@ -2636,6 +2645,7 @@ function AdminPage({
                                 value={item.unit_price || ''}
                                 onChange={e => updateItem(index, 'unit_price', e.target.value)}
                                 aria-label={`${t.unitPrice} ${index + 1}`}
+                                placeholder="Rs"
                               />
                             </td>
                             <td>
@@ -2648,6 +2658,7 @@ function AdminPage({
                                 onChange={e => updateItem(index, 'total', e.target.value)}
                                 aria-label={`${t.lineTotal} ${index + 1}`}
                                 title={t.editTotal}
+                                placeholder="Total"
                               />
                             </td>
                             <td>
@@ -2920,7 +2931,7 @@ function AdminCreateOrder({
                       </div>
                     </td>
                     <td>
-                      <input className="cell-input" type="number" min="0" step="0.001" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} placeholder={isRtl ? 'مقدار' : 'Qty'} aria-label={`Quantity ${index + 1}`} />
+                      <input className="cell-input" type="number" min="0" step="0.001" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} placeholder={isRtl ? 'مقدار' : 'Quantity'} aria-label={`Quantity ${index + 1}`} />
                     </td>
                     <td>
                       <div className="select-wrap">
@@ -2931,7 +2942,7 @@ function AdminCreateOrder({
                       </div>
                     </td>
                     <td>
-                      <input className="cell-input" type="number" min="0" step="0.01" value={row.rate} onChange={e => updateRow(row.id, 'rate', e.target.value)} placeholder="0" aria-label={`Rate ${index + 1}`} />
+                      <input className="cell-input" type="number" min="0" step="0.01" value={row.rate} onChange={e => updateRow(row.id, 'rate', e.target.value)} placeholder="Rs" aria-label={`Rate ${index + 1}`} />
                     </td>
                     <td>
                       <div className="cell-locked">

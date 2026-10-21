@@ -2394,6 +2394,7 @@ a { color: var(--c-green-500); }
   .admin-create-table td:nth-child(4)::before { content:'Unit'; display:block; font-size:10px; font-weight:700; color:#4b7a5f; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
   .admin-create-table td:nth-child(5)::before { content:'Rate (Rs.)'; display:block; font-size:10px; font-weight:700; color:#4b7a5f; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
   .admin-create-table td:nth-child(6)::before { content:'Total'; display:block; font-size:10px; font-weight:700; color:#4b7a5f; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+  .admin-create-table td:nth-child(2)::before, .admin-create-table td:nth-child(3)::before, .admin-create-table td:nth-child(4)::before, .admin-create-table td:nth-child(5)::before, .admin-create-table td:nth-child(6)::before { display:none; }
   /* Input sizing */
   .admin-create-table .cell-input { width:100% !important; min-width:0 !important; height:44px !important; font-size:14px !important; }
   .admin-create-table td:nth-child(3), .admin-create-table td:nth-child(4), .admin-create-table td:nth-child(5), .admin-create-table td:nth-child(6) { min-height:42px; }
@@ -2413,6 +2414,7 @@ a { color: var(--c-green-500); }
   .pricing-table td:nth-child(6) { grid-area:total !important; display:block !important; min-width:0; padding:0 !important; }
   .pricing-table td:nth-child(6) .pricing-input { width:100%; max-width:none; height:44px; min-height:42px; }
   .pricing-table td:last-child { position:absolute; top:8px; right:8px; z-index:4; display:grid !important; width:44px; height:44px; padding:0 !important; }
+  .pricing-table .pricing-input::placeholder, .admin-create-table .cell-input::placeholder { color:#4b7a5f; opacity:1; }
   /* Catalog grid — two columns minimum on mobile */
   .catalog-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
