@@ -125,6 +125,22 @@ const pdfQuantityText = (value: number, unit: UnitType) => {
   return label ? `${qty} ${label}` : String(qty)
 }
 
+// Enter advances to the next item row without submitting the surrounding form.
+// Tab is intentionally left native so the DOM order remains Item -> Qty -> Unit -> Rate.
+function advanceItemRow(event: React.KeyboardEvent<HTMLElement>, addRow: () => void) {
+  if (event.key !== 'Enter') return
+  event.preventDefault()
+  const row = event.currentTarget.closest('tr')
+  const nextRow = row?.nextElementSibling
+  const focusNext = () => {
+    const target = nextRow?.querySelector<HTMLElement>('[data-item-name]')
+      || row?.parentElement?.lastElementChild?.querySelector<HTMLElement>('[data-item-name]')
+    target?.focus()
+  }
+  if (nextRow) focusNext()
+  else { addRow(); window.setTimeout(focusNext, 0) }
+}
+
 const unitRateLabel = (unit: UnitType) =>
   unit === 'PCS' ? 'Per Piece' : unit === 'LITRE' ? 'Per Litre' : unit === 'NONE' ? 'Amount' : 'Per KG'
 
@@ -1249,6 +1265,8 @@ function CustomerPage({
                       <div className="item-typeahead">
                         <input
                           className="cell-input"
+                          data-item-name
+                          onKeyDown={e => advanceItemRow(e, () => setRows(curr => [...curr, createRow()]))}
                           value={row.itemName}
                           onChange={e => updateRow(row.id, 'itemName', e.target.value)}
                           placeholder={t.itemPh}
@@ -1264,6 +1282,7 @@ function CustomerPage({
                     <td>
                       <input
                         className="cell-input"
+                        onKeyDown={e => advanceItemRow(e, () => setRows(curr => [...curr, createRow()]))}
                         type="number"
                         min="0"
                         step="0.001"
@@ -1277,6 +1296,7 @@ function CustomerPage({
                       <div className="select-wrap">
                         <select
                           className="cell-select"
+                          onKeyDown={e => advanceItemRow(e, () => setRows(curr => [...curr, createRow()]))}
                           value={row.unitType === 'NONE' ? '' : row.unitType}
                           onChange={e => updateRow(row.id, 'unitType', e.target.value || 'NONE')}
                           aria-label={`${t.unit} ${index + 1}`}
@@ -1956,6 +1976,8 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
                   <td>
                     <div className="daily-report-name-wrap">
                       <textarea
+                        data-item-name
+                        onKeyDown={e => advanceItemRow(e, addRow)}
                         value={row.expense_title}
                         rows={Math.max(1, (row.expense_title.match(/\n/g) || []).length + 1)}
                         onChange={e => updateRow(row.id, 'expense_title', e.target.value)}
@@ -1966,6 +1988,7 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
                   </td>
                   <td>
                     <input
+                        onKeyDown={e => advanceItemRow(e, addRow)}
                       type="number"
                       min="0"
                       step="1"
@@ -2601,6 +2624,8 @@ function AdminPage({
                               <div className="pricing-name-wrap">
                                 <textarea
                                   className="pricing-input pricing-input--name"
+                                  data-item-name
+                                  onKeyDown={e => advanceItemRow(e, addAdminItem)}
                                   value={item.name}
                                   rows={Math.max(1, (item.name.match(/\n/g) || []).length + 1)}
                                   onChange={e => updateItem(index, 'name', e.target.value)}
@@ -2612,6 +2637,7 @@ function AdminPage({
                             <td>
                               <input
                                 className="pricing-input pricing-input--num"
+                                onKeyDown={e => advanceItemRow(e, addAdminItem)}
                                 type="number"
                                 min="0"
                                 step="0.001"
@@ -2623,8 +2649,9 @@ function AdminPage({
                             </td>
                             <td>
                               <div className="select-wrap">
-                                <select
+                                  <select
                                   className="pricing-select"
+                                  onKeyDown={e => advanceItemRow(e, addAdminItem)}
                                   value={item.unit_type}
                                   onChange={e => updateItem(index, 'unit_type', e.target.value as UnitType)}
                                   aria-label={`${t.unit} ${index + 1}`}
@@ -2639,6 +2666,7 @@ function AdminPage({
                             <td>
                               <input
                                 className="pricing-input pricing-input--num"
+                                onKeyDown={e => advanceItemRow(e, addAdminItem)}
                                 type="number"
                                 min="0"
                                 step="0.01"
@@ -2651,6 +2679,7 @@ function AdminPage({
                             <td>
                               <input
                                 className="pricing-input pricing-input--num pricing-input--total"
+                                onKeyDown={e => advanceItemRow(e, addAdminItem)}
                                 type="number"
                                 min="0"
                                 step="0.01"
@@ -2919,6 +2948,8 @@ function AdminCreateOrder({
                       <div className="item-typeahead">
                         <input
                           className="cell-input"
+                          data-item-name
+                          onKeyDown={e => advanceItemRow(e, () => setRows(curr => [...curr, createAdminRow()]))}
                           value={row.itemName}
                           onChange={e => updateRow(row.id, 'itemName', e.target.value)}
                           placeholder={isRtl ? 'مثلاً چاول، چینی' : 'e.g. Rice, Sugar'}
@@ -2931,18 +2962,18 @@ function AdminCreateOrder({
                       </div>
                     </td>
                     <td>
-                      <input className="cell-input" type="number" min="0" step="0.001" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} placeholder={isRtl ? 'مقدار' : 'Quantity'} aria-label={`Quantity ${index + 1}`} />
+                      <input className="cell-input" type="number" min="0" step="0.001" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} onKeyDown={e => advanceItemRow(e, () => setRows(curr => [...curr, createAdminRow()]))} placeholder={isRtl ? 'مقدار' : 'Quantity'} aria-label={`Quantity ${index + 1}`} />
                     </td>
                     <td>
                       <div className="select-wrap">
-                        <select className="cell-select" value={row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value as UnitType)} aria-label={`Unit ${index + 1}`}>
+                        <select className="cell-select" value={row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value as UnitType)} onKeyDown={e => advanceItemRow(e, () => setRows(curr => [...curr, createAdminRow()]))} aria-label={`Unit ${index + 1}`}>
                           {UNIT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[language === 'ur' ? 'ur' : 'en']}</option>)}
                         </select>
                         <ChevronDown size={14} className="select-icon" />
                       </div>
                     </td>
                     <td>
-                      <input className="cell-input" type="number" min="0" step="0.01" value={row.rate} onChange={e => updateRow(row.id, 'rate', e.target.value)} placeholder="Rs" aria-label={`Rate ${index + 1}`} />
+                      <input className="cell-input" type="number" min="0" step="0.01" value={row.rate} onChange={e => updateRow(row.id, 'rate', e.target.value)} onKeyDown={e => advanceItemRow(e, () => setRows(curr => [...curr, createAdminRow()]))} placeholder="Rs" aria-label={`Rate ${index + 1}`} />
                     </td>
                     <td>
                       <div className="cell-locked admin-total-value">
