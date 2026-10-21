@@ -147,6 +147,23 @@ function autoExpandTextarea(event: React.FormEvent<HTMLTextAreaElement>) {
   textarea.style.height = `${textarea.scrollHeight}px`
 }
 
+function insertTextareaLineBreak(event: React.KeyboardEvent<HTMLTextAreaElement>, setValue: (value: string) => void) {
+  if (event.key !== 'Enter') return
+  event.preventDefault()
+  event.stopPropagation()
+  const textarea = event.currentTarget
+  const start = textarea.selectionStart ?? textarea.value.length
+  const end = textarea.selectionEnd ?? start
+  const next = `${textarea.value.slice(0, start)}\n${textarea.value.slice(end)}`
+  setValue(next)
+  window.setTimeout(() => {
+    textarea.selectionStart = start + 1
+    textarea.selectionEnd = start + 1
+    textarea.style.height = 'auto'
+    textarea.style.height = `${textarea.scrollHeight}px`
+  }, 0)
+}
+
 const unitRateLabel = (unit: UnitType) =>
   unit === 'PCS' ? 'Per Piece' : unit === 'LITRE' ? 'Per Litre' : unit === 'NONE' ? 'Amount' : 'Per KG'
 
@@ -1272,6 +1289,7 @@ function CustomerPage({
                         <textarea
                           className="cell-input item-name-field"
                           data-item-name
+                          onKeyDown={e => insertTextareaLineBreak(e, value => updateRow(row.id, 'itemName', value))}
                           onInput={autoExpandTextarea}
                           value={row.itemName}
                           onChange={e => updateRow(row.id, 'itemName', e.target.value)}
@@ -1983,6 +2001,7 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
                     <div className="daily-report-name-wrap">
                       <textarea
                         data-item-name
+                        onKeyDown={e => insertTextareaLineBreak(e, value => updateRow(row.id, 'expense_title', value))}
                         onInput={autoExpandTextarea}
                         value={row.expense_title}
                         rows={Math.max(1, (row.expense_title.match(/\n/g) || []).length + 1)}
@@ -2631,6 +2650,7 @@ function AdminPage({
                                 <textarea
                                   className="pricing-input pricing-input--name"
                                   data-item-name
+                                  onKeyDown={e => insertTextareaLineBreak(e, value => updateItem(index, 'name', value))}
                                   onInput={autoExpandTextarea}
                                   value={item.name}
                                   rows={Math.max(1, (item.name.match(/\n/g) || []).length + 1)}
@@ -2956,6 +2976,7 @@ function AdminCreateOrder({
                           className="cell-input item-name-field"
                           data-item-name
                           onInput={autoExpandTextarea}
+                          onKeyDown={e => insertTextareaLineBreak(e, value => updateRow(row.id, 'itemName', value))}
                           value={row.itemName}
                           onChange={e => updateRow(row.id, 'itemName', e.target.value)}
                           placeholder={isRtl ? 'مثلاً چاول، چینی' : 'e.g. Rice, Sugar'}
