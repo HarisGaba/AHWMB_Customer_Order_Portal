@@ -547,6 +547,20 @@ a { color: var(--c-green-500); }
 .cell-input:focus { border-color: var(--c-green-500); box-shadow: var(--shadow-glow); background: #fff; outline: none; }
 .cell-input::placeholder { color: var(--c-ink-300); font-size: 13px; font-weight: 500; }
 
+/* Item names accept sub-details on multiple lines. React grows these fields
+   from their scrollHeight while preserving the existing input styling. */
+.item-name-field {
+  height: auto !important;
+  min-height: 48px;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.35;
+  padding-top: 11px;
+  padding-bottom: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Unit select wrapper */
 .select-wrap { position: relative; display: block; }
 
@@ -2398,6 +2412,7 @@ a { color: var(--c-green-500); }
   /* Input sizing */
   .admin-create-table .item-typeahead, .admin-create-table .cell-input, .admin-create-table .select-wrap, .admin-create-table .cell-select, .admin-create-table .cell-locked { width:100% !important; max-width:none !important; min-width:0 !important; box-sizing:border-box; }
   .admin-create-table .cell-input { width:100% !important; min-width:0 !important; height:44px !important; font-size:14px !important; }
+  .admin-create-table .item-name-field { height:auto !important; min-height:44px !important; padding-top:11px !important; padding-bottom:11px !important; }
   .admin-create-table td:nth-child(3), .admin-create-table td:nth-child(4), .admin-create-table td:nth-child(5), .admin-create-table td:nth-child(6) { min-height:42px; }
   .admin-create-table td:nth-child(4) .select-wrap { width:100% !important; min-width:0 !important; }
   .admin-create-table td:nth-child(4) .cell-select { width:100% !important; min-width:0 !important; height:44px !important; font-size:14px !important; }

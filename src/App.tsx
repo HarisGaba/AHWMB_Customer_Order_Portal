@@ -141,6 +141,12 @@ function advanceItemRow(event: React.KeyboardEvent<HTMLElement>, addRow: () => v
   else { addRow(); window.setTimeout(focusNext, 0) }
 }
 
+function autoExpandTextarea(event: React.FormEvent<HTMLTextAreaElement>) {
+  const textarea = event.currentTarget
+  textarea.style.height = 'auto'
+  textarea.style.height = `${textarea.scrollHeight}px`
+}
+
 const unitRateLabel = (unit: UnitType) =>
   unit === 'PCS' ? 'Per Piece' : unit === 'LITRE' ? 'Per Litre' : unit === 'NONE' ? 'Amount' : 'Per KG'
 
@@ -1263,10 +1269,10 @@ function CustomerPage({
                     <td className="col-sr td-sr">{index + 1}</td>
                     <td>
                       <div className="item-typeahead">
-                        <input
-                          className="cell-input"
+                        <textarea
+                          className="cell-input item-name-field"
                           data-item-name
-                          onKeyDown={e => advanceItemRow(e, () => setRows(curr => [...curr, createRow()]))}
+                          onInput={autoExpandTextarea}
                           value={row.itemName}
                           onChange={e => updateRow(row.id, 'itemName', e.target.value)}
                           placeholder={t.itemPh}
@@ -1977,7 +1983,7 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
                     <div className="daily-report-name-wrap">
                       <textarea
                         data-item-name
-                        onKeyDown={e => advanceItemRow(e, addRow)}
+                        onInput={autoExpandTextarea}
                         value={row.expense_title}
                         rows={Math.max(1, (row.expense_title.match(/\n/g) || []).length + 1)}
                         onChange={e => updateRow(row.id, 'expense_title', e.target.value)}
@@ -2625,7 +2631,7 @@ function AdminPage({
                                 <textarea
                                   className="pricing-input pricing-input--name"
                                   data-item-name
-                                  onKeyDown={e => advanceItemRow(e, addAdminItem)}
+                                  onInput={autoExpandTextarea}
                                   value={item.name}
                                   rows={Math.max(1, (item.name.match(/\n/g) || []).length + 1)}
                                   onChange={e => updateItem(index, 'name', e.target.value)}
@@ -2946,10 +2952,10 @@ function AdminCreateOrder({
                     <td className="col-sr td-sr">{index + 1}</td>
                     <td>
                       <div className="item-typeahead">
-                        <input
-                          className="cell-input"
+                        <textarea
+                          className="cell-input item-name-field"
                           data-item-name
-                          onKeyDown={e => advanceItemRow(e, () => setRows(curr => [...curr, createAdminRow()]))}
+                          onInput={autoExpandTextarea}
                           value={row.itemName}
                           onChange={e => updateRow(row.id, 'itemName', e.target.value)}
                           placeholder={isRtl ? 'مثلاً چاول، چینی' : 'e.g. Rice, Sugar'}
