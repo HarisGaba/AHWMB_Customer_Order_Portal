@@ -1148,7 +1148,11 @@ function CustomerPage({
             <span className="hero-badge-text">{language === 'ur' ? '✦ آنلائن آرڈر پورٹل' : '✦ Live Order Portal'}</span>
           </div>
           <h2 className="hero-title">{t.welcome}</h2>
+          <h3 className="portal-hero-headline">Premium Wholesale Commodity Ordering</h3>
           <p className="hero-sub">{t.subtitle}</p>
+          <div className="portal-hero-categories" aria-label="Commodity categories">
+            <span>Rice</span><span>Pulses</span><span>Spices</span><span>Dry Fruits</span>
+          </div>
         </section>
 
         {/* Customer details */}

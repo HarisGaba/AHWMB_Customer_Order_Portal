@@ -2377,6 +2377,78 @@ button { min-height: 44px; }
 .portal-hero-glass span:last-child { position:absolute; width:38px; height:38px; right:16px; bottom:14px; border:1px solid rgba(255,255,255,.2); border-radius:50%; }
 .portal-shop-name { font-size:clamp(13px,1.8vw,16px); letter-spacing:.06em; }
 .portal-shop-status { text-transform:none; letter-spacing:.01em; background:rgba(255,255,255,.09); backdrop-filter:blur(8px); }
+.portal-hero-headline { position:relative; z-index:1; margin:6px 0 8px; max-width:720px; color:#fff; font-size:clamp(24px,4vw,42px); line-height:1.08; font-weight:950; letter-spacing:-.035em; text-shadow:0 2px 18px rgba(0,0,0,.18); }
+.portal-hero-categories { position:relative; z-index:1; display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+.portal-hero-categories span { display:inline-flex; align-items:center; min-height:36px; padding:6px 14px; border:1px solid rgba(244,197,66,.5); border-radius:999px; color:#fff8d9; background:rgba(4,30,20,.35); font-size:13px; font-weight:850; letter-spacing:.03em; }
+@media (max-width:767px) { .portal-hero { min-height:230px; } .portal-hero-headline { max-width:95%; font-size:28px; } .portal-hero-categories { margin-top:16px; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PREMIUM PORTAL DESIGN SYSTEM
+   A cohesive visual layer for customer and admin experiences.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --premium-ink:#10261d;
+  --premium-muted:#587365;
+  --premium-surface:#ffffff;
+  --premium-soft:#f4faf6;
+  --premium-line:#d7e8de;
+  --premium-green:#075c3b;
+  --premium-green-bright:#0c8a58;
+  --premium-gold:#d8a62a;
+  --premium-shadow:0 14px 34px rgba(7,61,37,.09);
+  --premium-shadow-lg:0 24px 60px rgba(7,61,37,.14);
+}
+
+body { background:linear-gradient(135deg,#f3faf6 0%,#eef6f1 48%,#f8f6ed 100%); color:var(--premium-ink); }
+button, input, select, textarea { font-family:inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:3px solid rgba(216,166,42,.55); outline-offset:2px; }
+.app-header { min-height:78px; padding:14px clamp(18px,4vw,54px); border-bottom:1px solid rgba(255,255,255,.14); background:linear-gradient(110deg,#062d20,#075c3b 62%,#113d2d); box-shadow:0 8px 28px rgba(4,42,27,.14); }
+.header-title { letter-spacing:-.035em; }
+.header-eyebrow, .portal-shop-name, .admin-eyebrow { letter-spacing:.16em; text-transform:uppercase; }
+.page-wrap { max-width:1280px; margin:0 auto; padding:clamp(18px,3vw,36px); }
+.card, .panel, .submit-card { border:1px solid rgba(184,215,198,.8); background:rgba(255,255,255,.92); box-shadow:var(--premium-shadow); backdrop-filter:blur(10px); }
+.card { border-radius:22px; }
+.card-header { padding-bottom:18px; border-bottom:1px solid var(--premium-line); }
+.card-title, .admin-heading { color:var(--premium-ink); letter-spacing:-.025em; }
+.card-sub, .panel-sub { color:var(--premium-muted); }
+.card-icon { box-shadow:0 7px 16px rgba(7,92,59,.12); }
+.field-label, .financial-field span { color:#285440; font-size:12px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.field-input, .field-textarea, .location-input, .catalog-search, .cell-input, .cell-select, .pricing-input, .pricing-select, .financial-field input, .financial-field output { border:2px solid var(--premium-line); background:#fbfefc; color:var(--premium-ink); border-radius:12px; box-shadow:inset 0 1px 2px rgba(7,61,37,.03); }
+.field-input:hover, .field-textarea:hover, .location-input:hover, .catalog-search:hover, .cell-input:hover, .cell-select:hover, .pricing-input:hover, .pricing-select:hover { border-color:#9bc5ad; }
+.field-input:focus, .field-textarea:focus, .location-input:focus, .catalog-search:focus, .cell-input:focus, .cell-select:focus, .pricing-input:focus, .pricing-select:focus { border-color:var(--premium-green-bright); box-shadow:0 0 0 4px rgba(12,138,88,.12); background:#fff; }
+.btn-submit, .btn-print { border:1px solid rgba(255,255,255,.15); background:linear-gradient(115deg,#d9ad39,#f3d477 52%,#d6a62a); color:#173522; box-shadow:0 5px 0 #a77717,0 14px 28px rgba(201,148,31,.2); }
+.btn-submit:hover, .btn-print:hover { filter:saturate(1.08) brightness(1.03); transform:translateY(-1px); }
+.btn-secondary, .btn-share-pdf, .btn-add-item, .btn-add-row { border:1px solid #b7d7c4; background:#fff; color:var(--premium-green); box-shadow:0 5px 14px rgba(7,61,37,.07); }
+.btn-secondary:hover, .btn-share-pdf:hover, .btn-add-item:hover, .btn-add-row:hover { border-color:var(--premium-green-bright); background:var(--premium-soft); transform:translateY(-1px); }
+.order-table, .pricing-table, .daily-report-table { border-color:var(--premium-line); }
+.order-table th, .pricing-table th, .daily-report-table thead th { background:linear-gradient(110deg,#e9f6ee,#f5fbf7); color:#145d3e; font-weight:950; }
+.order-table td, .pricing-table td, .daily-report-table tbody td { color:var(--premium-ink); }
+.order-table tr:hover td, .pricing-table tr:hover td, .daily-report-table tbody tr:hover { background:#f3fbf6; }
+.financial-grid, .invoice-financials { border-color:var(--premium-line); }
+.financial-field, .financial-grid .financial-field { border:1px solid var(--premium-line); border-radius:15px; background:linear-gradient(145deg,#fff,#f5fbf7); box-shadow:0 6px 16px rgba(7,61,37,.06); }
+.financial-field output, .financial-field input { color:#075c3b; }
+.order-card-wrap { border-color:var(--premium-line); box-shadow:0 8px 20px rgba(7,61,37,.06); }
+.order-card-wrap:hover, .order-card-wrap--selected { border-color:#82b99a; box-shadow:0 12px 28px rgba(7,61,37,.11); }
+.filter-tabs { border:1px solid var(--premium-line); box-shadow:0 5px 14px rgba(7,61,37,.05); }
+.modal-box { border:1px solid #c2ddcc; border-radius:24px; box-shadow:var(--premium-shadow-lg); }
+.toast { border:1px solid #c2ddcc; border-radius:15px; box-shadow:0 12px 30px rgba(7,61,37,.14); }
+.loading-screen { min-height:360px; }
+.skeleton { border-radius:12px; background:linear-gradient(90deg,#e4f1e8 25%,#f8fcf9 50%,#e4f1e8 75%); background-size:200% 100%; animation:premium-shimmer 1.5s ease-in-out infinite; }
+@keyframes premium-shimmer { to { background-position:-200% 0; } }
+
+@media (max-width:767px) {
+  .app-header { padding:12px 14px; }
+  .header-actions { gap:6px; }
+  .header-actions button { min-height:44px; }
+  .page-wrap { padding:14px 10px 28px; }
+  .card, .panel, .submit-card { border-radius:18px; }
+  .card-header { gap:12px; }
+  .card-title { font-size:20px; }
+  .field-group { gap:14px; }
+  .btn-submit, .btn-print, .btn-secondary, .btn-share-pdf { min-height:54px; font-size:17px; }
+  .portal-hero { padding:24px 20px 26px; box-shadow:0 16px 34px rgba(5,35,24,.18); }
+  .portal-hero-categories span { min-height:40px; padding-inline:13px; }
+}
 
 /* Customer mobile row 1 isolates Delete; row 2 reserves a readable unit-select column. */
 /* Mobile order-item cards: keep every control readable below tablet width. */
