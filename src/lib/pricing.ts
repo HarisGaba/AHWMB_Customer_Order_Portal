@@ -92,7 +92,7 @@ export const PRODUCT_CATALOG: readonly CatalogProduct[] = [
 
 export type PricedQuantity = {
   quantity_value: number
-  unit_type: 'KG' | 'GRAMS' | 'PCS' | 'LITRE' | 'NONE'
+  unit_type: 'KG' | 'GRAMS' | 'PCS' | 'LITRE' | 'BAGS' | 'NONE'
   unit_price?: number
   rate?: number
 }

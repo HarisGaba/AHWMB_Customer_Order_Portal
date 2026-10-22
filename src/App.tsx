@@ -15,7 +15,7 @@ const SHOPKEEPER_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.en
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Language = 'en' | 'ur'
-type UnitType = 'KG' | 'GRAMS' | 'PCS' | 'LITRE' | 'NONE'
+type UnitType = 'KG' | 'GRAMS' | 'PCS' | 'LITRE' | 'BAGS' | 'NONE'
 type OrderRow = { id: string; itemName: string; quantityValue: string; unitType: UnitType }
 type OrderItem = {
   sr: number
@@ -55,6 +55,7 @@ const UNIT_OPTIONS: { value: UnitType; en: string; ur: string }[] = [
   { value: 'GRAMS', en: 'Grams', ur: 'گرام' },
   { value: 'LITRE', en: 'Litre', ur: 'لیٹر' },
   { value: 'PCS', en: 'Packet / Piece', ur: 'پیکٹ / عدد' },
+  { value: 'BAGS', en: 'Bags', ur: 'تھیلے' },
 ]
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
@@ -104,6 +105,7 @@ const parseUnit = (value: string): UnitType =>
   /gram|g\b|گرام/i.test(value) ? 'GRAMS'
   : /litre|liter|(?:^|\s)l(?:\s|$)|لیتر/i.test(value) ? 'LITRE'
   : /packet|pack|pcs|piece|پیکٹ|عدد/i.test(value) ? 'PCS'
+  : /bag|bags|تھیلا|تھیلے/i.test(value) ? 'BAGS'
   : 'NONE'
 
 const unitLabel = (unit: UnitType, language: Language) =>
@@ -121,7 +123,7 @@ const quantityText = (value: number, unit: UnitType, language: Language) =>
 
 const pdfQuantityText = (value: number, unit: UnitType) => {
   const qty = Number.isInteger(value) ? value : Number(value.toFixed(3))
-  const label = unit === 'KG' ? 'kg' : unit === 'GRAMS' ? 'grams' : unit === 'LITRE' ? 'litres' : unit === 'PCS' ? 'pieces' : ''
+  const label = unit === 'KG' ? 'kg' : unit === 'GRAMS' ? 'grams' : unit === 'LITRE' ? 'litres' : unit === 'PCS' ? 'pieces' : unit === 'BAGS' ? 'bags' : ''
   return label ? `${qty} ${label}` : String(qty)
 }
 
@@ -165,7 +167,7 @@ function insertTextareaLineBreak(event: React.KeyboardEvent<HTMLTextAreaElement>
 }
 
 const unitRateLabel = (unit: UnitType) =>
-  unit === 'PCS' ? 'Per Piece' : unit === 'LITRE' ? 'Per Litre' : unit === 'NONE' ? 'Amount' : 'Per KG'
+  unit === 'PCS' ? 'Per Piece' : unit === 'BAGS' ? 'Per Bag' : unit === 'LITRE' ? 'Per Litre' : unit === 'NONE' ? 'Amount' : 'Per KG'
 
 const productSuggestions = (query: string) => {
   const normalized = query.trim().toLowerCase()
@@ -199,7 +201,7 @@ const safeItems = (items: unknown): OrderItem[] => {
     const rawQuantity = String(v.quantity || '')
     const quantityValue = Number(v.quantity_value) || parseQuantity(rawQuantity)
     const rawUnit = v.unit_type
-    const unitType: UnitType = rawUnit === 'KG' || rawUnit === 'GRAMS' || rawUnit === 'PCS' || rawUnit === 'LITRE' || rawUnit === 'NONE'
+    const unitType: UnitType = rawUnit === 'KG' || rawUnit === 'GRAMS' || rawUnit === 'PCS' || rawUnit === 'LITRE' || rawUnit === 'BAGS' || rawUnit === 'NONE'
       ? rawUnit : parseUnit(rawQuantity)
     const unitPrice = Number(v.unit_price ?? v.rate) || 0
     const total = unitType === 'GRAMS'
@@ -395,7 +397,7 @@ const invoiceFilename = (customerName: string) => {
 const INV_BASE: React.CSSProperties = {
   border: '1px solid #050505',
   padding: '2.5mm 2mm',
-  fontWeight: 700,
+  fontWeight: 800,
   color: '#000000',
   fontSize: '11px',
   verticalAlign: 'middle',
@@ -512,8 +514,8 @@ function buildInvoiceHtml(payload: InvoicePayload): string {
   const F = 'font-family:Georgia,"Times New Roman",serif;'
   const TH = `${F}background:#000;color:#fff;font-weight:900;font-size:12px;padding:8px 6px;text-align:center;border:2px solid #000;vertical-align:middle;`
   const TH_L = `${TH}text-align:left;`
-  const TD = `${F}font-weight:700;font-size:13px;color:#000;padding:8px 6px;text-align:center;border:1.5px solid #000;vertical-align:middle;`
-  const TD_L = `${TD}text-align:left;white-space:pre-wrap;`
+  const TD = `${F}font-weight:800;font-size:13px;color:#000;padding:8px 6px;text-align:center;border:1.5px solid #000;vertical-align:middle;`
+  const TD_L = `${TD}text-align:left;white-space:pre-wrap;font-weight:900;`
   const FT = `${F}font-weight:700;font-size:12px;color:#000;padding:7px 6px;border:1.5px solid #000;vertical-align:middle;`
 
   // ── Corner SVG ornament ───────────────────────────────────────────────────
