@@ -1153,6 +1153,12 @@ function CustomerPage({
           <div className="portal-hero-categories" aria-label="Commodity categories">
             <span>Rice</span><span>Pulses</span><span>Spices</span><span>Dry Fruits</span>
           </div>
+          <div className="portal-hero-showcase" aria-hidden="true">
+            <div className="showcase-kicker">AHWMB</div>
+            <div className="showcase-title">Trusted essentials<br /><strong>delivered with care.</strong></div>
+            <div className="showcase-rule" />
+            <div className="showcase-stats"><span><b>01</b> Select items</span><span><b>02</b> Confirm order</span></div>
+          </div>
         </section>
 
         {/* Customer details */}
