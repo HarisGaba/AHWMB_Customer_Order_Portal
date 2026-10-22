@@ -2450,6 +2450,35 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .portal-hero-categories span { min-height:40px; padding-inline:13px; }
 }
 
+/* Final brand correction: solid deep green, gold and white only. */
+body { background:#f8faf8; color:#10261d; }
+.app-header { background:#062d20; }
+.portal-hero { background:#075c3b !important; }
+.portal-hero::before, .portal-hero-glow { background:#0b6b45 !important; opacity:.45; }
+.card, .panel, .submit-card, .modal-box, .toast { background:#fff; }
+.btn-submit, .btn-print { background:#d8a62a !important; color:#10261d; }
+.btn-secondary, .btn-share-pdf, .btn-add-item, .btn-add-row { background:#fff; color:#075c3b; }
+.order-table th, .pricing-table th, .daily-report-table thead th { background:#eaf3ed; }
+.financial-field, .financial-grid .financial-field { background:#fff; }
+.skeleton { background:#e4eee7; animation:none; }
+
+/* Prevent labels and values from touching borders or being clipped. */
+*, *::before, *::after { box-sizing:border-box; }
+input, select, textarea, button { line-height:1.25; }
+.field, .financial-field, .field-input-wrap, .item-typeahead, .select-wrap { min-width:0; }
+.field-label, .financial-field span { display:block; line-height:1.35; margin-bottom:6px; white-space:normal; }
+.field-input, .field-textarea, .cell-input, .cell-select, .pricing-input, .pricing-select, .financial-field input, .financial-field output { line-height:1.3; overflow:visible; }
+.financial-field output { display:flex; align-items:center; justify-content:flex-start; padding:0 12px; }
+.card-sub, .panel-sub { line-height:1.45; }
+.table-wrap, .pricing-wrap, .daily-report-table-wrap { overflow-x:auto; }
+
+/* Clean CSS rickshaw: no emoji, no visual noise. */
+.submit-rickshaw { position:absolute; left:-58px; bottom:9px; width:46px; height:25px; display:block; border-radius:6px 10px 5px 5px; background:#075c3b; border:2px solid #fff; animation:rickshaw-delivery 1.8s ease-in-out infinite; }
+.submit-rickshaw::before { content:""; position:absolute; right:5px; top:-11px; width:18px; height:14px; border:2px solid #fff; border-bottom:0; border-radius:10px 10px 0 0; }
+.submit-rickshaw i, .submit-rickshaw b { position:absolute; bottom:-7px; width:11px; height:11px; border:2px solid #fff; border-radius:50%; background:#d8a62a; }
+.submit-rickshaw i { left:5px; }.submit-rickshaw b { right:5px; }.submit-rickshaw em { display:none; }
+@keyframes rickshaw-delivery { 0% { left:-58px; opacity:0; } 15% { opacity:1; } 50% { left:50%; transform:translateX(-50%); } 85% { left:calc(100% + 58px); transform:translateX(0); opacity:1; } 100% { left:calc(100% + 58px); opacity:0; } }
+
 /* Customer mobile row 1 isolates Delete; row 2 reserves a readable unit-select column. */
 /* Mobile order-item cards: keep every control readable below tablet width. */
 @media (max-width:767px) {
