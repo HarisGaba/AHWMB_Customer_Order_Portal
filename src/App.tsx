@@ -1138,13 +1138,6 @@ function CustomerPage({
       <div className="page-wrap">
         <section className="image-hero" aria-label="AHWMB premium products">
           <img src="/images/ahwmb-hero.png" alt="AHWMB premium rice, pulses and spices delivery" />
-          <div className="image-hero-shade" />
-          <div className="image-hero-copy">
-            <span className="image-hero-kicker">AHWMB · RICE · PULSES · SPICES</span>
-            <h2>Best quality products<br /><strong>at your doorstep.</strong></h2>
-            <p>Shop trusted everyday essentials from Adam Haji Wali Muhammad &amp; Brothers.</p>
-            <a href="#customer-details" className="image-hero-cta">Shop Now <span>→</span></a>
-          </div>
         </section>
         {/* Customer details */}
         <section className="card" id="customer-details">
