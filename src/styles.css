@@ -561,6 +561,30 @@ a { color: var(--c-green-500); }
 .item-suggestions button:hover, .item-suggestions button:focus { background: var(--c-green-50); outline: none; }
 .item-suggestions small { flex: 0 0 auto; color: var(--c-ink-300); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 
+/* Elder-friendly interaction baseline */
+input, select, textarea, button { -webkit-tap-highlight-color: transparent; }
+input, select, textarea { color: var(--c-ink); font-size: 16px; }
+button { min-height: 44px; }
+.field-label, .card-sub, .panel-sub { font-size: 14px; }
+.financial-field output, .financial-field input { min-height: 48px; font-size: 18px; font-weight: 900; }
+.btn-submit, .btn-print, .btn-secondary, .btn-share-pdf, .btn-add-row, .btn-add-item { min-height: 52px; font-size: 16px; }
+.btn-submit { position: relative; overflow: hidden; }
+.submit-rickshaw { position: absolute; left: -48px; font-size: 28px; line-height: 1; animation: rickshaw-delivery 1.8s cubic-bezier(.4,0,.2,1) infinite; pointer-events: none; }
+@keyframes rickshaw-delivery { 0% { left:-48px; transform:translateY(5px) scale(.8); opacity:0; } 15% { opacity:1; } 48% { left:50%; transform:translate(-50%,5px) scale(1); } 82% { left:calc(100% + 48px); transform:translateY(5px) scale(.9); opacity:1; } 100% { left:calc(100% + 48px); opacity:0; } }
+
+@media (max-width: 767px) {
+  .page-wrap { width:100%; padding-inline:10px; }
+  .card, .panel, .submit-card { box-shadow:0 8px 24px rgba(5,35,24,.10); }
+  .field-input, .field-textarea, .cell-input, .cell-select, .pricing-input, .pricing-select { min-height:48px; font-size:16px; }
+  .daily-report-summary strong, .grand-value, .ledger-total-highlight { font-size:22px; }
+  .financial-grid--five { grid-template-columns:1fr !important; }
+  .financial-field { min-height:76px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .submit-rickshaw, .hero-live-dot, .hero-pulse-ring { animation:none !important; }
+}
+
 /* Item names accept sub-details on multiple lines. React grows these fields
    from their scrollHeight while preserving the existing input styling. */
 .item-name-field {

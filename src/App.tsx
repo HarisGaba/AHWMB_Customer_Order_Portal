@@ -1517,6 +1517,7 @@ function CustomerPage({
             disabled={saving}
           >
             {saving ? <RefreshCw size={21} className="spin" /> : <Send size={21} />}
+            {saving && <span className="submit-rickshaw" aria-hidden="true">🛺</span>}
             <span>{saving ? t.submitting : t.submit}</span>
             <FileDown size={19} />
           </button>
