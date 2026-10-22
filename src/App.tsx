@@ -167,6 +167,19 @@ function insertTextareaLineBreak(event: React.KeyboardEvent<HTMLTextAreaElement>
 const unitRateLabel = (unit: UnitType) =>
   unit === 'PCS' ? 'Per Piece' : unit === 'LITRE' ? 'Per Litre' : unit === 'NONE' ? 'Amount' : 'Per KG'
 
+const productSuggestions = (query: string) => {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return PRODUCT_CATALOG.slice(0, 12)
+  return PRODUCT_CATALOG
+    .filter(product => product.name.toLowerCase().includes(normalized))
+    .sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(normalized) ? 0 : 1
+      const bStarts = b.name.toLowerCase().startsWith(normalized) ? 0 : 1
+      return aStarts - bStarts
+    })
+    .slice(0, 12)
+}
+
 const safeItems = (items: unknown): OrderItem[] => {
   if (!Array.isArray(items)) return []
   return items.map((item, index) => {
@@ -1299,7 +1312,7 @@ function CustomerPage({
                           autoComplete="off"
                         />
                         <datalist id={`product-suggestions-${row.id}`}>
-                          {PRODUCT_CATALOG.filter(product => !row.itemName.trim() || product.name.toLowerCase().includes(row.itemName.trim().toLowerCase())).slice(0, 12).map(product => <option key={product.name} value={product.name} />)}
+                          {productSuggestions(row.itemName).map(product => <option key={product.name} value={product.name} />)}
                         </datalist>
                       </div>
                     </td>
@@ -2984,7 +2997,7 @@ function AdminCreateOrder({
                           autoComplete="off"
                         />
                         <datalist id={`admin-product-suggestions-${row.id}`}>
-                          {PRODUCT_CATALOG.filter(p => !row.itemName.trim() || p.name.toLowerCase().includes(row.itemName.trim().toLowerCase())).slice(0, 12).map(p => <option key={p.name} value={p.name} />)}
+                          {productSuggestions(row.itemName).map(p => <option key={p.name} value={p.name} />)}
                         </datalist>
                       </div>
                     </td>
