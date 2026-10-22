@@ -480,21 +480,21 @@ const invoicePrintCss = `
   .invoice-header { text-align: center; margin-bottom: 4mm; }
   .invoice-header h1 { display: inline-block; margin: 0 auto; border: 2.5px solid #050505; padding: 2mm 10mm; font-size: 22px; line-height: 1.2; font-weight: 900; letter-spacing: .05em; }
   /* Customer bar — fixed two-column layout, no overflow */
-  .invoice-customer-bar { width: 100%; border-collapse: collapse; border: 2px solid #050505; margin: 4mm 0; font-size: 12px; font-weight: 700; table-layout: fixed; }
+  .invoice-customer-bar { width: calc(100% - 8mm); border-collapse: collapse; border: 2px solid #050505; margin: 4mm auto; font-size: 12px; font-weight: 700; table-layout: fixed; }
   .invoice-customer-bar td { padding: 3mm 4mm; font-weight: 700; color: #000; vertical-align: middle; overflow: hidden; }
   .invoice-customer-bar td:first-child { width: 63%; }
   .invoice-customer-bar td:last-child  { width: 37%; border-left: 2px solid #050505; }
   .inv-clabel { font-size: 11px; font-weight: 700; white-space: nowrap; }
   .inv-cval   { display: block; border-bottom: 1.5px solid #050505; padding-bottom: 1mm; margin-top: 1mm; font-size: 13px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .invoice-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
+  .invoice-table { width: calc(100% - 8mm); margin-left:auto; margin-right:auto; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
   .invoice-table thead { display: table-header-group; }
   .invoice-table tr { page-break-inside: avoid; page-break-after: auto; }
-  .invoice-financials { width: 100%; border-collapse: collapse; border: 2px solid #050505; margin-top: 5mm; page-break-inside: avoid; }
+  .invoice-financials { width: calc(100% - 8mm); margin-left:auto; margin-right:auto; border-collapse: collapse; border: 2px solid #050505; margin-top: 5mm; page-break-inside: avoid; }
   .invoice-financials td { width: 20%; border-right: 1px solid #050505; text-align: center; font-weight: 700; color: #000; }
   .invoice-financials td:last-child { border-right: 0; }
   .invoice-financials strong { display: block; background: #000; color: #fff; font-weight: 900; padding: 2mm 1mm; font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
   .invoice-financials span { display: block; padding: 4mm 1mm; font-size: 13px; color: #000; font-weight: 700; }
-  .invoice-total-amount { width: 100%; border-collapse: collapse; border: 2px solid #050505; margin-top: 4mm; font-size: 16px; font-weight: 900; page-break-inside: avoid; }
+  .invoice-total-amount { width: calc(100% - 8mm); margin-left:auto; margin-right:auto; border-collapse: collapse; border: 2px solid #050505; margin-top: 4mm; font-size: 16px; font-weight: 900; page-break-inside: avoid; }
   .invoice-total-amount td { padding: 4mm 7mm; font-weight: 900; color: #000; }
   .invoice-total-amount td:last-child { text-align: right; }
   /* Footer — plain cursive joining text only */
@@ -569,7 +569,7 @@ function buildInvoiceHtml(payload: InvoicePayload): string {
 
     /* ── Customer bar ── */
     /* Two fixed columns: name side gets 65%, date side 35% — no overlap ever */
-    .cbar { width:100%; border-collapse:collapse; border:2px solid #000; margin:5mm 0 5mm; font-size:13px; table-layout:fixed; }
+    .cbar { width:calc(100% - 8mm); border-collapse:collapse; border:2px solid #000; margin:5mm auto; font-size:13px; table-layout:fixed; }
     .cbar td { padding:3mm 5mm; font-weight:700; color:#000; border:none; vertical-align:middle; overflow:hidden; }
     .cbar td:first-child { width:65%; }
     .cbar td:last-child  { width:35%; border-left:2px solid #000; }
@@ -583,20 +583,20 @@ function buildInvoiceHtml(payload: InvoicePayload): string {
     }
 
     /* ── Main invoice table ── */
-    .inv { width:100%; border-collapse:collapse; table-layout:fixed; page-break-inside:auto; }
+    .inv { width:calc(100% - 8mm); margin-left:auto; margin-right:auto; border-collapse:collapse; table-layout:fixed; page-break-inside:auto; }
     .inv thead { display:table-header-group; }
     .inv tr { page-break-inside:avoid; page-break-after:auto; }
 
     /* ── Financials block ── */
     .fin-wrap { page-break-inside:auto; break-inside:auto; margin-top:4mm; }
-    .fin { width:100%; border-collapse:collapse; border:2.5px solid #000; }
+    .fin { width:calc(100% - 8mm); margin-left:auto; margin-right:auto; border-collapse:collapse; border:2.5px solid #000; }
     .fin td { width:20%; border-right:2px solid #000; text-align:center; padding:0; font-weight:700; color:#000; }
     .fin td:last-child { border-right:none; }
     .fin .lbl { display:block; background:#000; color:#fff; font-weight:900; font-size:10px; letter-spacing:.04em; padding:3mm 2mm; border-bottom:none; text-transform:uppercase; }
     .fin .val { display:block; padding:5mm 2mm; font-size:15px; font-weight:900; color:#000; font-family:Georgia,"Times New Roman",serif; }
 
     /* ── Remaining balance row ── */
-    .rem { width:100%; border-collapse:collapse; border:2.5px solid #000; margin-top:3mm; font-size:18px; font-weight:900; page-break-inside:avoid; break-inside:avoid; }
+    .rem { width:calc(100% - 8mm); margin-left:auto; margin-right:auto; border-collapse:collapse; border:2.5px solid #000; margin-top:3mm; font-size:18px; font-weight:900; page-break-inside:avoid; break-inside:avoid; }
     .rem td { padding:4mm 8mm; font-weight:900; color:#000; }
     .rem td:last-child { text-align:right; }
 
@@ -770,7 +770,7 @@ async function drawInvoice(
 
   // Customer / Date bar
   const barY = titleY+15, barH = 14
-  const bL = M+3, bW = PW-M*2-6, divX = bL + bW*0.63
+  const bL = M+9, bW = PW-M*2-18, divX = bL + bW*0.63
   doc.setLineWidth(0.5); doc.rect(bL, barY, bW, barH)
   doc.line(divX, barY, divX, barY+barH)
   doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(0)
@@ -783,10 +783,10 @@ async function drawInvoice(
   doc.setLineWidth(0.3); doc.line(divX+18, barY+8, bL+bW-3, barY+8)
 
   // ── Items table (pure jsPDF, no autoTable) ────────────────────────────
-  const TL = M+3, TW = 174
+  const TL = M+9, TW = 168
   // Column left-edges and widths: S.No=14, Item=64, Qty=28, Rate=34, Amt=34
-  const CX = [TL, TL+14, TL+78, TL+106, TL+140]
-  const CW = [14,    64,    28,    34,     34]
+  const CX = [TL, TL+14, TL+74, TL+102, TL+135]
+  const CW = [14,    60,    28,    33,     33]
   const HDR_H = 12
 
   const drawItemsHeader = (y: number): number => {
