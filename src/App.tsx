@@ -1136,31 +1136,6 @@ function CustomerPage({
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
       <div className="page-wrap">
-        {/* Hero */}
-        <section className="hero-section portal-hero">
-          <div className="portal-hero-glow" aria-hidden="true"/>
-          <p className="portal-shop-name">Adam Haji Wali Muhammad &amp; Brothers</p>
-          <div className="portal-shop-status"><span className="portal-status-dot"/> {language === 'ur' ? 'آن لائن آرڈر قبول کیے جا رہے ہیں' : 'Accepting Orders Online'}</div>
-          <div className="hero-badge-wrap" aria-hidden="true">
-            <span className="hero-pulse-ring" />
-            <span className="hero-pulse-ring hero-pulse-ring--2" />
-            <span className="hero-live-dot" />
-            <span className="hero-badge-text">{language === 'ur' ? '✦ آنلائن آرڈر پورٹل' : '✦ Live Order Portal'}</span>
-          </div>
-          <h2 className="hero-title">{t.welcome}</h2>
-          <h3 className="portal-hero-headline">Premium Wholesale Commodity Ordering</h3>
-          <p className="hero-sub">{t.subtitle}</p>
-          <div className="portal-hero-categories" aria-label="Commodity categories">
-            <span>Rice</span><span>Pulses</span><span>Spices</span><span>Dry Fruits</span>
-          </div>
-          <div className="portal-hero-showcase" aria-hidden="true">
-            <div className="showcase-kicker">AHWMB</div>
-            <div className="showcase-title">Trusted essentials<br /><strong>delivered with care.</strong></div>
-            <div className="showcase-rule" />
-            <div className="showcase-stats"><span><b>01</b> Select items</span><span><b>02</b> Confirm order</span></div>
-          </div>
-        </section>
-
         {/* Customer details */}
         <section className="card">
           <div className="card-header">

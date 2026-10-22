@@ -2478,6 +2478,12 @@ input, select, textarea, button { line-height:1.25; }
 .financial-field output { display:flex; align-items:center; justify-content:flex-start; padding:0 12px; }
 .financial-field > span { min-height:34px; display:flex; align-items:flex-start; line-height:1.2; padding:0 2px; }
 .financial-field output, .financial-field input { margin-top:6px; }
+.financial-grid--five { grid-template-columns:repeat(5,minmax(0,1fr)) !important; align-items:stretch; }
+.financial-grid--five .financial-field { display:grid; grid-template-rows:minmax(34px,auto) 52px; align-content:start; gap:0; }
+.financial-grid--five .financial-field > span { min-height:34px; padding:0 2px 5px; font-size:11px; line-height:1.15; overflow-wrap:anywhere; }
+.financial-grid--five .financial-field input, .financial-grid--five .financial-field output { height:52px; min-height:52px; margin:0; }
+@media (max-width:900px) { .financial-grid--five { grid-template-columns:repeat(3,minmax(0,1fr)) !important; } }
+@media (max-width:620px) { .financial-grid--five { grid-template-columns:1fr !important; } }
 
 @media (max-width:767px) {
   .portal-hero-showcase { position:relative; right:auto; top:auto; width:100%; min-height:0; margin-top:22px; padding:15px 0 0 15px; transform:none; border-left:2px solid #d8a62a; }
