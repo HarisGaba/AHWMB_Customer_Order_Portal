@@ -1137,7 +1137,10 @@ function CustomerPage({
 
       <div className="page-wrap">
         <section className="image-hero" aria-label="AHWMB premium products">
-          <img src="/images/ahwmb-hero.png" alt="AHWMB premium rice, pulses and spices delivery" />
+          <picture>
+            <source media="(min-width: 768px)" srcSet="/images/ahwmb-hero-desktop.png" />
+            <img src="/images/ahwmb-hero.png" alt="AHWMB premium rice, pulses and spices delivery" />
+          </picture>
         </section>
         {/* Customer details */}
         <section className="card" id="customer-details">
