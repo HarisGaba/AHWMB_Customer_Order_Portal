@@ -180,6 +180,18 @@ const productSuggestions = (query: string) => {
     .slice(0, 12)
 }
 
+function ProductSuggestionMenu({ query, onSelect }: { query: string; onSelect: (name: string) => void }) {
+  const matches = productSuggestions(query)
+  if (!matches.length) return null
+  return <div className="item-suggestions" role="listbox">
+    {matches.map(product => (
+      <button key={product.name} type="button" role="option" onMouseDown={e => e.preventDefault()} onClick={() => onSelect(product.name)}>
+        <span>{product.name}</span><small>{product.category}</small>
+      </button>
+    ))}
+  </div>
+}
+
 const safeItems = (items: unknown): OrderItem[] => {
   if (!Array.isArray(items)) return []
   return items.map((item, index) => {
@@ -993,6 +1005,7 @@ function CustomerPage({
   const [expandedCategories] = useState<Set<string>>(() => new Set(PRODUCT_CATALOG.map(product => product.category)))
   const [orderSearch, setOrderSearch] = useState('')
   const [orderSearchOpen, setOrderSearchOpen] = useState(false)
+  const [suggestionRowId, setSuggestionRowId] = useState<string | null>(null)
 
   const catalogMatches = useMemo(() => {
     const query = catalogSearch.trim().toLowerCase()
@@ -1304,6 +1317,8 @@ function CustomerPage({
                           data-item-name
                           onKeyDown={e => insertTextareaLineBreak(e, value => updateRow(row.id, 'itemName', value))}
                           onInput={autoExpandTextarea}
+                          onFocus={() => setSuggestionRowId(row.id)}
+                          onBlur={() => window.setTimeout(() => setSuggestionRowId(null), 150)}
                           value={row.itemName}
                           onChange={e => updateRow(row.id, 'itemName', e.target.value)}
                           placeholder={t.itemPh}
@@ -1311,6 +1326,7 @@ function CustomerPage({
                           list={`product-suggestions-${row.id}`}
                           autoComplete="off"
                         />
+                        {suggestionRowId === row.id && <ProductSuggestionMenu query={row.itemName} onSelect={name => { updateRow(row.id, 'itemName', name); setSuggestionRowId(null) }} />}
                         <datalist id={`product-suggestions-${row.id}`}>
                           {productSuggestions(row.itemName).map(product => <option key={product.name} value={product.name} />)}
                         </datalist>
@@ -2812,6 +2828,7 @@ function AdminCreateOrder({
   const [address, setAddress] = useState('')
   const [notes, setNotes] = useState('')
   const [rows, setRows] = useState<AdminOrderRow[]>(() => Array.from({ length: 5 }, createAdminRow))
+  const [suggestionRowId, setSuggestionRowId] = useState<string | null>(null)
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
 
@@ -2990,12 +3007,15 @@ function AdminCreateOrder({
                           data-item-name
                           onInput={autoExpandTextarea}
                           onKeyDown={e => insertTextareaLineBreak(e, value => updateRow(row.id, 'itemName', value))}
+                          onFocus={() => setSuggestionRowId(row.id)}
+                          onBlur={() => window.setTimeout(() => setSuggestionRowId(null), 150)}
                           value={row.itemName}
                           onChange={e => updateRow(row.id, 'itemName', e.target.value)}
                           placeholder={isRtl ? 'مثلاً چاول، چینی' : 'e.g. Rice, Sugar'}
                           list={`admin-product-suggestions-${row.id}`}
                           autoComplete="off"
                         />
+                        {suggestionRowId === row.id && <ProductSuggestionMenu query={row.itemName} onSelect={name => { updateRow(row.id, 'itemName', name); setSuggestionRowId(null) }} />}
                         <datalist id={`admin-product-suggestions-${row.id}`}>
                           {productSuggestions(row.itemName).map(p => <option key={p.name} value={p.name} />)}
                         </datalist>

@@ -546,6 +546,20 @@ a { color: var(--c-green-500); }
 .cell-input:hover { border-color: var(--c-green-400); }
 .cell-input:focus { border-color: var(--c-green-500); box-shadow: var(--shadow-glow); background: #fff; outline: none; }
 .cell-input::placeholder { color: var(--c-ink-300); font-size: 13px; font-weight: 500; }
+.item-typeahead { position: relative; width: 100%; }
+.item-suggestions {
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0;
+  max-height: 230px; overflow-y: auto; padding: 5px;
+  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  background: #fff; box-shadow: 0 10px 24px rgba(0,40,20,.16);
+}
+.item-suggestions button {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 40px; padding: 8px 10px; border-radius: 8px;
+  text-align: left; color: var(--c-ink); background: #fff; font-size: 14px; font-weight: 700;
+}
+.item-suggestions button:hover, .item-suggestions button:focus { background: var(--c-green-50); outline: none; }
+.item-suggestions small { flex: 0 0 auto; color: var(--c-ink-300); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 
 /* Item names accept sub-details on multiple lines. React grows these fields
    from their scrollHeight while preserving the existing input styling. */
