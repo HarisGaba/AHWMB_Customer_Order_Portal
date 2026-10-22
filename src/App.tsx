@@ -1312,11 +1312,9 @@ function CustomerPage({
                     <td className="col-sr td-sr">{index + 1}</td>
                     <td>
                       <div className="item-typeahead">
-                        <textarea
-                          className="cell-input item-name-field"
+                        <input
+                          className="cell-input"
                           data-item-name
-                          onKeyDown={e => insertTextareaLineBreak(e, value => updateRow(row.id, 'itemName', value))}
-                          onInput={autoExpandTextarea}
                           onFocus={() => setSuggestionRowId(row.id)}
                           onBlur={() => window.setTimeout(() => setSuggestionRowId(null), 150)}
                           value={row.itemName}
@@ -3002,11 +3000,9 @@ function AdminCreateOrder({
                     <td className="col-sr td-sr">{index + 1}</td>
                     <td>
                       <div className="item-typeahead">
-                        <textarea
-                          className="cell-input item-name-field"
+                        <input
+                          className="cell-input"
                           data-item-name
-                          onInput={autoExpandTextarea}
-                          onKeyDown={e => insertTextareaLineBreak(e, value => updateRow(row.id, 'itemName', value))}
                           onFocus={() => setSuggestionRowId(row.id)}
                           onBlur={() => window.setTimeout(() => setSuggestionRowId(null), 150)}
                           value={row.itemName}
