@@ -534,7 +534,7 @@ function buildInvoiceHtml(payload: InvoicePayload): string {
   const dataRows = items.map((item, i) => `
     <tr>
       <td style="${TD}">${i + 1}</td>
-      <td style="${TD_L}">${nameHtml(item.name)}</td>
+      <td dir="auto" style="${TD_L}unicode-bidi:plaintext;line-height:1.8;">${nameHtml(item.name)}</td>
       <td style="${TD}">${pdfQuantityText(item.quantity_value, item.unit_type)}</td>
       <td style="${TD}">${item.unit_price > 0 ? invoiceNumber(item.unit_price) : ''}</td>
       <td style="${TD}">${invoiceNumber(item.total)}</td>
@@ -624,7 +624,7 @@ function buildInvoiceHtml(payload: InvoicePayload): string {
     <table class="cbar"><tbody><tr>
       <td>
         <span class="clabel">Customer Name:</span>
-        <span class="cval">${order.customer_name || '—'}</span>
+        <span class="cval" dir="auto">${escHtml(order.customer_name || '—')}</span>
       </td>
       <td>
         <span class="clabel">Date:</span>
@@ -743,6 +743,42 @@ async function drawInvoice(
   filename: string,
 ): Promise<Blob> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
+  await document.fonts.ready
+  // Browser shaping preserves Urdu joins and Unicode glyphs unsupported by Times.
+  const unicodeName = (text: string, width: number) => {
+    if (!/[^\x00-\x7F]/.test(text)) return null
+    const scale = 12
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.ceil(width * scale)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Invoice text rendering is unavailable')
+    const font = 'bold 46px "Noto Naskh Arabic", Arial, sans-serif'
+    ctx.font = font
+    const lines: string[] = []
+    for (const paragraph of text.split(/\r?\n/)) {
+      let line = ''
+      for (const word of paragraph.split(/\s+/)) {
+        const candidate = line ? `${line} ${word}` : word
+        if (line && ctx.measureText(candidate).width > canvas.width - 16) {
+          lines.push(line)
+          line = word
+        } else line = candidate
+      }
+      lines.push(line)
+    }
+    const lineHeight = 80
+    canvas.height = lines.length * lineHeight + 24
+    ctx.font = font
+    ctx.fillStyle = '#000'
+    ctx.textBaseline = 'middle'
+    lines.forEach((line, index) => {
+      const rtl = /^[^A-Za-z\u0600-\u06ff]*[\u0600-\u06ff]/.test(line)
+      ctx.direction = rtl ? 'rtl' : 'ltr'
+      ctx.textAlign = rtl ? 'right' : 'left'
+      ctx.fillText(line, rtl ? canvas.width - 8 : 8, 12 + (index + 0.5) * lineHeight, canvas.width - 16)
+    })
+    return { canvas, height: canvas.height / scale }
+  }
   const PW = 210, PH = 297, M = 12
 
   // Double-border frame with corner ornaments
@@ -776,7 +812,11 @@ async function drawInvoice(
   doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(0)
   doc.text('Customer Name:', bL+4, barY+6)
   const nameLines = doc.splitTextToSize(order.customer_name || '—', divX - (bL+34) - 3)
-  doc.setFontSize(11); doc.text(nameLines[0] ?? '', bL+34, barY+6)
+  const customerImage = unicodeName(order.customer_name || '', divX - (bL+34) - 3)
+  doc.setFontSize(11)
+  if (customerImage) {
+    doc.addImage(customerImage.canvas, 'PNG', bL+34, barY+1, divX-(bL+34)-3, Math.min(7, customerImage.height))
+  } else doc.text(nameLines[0] ?? '', bL+34, barY+6)
   doc.setLineWidth(0.3); doc.line(bL+34, barY+8, divX-3, barY+8)
   doc.setFontSize(10); doc.text('Date:', divX+4, barY+6)
   doc.setFontSize(11); doc.text(formatDateShort(order.created_at), divX+18, barY+6)
@@ -815,7 +855,8 @@ async function drawInvoice(
   for (let idx = 0; idx < items.length; idx++) {
     const item = items[idx]
     const nameLines2 = doc.splitTextToSize(item.name || '—', CW[1]-4)
-    const rh = Math.max(9, nameLines2.length * 5.5 + 5)
+    const nameImage = unicodeName(item.name || '', CW[1]-4)
+    const rh = Math.max(9, (nameImage ? nameImage.height : nameLines2.length * 5.5) + 5)
     // Page break
     if (curY + rh > PH - M - 40) {
       doc.addPage(); drawFrame(); curY = M+16
@@ -827,7 +868,9 @@ async function drawInvoice(
     for (let i = 1; i < 5; i++) doc.line(CX[i], curY, CX[i], curY+rh)
     const midY = curY + rh/2 + 2
     doc.text(String(idx+1),                                    CX[0]+CW[0]/2, midY, {align:'center'})
-    doc.text(nameLines2,                                        CX[1]+2,       curY+3.5+3)
+    if (nameImage) {
+      doc.addImage(nameImage.canvas, 'PNG', CX[1]+2, curY+2.5, CW[1]-4, nameImage.height)
+    } else doc.text(nameLines2, CX[1]+2, curY+3.5+3)
     doc.text(pdfQuantityText(item.quantity_value, item.unit_type), CX[2]+CW[2]/2, midY, {align:'center'})
     doc.text(item.unit_price > 0 ? invoiceNumber(item.unit_price) : '—', CX[3]+CW[3]/2, midY, {align:'center'})
     doc.text(invoiceNumber(item.total),                        CX[4]+CW[4]/2, midY, {align:'center'})
@@ -1346,7 +1389,7 @@ function CustomerPage({
                           aria-label={`${t.unit} ${index + 1}`}
                         >
                           <option value="">Select Unit</option>
-                          {UNIT_OPTIONS.filter(o => o.value !== 'NONE').map(o => (
+                          {UNIT_OPTIONS.filter(o => o.value !== 'NONE' && o.value !== 'BAGS').map(o => (
                             <option key={o.value} value={o.value}>
                               {o[language === 'ur' ? 'ur' : 'en']}
                             </option>
