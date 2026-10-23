@@ -12,6 +12,7 @@ export const PRODUCT_CATALOG: readonly CatalogProduct[] = [
   { category: 'PULSES', name: 'Chana Dal' },
   { category: 'PULSES', name: 'Mong Dal' },
   { category: 'PULSES', name: 'Masoor Dal' },
+  { category: 'PULSES', name: 'Mash Dal' },
   { category: 'PULSES', name: 'Masoor sabut' },
   { category: 'PULSES', name: 'Kala Chana' },
   { category: 'PULSES', name: 'Safaid Chana (Small)' },

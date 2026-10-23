@@ -201,8 +201,11 @@ const safeItems = (items: unknown): OrderItem[] => {
     const rawQuantity = String(v.quantity || '')
     const quantityValue = Number(v.quantity_value) || parseQuantity(rawQuantity)
     const rawUnit = v.unit_type
-    const unitType: UnitType = rawUnit === 'KG' || rawUnit === 'GRAMS' || rawUnit === 'PCS' || rawUnit === 'LITRE' || rawUnit === 'BAGS' || rawUnit === 'NONE'
+    const candidateUnit = rawUnit === 'KG' || rawUnit === 'GRAMS' || rawUnit === 'LITRE' || rawUnit === 'PCS' || rawUnit === 'NONE'
       ? rawUnit : parseUnit(rawQuantity)
+    // Keep submissions aligned with the existing Supabase check constraint.
+    const unitType: UnitType = candidateUnit === 'KG' || candidateUnit === 'GRAMS' || candidateUnit === 'LITRE' || candidateUnit === 'PCS' || candidateUnit === 'NONE'
+      ? candidateUnit : 'NONE'
     const unitPrice = Number(v.unit_price ?? v.rate) || 0
     const total = unitType === 'GRAMS'
       ? calculateAppLineTotal({ quantity_value: quantityValue, unit_type: unitType, unit_price: unitPrice, rate: unitPrice })
@@ -387,7 +390,15 @@ type InvoicePayload = {
 
 const invoiceSubtotal = (items: OrderItem[]) => sumLineTotals(items)
 
-const invoiceNumber = (value: number) => Math.round(Number(value) || 0).toLocaleString('en-PK')
+// Invoice output must not round decimal rates, quantities, or totals to integers.
+// Keep up to two meaningful decimal places while preserving values such as 128.5.
+const invoiceNumber = (value: number) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '0'
+  const [whole, rawFraction] = numeric.toFixed(2).split('.')
+  const fraction = rawFraction.replace(/0+$/, '')
+  return `${Number(whole).toLocaleString('en-PK')}${fraction ? `.${fraction}` : ''}`
+}
 const invoiceFilename = (customerName: string) => {
   const safeName = customerName.trim().replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Customer'
   return `${safeName}_Sales_Invoice.pdf`
