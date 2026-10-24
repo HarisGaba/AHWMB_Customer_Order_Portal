@@ -241,7 +241,7 @@ const copy = {
     locate: 'Share Location', locating: 'Finding...', locationReady: 'Location ready',
     locationError: 'Permission denied. Paste a Maps link instead.',
     items: 'Order Items', itemsSub: 'Select unit and enter quantity. Admin fills in the price.',
-    number: 'No.', item: 'Item Name', quantity: 'Qty', unit: 'Unit', rate: 'Rate', total: 'Total',
+    number: 'No.', item: 'Item Name', quantity: 'Quantity/Weight', unit: 'Unit', rate: 'Rate', total: 'Total',
     locked: 'Admin only', itemPh: 'e.g. Rice, Sugar', quantityPh: 'Quantity',
     quantityHelp: 'Weight rates use the per-KG price: grams are converted to kilograms · pieces use per-piece price',
     delete: 'Remove', add: '+ Add Item', rows: (n: number) => `${n} rows`,
