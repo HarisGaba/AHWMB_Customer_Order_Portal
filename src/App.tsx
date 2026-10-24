@@ -2157,8 +2157,29 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
   )
 }
 
-function AdminReportPlaceholder({ title, description, onBack }: { title: string; description: string; onBack: () => void }) {
-  return <section className="panel admin-placeholder"><div className="daily-report-head"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">{title}</h2><p className="panel-sub">{description}</p></div><button type="button" className="btn-secondary" onClick={onBack}><ReceiptText size={16} /> Orders</button></div><div className="empty-state"><PackageCheck size={46} /><p>This report section is ready for your reporting rules and data fields.</p></div></section>
+type SavedCustomer = { name: string; address: string; phone: string }
+function CustomerReport() {
+  const [customers, setCustomers] = useState<SavedCustomer[]>(() => { try { return JSON.parse(localStorage.getItem('ahwmb-saved-customers') || 'null') || SAVED_CUSTOMERS.map(customer => ({ ...customer, phone: '' })) } catch { return SAVED_CUSTOMERS.map(customer => ({ ...customer, phone: '' })) } })
+  const [editing, setEditing] = useState<number | null>(null)
+  const [draft, setDraft] = useState<SavedCustomer>({ name: '', address: '', phone: '' })
+  const [query, setQuery] = useState('')
+  useEffect(() => { try { localStorage.setItem('ahwmb-saved-customers', JSON.stringify(customers)) } catch { /* storage unavailable */ } }, [customers])
+  const visible = customers.filter(customer => `${customer.name} ${customer.address}`.toLowerCase().includes(query.toLowerCase()))
+  const save = () => { if (!draft.name.trim()) return; setCustomers(current => editing === null ? [...current, { ...draft, name: draft.name.trim() }] : current.map((customer, index) => index === editing ? draft : customer)); setDraft({ name: '', address: '', phone: '' }); setEditing(null) }
+  return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Customer Report</h2><p className="panel-sub">Manage saved customers, contacts, and delivery addresses.</p></div><span className="report-count">{customers.length} customers</span></div><div className="report-toolbar"><input className="report-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search customers..." /><button type="button" className="btn-submit report-add" onClick={() => { setEditing(null); setDraft({ name: '', address: '', phone: '' }) }}><Plus size={17} /> Add Customer</button></div><div className="report-form"><input className="field-input" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Customer name" /><input className="field-input" value={draft.phone} onChange={e => setDraft({ ...draft, phone: e.target.value })} placeholder="Contact number" /><input className="field-input" value={draft.address} onChange={e => setDraft({ ...draft, address: e.target.value })} placeholder="Address" /><button type="button" className="btn-secondary" onClick={save}><Check size={16} /> {editing === null ? 'Save Customer' : 'Update Customer'}</button></div><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Name</th><th>Contact</th><th>Address</th><th>Actions</th></tr></thead><tbody>{visible.map((customer) => { const index = customers.indexOf(customer); return <tr key={`${customer.name}-${index}`}><td><strong>{customer.name}</strong></td><td>{customer.phone || '—'}</td><td>{customer.address}</td><td><button type="button" className="report-icon-btn" onClick={() => { setEditing(index); setDraft(customer) }} aria-label="Edit customer">✎</button><button type="button" className="report-icon-btn report-icon-btn--danger" onClick={() => setCustomers(current => current.filter((_, i) => i !== index))} aria-label="Delete customer"><Trash2 size={15} /></button></td></tr> })}</tbody></table></div></section>
+}
+
+function PurchaseReport() {
+  const [rows, setRows] = useState([{ id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }])
+  const update = (id: string, key: 'party' | 'area' | 'item' | 'amount' | 'date', value: string) => setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row))
+  return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Purchase Report</h2><p className="panel-sub">Record supplier purchases, deposits, and payment dates.</p></div><button type="button" className="btn-submit report-add" onClick={() => setRows(current => [...current, { id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }])}><Plus size={17} /> Add Purchase</button></div><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Party Name</th><th>Area</th><th>Item</th><th>Amount / Deposit</th><th>Date</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td><input className="report-cell-input" value={row.party} onChange={e => update(row.id, 'party', e.target.value)} placeholder="Supplier" /></td><td><input className="report-cell-input" value={row.area} onChange={e => update(row.id, 'area', e.target.value)} placeholder="Area" /></td><td><input className="report-cell-input" value={row.item} onChange={e => update(row.id, 'item', e.target.value)} placeholder="Item" /></td><td><input className="report-cell-input" type="number" value={row.amount} onChange={e => update(row.id, 'amount', e.target.value)} placeholder="Rs." /></td><td><input className="report-cell-input" type="date" value={row.date} onChange={e => update(row.id, 'date', e.target.value)} /></td></tr>)}</tbody></table></div></section>
+}
+
+function StockReport() {
+  const [site, setSite] = useState<'Jodia Bazaar' | 'Godam Site'>('Jodia Bazaar')
+  const [rows, setRows] = useState([{ id: crypto.randomUUID(), item: '', qty: '', bags: '' }])
+  const update = (id: string, key: 'item' | 'qty' | 'bags', value: string) => setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row))
+  return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Stock Report</h2><p className="panel-sub">Manage stock quantity and bags by storage location.</p></div></div><div className="site-tabs">{(['Jodia Bazaar', 'Godam Site'] as const).map(value => <button key={value} type="button" className={site === value ? 'site-tab site-tab--active' : 'site-tab'} onClick={() => setSite(value)}>{value}</button>)}<button type="button" className="btn-submit report-add" onClick={() => setRows(current => [...current, { id: crypto.randomUUID(), item: '', qty: '', bags: '' }])}><Plus size={17} /> Add Item</button></div><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Items</th><th>Quantity</th><th>Bags</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td><input className="report-cell-input" value={row.item} onChange={e => update(row.id, 'item', e.target.value)} placeholder="e.g. Chana Dal (50kg)" /></td><td><input className="report-cell-input" value={row.qty} onChange={e => update(row.id, 'qty', e.target.value)} placeholder="500 kg" /></td><td><input className="report-cell-input" type="number" value={row.bags} onChange={e => update(row.id, 'bags', e.target.value)} placeholder="10" /></td></tr>)}</tbody></table></div></section>
 }
 
 // ─── Admin Page ───────────────────────────────────────────────────────────────
@@ -2185,7 +2206,7 @@ function AdminPage({
   const [printPayload, setPrintPayload] = useState<InvoicePayload | null>(null)
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [adminView, setAdminView] = useState<'orders' | 'reports' | 'create-order' | 'customer-report' | 'stock-report'>('orders')
+  const [adminView, setAdminView] = useState<'orders' | 'reports' | 'create-order' | 'customer-report' | 'purchase-report' | 'stock-report'>('orders')
   const [editCustomerOrder, setEditCustomerOrder] = useState<OrderRecord | null>(null)
   const [editCustomerName, setEditCustomerName] = useState('')
   const [editCustomerPhone, setEditCustomerPhone] = useState('')
@@ -2473,7 +2494,7 @@ function AdminPage({
             <span className="admin-emails">{ADMIN_EMAILS.join(' · ')}</span>
           </div>
           <div className="admin-top-actions">
-            {([['orders', 'Orders', ReceiptText], ['create-order', 'Create Order', Plus], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
+            {([['orders', 'Orders', ReceiptText], ['create-order', 'Create Order', Plus], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['purchase-report', 'Purchase Report', ReceiptText], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
             {adminView === 'orders' && <button type="button" className="btn-secondary" onClick={() => void refresh()}><RefreshCw size={16} /> {t.refresh}</button>}
             <button type="button" className="btn-secondary btn-danger" onClick={onAuth}>
               <LogOut size={16} /> {t.logout}
@@ -2485,9 +2506,11 @@ function AdminPage({
         {adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('orders')} />
           : adminView === 'customer-report'
-          ? <AdminReportPlaceholder title="Customer Report" description="Review saved customers and their order history." onBack={() => setAdminView('orders')} />
+          ? <CustomerReport />
+          : adminView === 'purchase-report'
+          ? <PurchaseReport />
           : adminView === 'stock-report'
-          ? <AdminReportPlaceholder title="Stock Report" description="Track frequently ordered products and stock notes." onBack={() => setAdminView('orders')} />
+          ? <StockReport />
           : adminView === 'create-order'
           ? <AdminCreateOrder language={language} onSuccess={() => { setAdminView('orders'); void refresh() }} onBack={() => setAdminView('orders')} />
           : <div className="admin-grid">
