@@ -256,7 +256,7 @@ const copy = {
     orders: 'Orders', pending: 'Pending', completed: 'Completed', all: 'All',
     noOrders: 'No orders yet.', select: 'Select an order to start pricing.',
     price: 'Invoice Editor', priceSub: 'Enter the per-KG price for KG or grams, and the per-piece price for pieces. Example: 250 g at Rs 1,600/kg = Rs 400.',
-    unitPrice: 'Rate (per KG / gram / piece)', lineTotal: 'Total', editTotal: 'You can manually override line totals',
+    unitPrice: 'Rate Per Unit', lineTotal: 'Total', editTotal: 'You can manually override line totals',
     addAdmin: 'Add Item', remove: 'Remove',
     savePrint: 'Save & Print Invoice', sharePdf: 'Share PDF File', balance: 'Balance', deposit: 'Deposit', remaining: 'Remaining Balance', saving: 'Generating PDF…', refresh: 'Refresh', reports: 'Daily Reports', ordersView: 'Orders',
     grand: 'Grand Total', status: 'Status', created: 'Date',
