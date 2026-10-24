@@ -2561,6 +2561,21 @@ input, select, textarea, button { line-height:1.25; }
 /* Keep a deliberate breathing space between the brand banner and customer form. */
 .page-wrap > .portal-hero { margin-bottom:24px !important; }
 
+/* Clear customer footer separation and readable support contact. */
+.submit-card { margin-bottom: 18px; }
+.page-footer { margin-top: 0 !important; padding: 22px 18px !important; border-top: 1px solid #cfe4d8; display:flex; justify-content:space-between; gap:18px; flex-wrap:wrap; }
+.page-footer > div { display:flex; flex-direction:column; gap:5px; }
+.page-footer a { color:var(--c-green); font-weight:800; text-decoration:none; }
+.customer-autocomplete { position:relative; }
+.customer-suggestions { position:absolute; z-index:20; left:0; right:0; top:100%; background:#fff; border:1px solid #cfe4d8; border-radius:10px; box-shadow:0 8px 22px rgba(0,40,20,.14); overflow:hidden; }
+.customer-suggestions button { width:100%; padding:10px 12px; border:0; border-bottom:1px solid #e7f1eb; background:#fff; text-align:left; display:flex; flex-direction:column; gap:3px; cursor:pointer; }
+.customer-suggestions button:hover { background:#eff9f1; }
+.customer-suggestions small { color:#6d8f7b; }
+.btn-quick-item { background:#fff8e1; border-color:#e4b322; color:#795400; }
+.admin-placeholder { min-height:420px; }
+@media (min-width: 1050px) { .admin-top-actions { align-items:stretch; flex-wrap:wrap; max-width:700px; justify-content:flex-end; } }
+@media (max-width: 700px) { .admin-top-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; } .admin-top-actions .btn-secondary { justify-content:center; min-height:46px; } .page-footer { flex-direction:column; } }
+
 /* Admin pricing fields: protect Rate focus and give Amount a bounded share. */
 /* min-width only applies on true desktop (>860px); tablets use auto layout */
 .admin-create-table { width:100%; min-width:860px; table-layout:fixed; }

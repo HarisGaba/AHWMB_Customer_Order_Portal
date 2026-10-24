@@ -12,6 +12,20 @@ import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ADMIN_EMAILS = ['ahmedyounus1978@gmail.com', 'ahwmb1965@gmail.com']
 const SHOPKEEPER_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.env.VITE_SHOPKEEPER_WHATSAPP || '923001234567'
+const SAVED_CUSTOMERS = [
+  ['AHMED STORE', 'MANZOOR COLONY'], ['NAZAR KHAN', 'MANZOOR COLONY'], ['HAJI HAIDER GUL', 'CANT'],
+  ['QAPAS ALTAF COMPANY', 'PORT QASIM'], ['DARAKSHAN/PEHALVI HOTEL', 'SADAR'], ['SAIFUULAH DEFENSE', 'DEFENCE'],
+  ['ABDUL HADI DEFENSE', 'DEFENCE'], ['YOUSUF JABBAR', 'PECHS'], ['ISMAIL VAYANI', 'BMCHS'], ['ASHRAF VAYANI', 'GULSHAN E IQBAL'],
+  ['SALMAN DEHLI COLONY', 'DEHLI COLONY'], ['MAMU BHANJA RESTURANT', 'PHASE 2 EXT'], ['FARHAN SHAH FAISAL', 'SHAH FASAL COLONY'],
+  ['HAKEEM SHAH', 'TARIQ ROAD'], ['FAHIM GABA', 'GULSHAN E JAMAL'], ['IRFAN GABA', 'GULSHAN E JAMAL'], ['IMRAN GABA', 'GULSHAN E JAMAL'],
+  ['JAWED MOSMIYAT', 'MOSMIYAT'], ['UMER BHATIYABAD', 'BHATIYABAD'], ['BAJAJ STORE', 'MIR PUR MATHELO'], ['JANNAT SUPER STORE', 'METROWIL'],
+  ['UBAID MULANA', 'HUSAINABAD'], ['ILYAS BHATIYABAD', 'BHITAYABAD'], ['TAYYAB STORE', 'HUSAINABAD'], ['M RAFEEQ', 'MACHAR COLONY'],
+  ['IDRESS BHAI', 'TARIQ ROAD'], ['IBRAHIM PASATA', 'NOT FOUND'], ['MAHRAJ', 'KARADAR'], ['BABA STORE', 'LIYAQTABAD'],
+  ['FAROOQ TEA POINT', 'NOT FOUND'], ['INSAF HOTEL', 'JODIA BAZAR'], ['TARIQ BROTHERS', 'JODIA BAZAR'], ['GHULAM ALI', 'DEFENCE'],
+  ['IQBAL MANZOOR ENTERPRISES', 'NOT FOUND'], ['KHUWAJA MALIR', 'MALIR'], ['ZAIQA FOODS', 'NOT FOUND'], ['IMRAN BABA BHIT', 'BHIT'],
+  ['M ALI KHATRI', 'NOT FOUND'], ['KHALID MARRIOT ROAD', 'MARRIOT ROAD'], ['ANWAR BHITAYABAD', 'BHITAYABAD'], ['TAHIRA BAJI', 'PHASE 8'],
+  ['HAJI MURAD', 'NOT FOUND'], ['KASHIF BUFERZONE', 'BUFERZONE'], ['HASHIM SHAMMIM', 'NOT FOUND'], ['NISAR FILTER', 'GHARO'],
+].map(([name, address]) => ({ name, address }))
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Language = 'en' | 'ur'
@@ -1573,8 +1587,8 @@ function CustomerPage({
         </section>
 
         <footer className="page-footer">
-          <span>{t.footer}</span>
-          <span>{t.cash}</span>
+          <div><strong>AHWMB Customer Order Portal</strong><span>{t.cash}</span></div>
+          <div><span>For any queries or questions, please contact us</span><a href="tel:03223928421">0322-3928421</a></div>
         </footer>
       </div>
 
@@ -2143,6 +2157,10 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
   )
 }
 
+function AdminReportPlaceholder({ title, description, onBack }: { title: string; description: string; onBack: () => void }) {
+  return <section className="panel admin-placeholder"><div className="daily-report-head"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">{title}</h2><p className="panel-sub">{description}</p></div><button type="button" className="btn-secondary" onClick={onBack}><ReceiptText size={16} /> Orders</button></div><div className="empty-state"><PackageCheck size={46} /><p>This report section is ready for your reporting rules and data fields.</p></div></section>
+}
+
 // ─── Admin Page ───────────────────────────────────────────────────────────────
 function AdminPage({
   language, setLanguage, onAuth, isAuthenticated,
@@ -2167,7 +2185,7 @@ function AdminPage({
   const [printPayload, setPrintPayload] = useState<InvoicePayload | null>(null)
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [adminView, setAdminView] = useState<'orders' | 'reports' | 'create-order'>('orders')
+  const [adminView, setAdminView] = useState<'orders' | 'reports' | 'create-order' | 'customer-report' | 'stock-report'>('orders')
   const [editCustomerOrder, setEditCustomerOrder] = useState<OrderRecord | null>(null)
   const [editCustomerName, setEditCustomerName] = useState('')
   const [editCustomerPhone, setEditCustomerPhone] = useState('')
@@ -2268,6 +2286,10 @@ function AdminPage({
       sr: curr.length + 1, name: '', quantity: '',
       quantity_value: 1, unit_type: 'NONE', rate: 0, unit_price: 0, total: 0,
     }])
+
+  const addQuickAdminItem = (name: string) => setPricedItems(curr => [...curr, {
+    sr: curr.length + 1, name, quantity: '', quantity_value: 1, unit_type: 'NONE', rate: 0, unit_price: 0, total: 0,
+  }])
 
   const removeAdminItem = (index: number) =>
     setPricedItems(curr =>
@@ -2451,19 +2473,8 @@ function AdminPage({
             <span className="admin-emails">{ADMIN_EMAILS.join(' · ')}</span>
           </div>
           <div className="admin-top-actions">
-            <button
-              type="button"
-              className={`btn-secondary ${adminView === 'create-order' ? 'btn-secondary--active' : ''}`}
-              onClick={() => setAdminView('create-order')}
-            >
-              <Plus size={16} /> Create Order
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setAdminView(current => current === 'orders' ? 'reports' : 'orders')}>
-              <ReceiptText size={16} /> {adminView === 'orders' ? t.reports : t.ordersView}
-            </button>
-            {adminView === 'orders' && <button type="button" className="btn-secondary" onClick={() => void refresh()}>
-              <RefreshCw size={16} /> {t.refresh}
-            </button>}
+            {([['orders', 'Orders', ReceiptText], ['create-order', 'Create Order', Plus], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
+            {adminView === 'orders' && <button type="button" className="btn-secondary" onClick={() => void refresh()}><RefreshCw size={16} /> {t.refresh}</button>}
             <button type="button" className="btn-secondary btn-danger" onClick={onAuth}>
               <LogOut size={16} /> {t.logout}
             </button>
@@ -2473,6 +2484,10 @@ function AdminPage({
         {/* Orders, Daily Reports, and Create Order views */}
         {adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('orders')} />
+          : adminView === 'customer-report'
+          ? <AdminReportPlaceholder title="Customer Report" description="Review saved customers and their order history." onBack={() => setAdminView('orders')} />
+          : adminView === 'stock-report'
+          ? <AdminReportPlaceholder title="Stock Report" description="Track frequently ordered products and stock notes." onBack={() => setAdminView('orders')} />
           : adminView === 'create-order'
           ? <AdminCreateOrder language={language} onSuccess={() => { setAdminView('orders'); void refresh() }} onBack={() => setAdminView('orders')} />
           : <div className="admin-grid">
@@ -2813,6 +2828,8 @@ function AdminPage({
                     <button type="button" className="btn-add-item" onClick={addAdminItem}>
                       <Plus size={16} /> {t.addAdmin}
                     </button>
+                    <button type="button" className="btn-add-item btn-quick-item" onClick={() => addQuickAdminItem('Rent')}><Plus size={16} /> Rent</button>
+                    <button type="button" className="btn-add-item btn-quick-item" onClick={() => addQuickAdminItem('Tulai')}><Plus size={16} /> Tulai</button>
                     <p className="pricing-note"><Info size={14} /> {t.editTotal}</p>
                   </div>
 
@@ -2879,6 +2896,11 @@ function AdminCreateOrder({
   const [suggestionRowId, setSuggestionRowId] = useState<string | null>(null)
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
+  const customerMatches = useMemo(() => {
+    const query = name.trim().toLowerCase()
+    if (!query) return []
+    return SAVED_CUSTOMERS.filter(customer => customer.name.toLowerCase().includes(query)).slice(0, 8)
+  }, [name])
 
   const updateRow = (id: string, field: keyof Omit<AdminOrderRow, 'id'>, value: string) => {
     setRows(curr => {
@@ -2901,8 +2923,6 @@ function AdminCreateOrder({
 
   const submit = async () => {
     const next: FormErrors = {}
-    if (!name.trim()) next.name = 'Please enter customer name.'
-    if (!address.trim()) next.address = 'Please enter delivery address.'
     if (filledRows.length === 0 || filledRows.some(r => !r.itemName.trim() || !r.quantityValue.trim()))
       next.items = 'Fill in item name and quantity for every row you use.'
     setErrors(next)
@@ -2983,12 +3003,13 @@ function AdminCreateOrder({
           </div>
         </div>
         <div className="field-group">
-          <label className={`field ${errors.name ? 'field--error' : ''}`}>
-            <span className="field-label">{isRtl ? 'گاہک کا نام' : 'Customer Name'} <b className="req">*</b></span>
+          <label className={`field customer-autocomplete ${errors.name ? 'field--error' : ''}`}>
+            <span className="field-label">{isRtl ? 'گاہک کا نام' : 'Customer Name'}</span>
             <div className="field-input-wrap">
               <UserRound size={18} className="field-icon" />
-              <input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder={isRtl ? 'گاہک کا پورا نام' : 'Customer full name'} />
+              <input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder={isRtl ? 'گاہک کا پورا نام' : 'Customer full name'} autoComplete="off" />
             </div>
+            {customerMatches.length > 0 && <div className="customer-suggestions">{customerMatches.map(customer => <button type="button" key={customer.name} onMouseDown={e => e.preventDefault()} onClick={() => { setName(customer.name); setAddress(customer.address) }}><strong>{customer.name}</strong><small>{customer.address}</small></button>)}</div>}
             {errors.name && <small className="field-error-msg">{errors.name}</small>}
           </label>
           <label className="field">
@@ -2999,7 +3020,7 @@ function AdminCreateOrder({
             </div>
           </label>
           <label className={`field ${errors.address ? 'field--error' : ''}`}>
-            <span className="field-label">{isRtl ? 'ترسیل کا پتہ' : 'Delivery Address'} <b className="req">*</b></span>
+            <span className="field-label">{isRtl ? 'ترسیل کا پتہ' : 'Delivery Address'}</span>
             <div className="field-input-wrap">
               <MapPin size={18} className="field-icon" />
               <textarea className="field-textarea" value={address} onChange={e => setAddress(e.target.value)} placeholder={isRtl ? 'گھر کا مکمل پتہ' : 'Full delivery address'} rows={3} />

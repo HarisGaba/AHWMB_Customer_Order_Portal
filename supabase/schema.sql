@@ -58,17 +58,14 @@ as $$
 declare
   new_order_id uuid;
 begin
-  if nullif(trim(p_order_ref), '') is null
-     or nullif(trim(p_customer_name), '') is null
-     or nullif(trim(p_customer_phone), '') is null
-     or nullif(trim(p_customer_address), '') is null then
-    raise exception 'Required order details are missing';
+  if nullif(trim(p_order_ref), '') is null then
+    raise exception 'Order reference is missing';
   end if;
 
   insert into public.orders (
     order_ref, customer_name, customer_phone, customer_address, location_link, items, status, grand_total
   ) values (
-    trim(p_order_ref), trim(p_customer_name), trim(p_customer_phone), trim(p_customer_address),
+    trim(p_order_ref), trim(coalesce(p_customer_name, '')), trim(coalesce(p_customer_phone, '')), trim(coalesce(p_customer_address, '')),
     nullif(trim(coalesce(p_location_link, '')), ''), coalesce(p_items, '[]'::jsonb), 'pending', 0
   ) returning id into new_order_id;
 
