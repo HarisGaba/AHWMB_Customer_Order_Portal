@@ -15,7 +15,7 @@ const SHOPKEEPER_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.en
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Language = 'en' | 'ur'
-type UnitType = 'KG' | 'GRAMS' | 'PCS' | 'LITRE' | 'BAGS' | 'NONE'
+type UnitType = 'KG' | 'GRAMS' | 'LITRE' | 'PCS' | 'PACKETS' | 'BAGS' | 'NONE'
 type OrderRow = { id: string; itemName: string; quantityValue: string; unitType: UnitType }
 type OrderItem = {
   sr: number
@@ -54,7 +54,8 @@ const UNIT_OPTIONS: { value: UnitType; en: string; ur: string }[] = [
   { value: 'KG', en: 'KG', ur: 'کلو' },
   { value: 'GRAMS', en: 'Grams', ur: 'گرام' },
   { value: 'LITRE', en: 'Litre', ur: 'لیٹر' },
-  { value: 'PCS', en: 'Packet / Piece', ur: 'پیکٹ / عدد' },
+  { value: 'PCS', en: 'Pieces', ur: 'عدد' },
+  { value: 'PACKETS', en: 'Packets', ur: 'پیکٹ' },
   { value: 'BAGS', en: 'Bags', ur: 'تھیلے' },
 ]
 
@@ -104,7 +105,8 @@ const parseQuantity = (value: string) => {
 const parseUnit = (value: string): UnitType =>
   /gram|g\b|گرام/i.test(value) ? 'GRAMS'
   : /litre|liter|(?:^|\s)l(?:\s|$)|لیتر/i.test(value) ? 'LITRE'
-  : /packet|pack|pcs|piece|پیکٹ|عدد/i.test(value) ? 'PCS'
+  : /packet|pack|پیکٹ/i.test(value) ? 'PACKETS'
+  : /pcs|piece|عدد/i.test(value) ? 'PCS'
   : /bag|bags|تھیلا|تھیلے/i.test(value) ? 'BAGS'
   : 'NONE'
 
@@ -123,7 +125,7 @@ const quantityText = (value: number, unit: UnitType, language: Language) =>
 
 const pdfQuantityText = (value: number, unit: UnitType) => {
   const qty = Number.isInteger(value) ? value : Number(value.toFixed(3))
-  const label = unit === 'KG' ? 'kg' : unit === 'GRAMS' ? 'grams' : unit === 'LITRE' ? 'litres' : unit === 'PCS' ? 'pieces' : unit === 'BAGS' ? 'bags' : ''
+  const label = unit === 'KG' ? 'kg' : unit === 'GRAMS' ? 'grams' : unit === 'LITRE' ? 'litres' : unit === 'PCS' ? 'pieces' : unit === 'PACKETS' ? 'packets' : unit === 'BAGS' ? 'bags' : ''
   return label ? `${qty} ${label}` : String(qty)
 }
 
@@ -167,7 +169,7 @@ function insertTextareaLineBreak(event: React.KeyboardEvent<HTMLTextAreaElement>
 }
 
 const unitRateLabel = (unit: UnitType) =>
-  unit === 'PCS' ? 'Per Piece' : unit === 'BAGS' ? 'Per Bag' : unit === 'LITRE' ? 'Per Litre' : unit === 'NONE' ? 'Amount' : 'Per KG'
+  unit === 'PCS' ? 'Per Piece' : unit === 'PACKETS' ? 'Per Packet' : unit === 'BAGS' ? 'Per Bag' : unit === 'LITRE' ? 'Per Litre' : unit === 'NONE' ? 'Amount' : 'Per KG'
 
 const productSuggestions = (query: string) => {
   const normalized = query.trim().toLowerCase()
@@ -201,10 +203,10 @@ const safeItems = (items: unknown): OrderItem[] => {
     const rawQuantity = String(v.quantity || '')
     const quantityValue = Number(v.quantity_value) || parseQuantity(rawQuantity)
     const rawUnit = v.unit_type
-    const candidateUnit = rawUnit === 'KG' || rawUnit === 'GRAMS' || rawUnit === 'LITRE' || rawUnit === 'PCS' || rawUnit === 'NONE'
+    const candidateUnit = rawUnit === 'KG' || rawUnit === 'GRAMS' || rawUnit === 'LITRE' || rawUnit === 'PCS' || rawUnit === 'PACKETS' || rawUnit === 'NONE'
       ? rawUnit : parseUnit(rawQuantity)
     // Keep submissions aligned with the existing Supabase check constraint.
-    const unitType: UnitType = candidateUnit === 'KG' || candidateUnit === 'GRAMS' || candidateUnit === 'LITRE' || candidateUnit === 'PCS' || candidateUnit === 'NONE'
+    const unitType: UnitType = candidateUnit === 'KG' || candidateUnit === 'GRAMS' || candidateUnit === 'LITRE' || candidateUnit === 'PCS' || candidateUnit === 'PACKETS' || candidateUnit === 'NONE'
       ? candidateUnit : 'NONE'
     const unitPrice = Number(v.unit_price ?? v.rate) || 0
     const total = unitType === 'GRAMS'

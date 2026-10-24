@@ -27,7 +27,7 @@ create table if not exists public.order_items (
   name text not null,
   quantity text not null default '',
   quantity_value numeric not null default 0,
-  unit_type text not null default 'KG' check (unit_type in ('KG', 'GRAMS', 'LITRE', 'PCS', 'NONE')),
+  unit_type text not null default 'KG' check (unit_type in ('KG', 'GRAMS', 'LITRE', 'PCS', 'PACKETS', 'NONE')),
   unit_price numeric not null default 0,
   total numeric not null default 0,
   created_at timestamptz not null default now()
@@ -125,5 +125,5 @@ end $$;
 
 
 alter table public.order_items drop constraint if exists order_items_unit_type_check;
-alter table public.order_items add constraint order_items_unit_type_check check (unit_type in ('KG', 'GRAMS', 'LITRE', 'PCS', 'NONE'));
+alter table public.order_items add constraint order_items_unit_type_check check (unit_type in ('KG', 'GRAMS', 'LITRE', 'PCS', 'PACKETS', 'NONE'));
 NOTIFY pgrst, 'reload schema';
