@@ -2600,6 +2600,18 @@ input, select, textarea, button { line-height:1.25; }
 .ledger-entry-form { display:grid; grid-template-columns:1fr 1fr 1.3fr auto; gap:10px; margin-bottom:14px; }
 .ledger-rows { display:grid; gap:6px; }
 .ledger-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; padding:10px 12px; background:#fff; border:1px solid #e3eee7; border-radius:9px; }
+.stock-location-select { min-width:190px; min-height:46px; border:1px solid #cfe4d8; border-radius:12px; padding:0 13px; background:#fff; color:var(--c-green); font:inherit; font-weight:800; }
+.stock-location-label { display:flex; align-items:center; min-height:46px; padding:0 14px; border-radius:11px; background:#edf8f0; color:#286044; }
+.stock-bags { background:#f2f7f4; color:#287049; font-weight:800; }
+.account-search-wrap { position:relative; max-width:680px; margin-bottom:16px; }
+.account-search { width:100%; box-sizing:border-box; min-height:52px; }
+.report-suggestions { top:54px; }
+.ledger-card--top { margin-top:0; }
+.ledger-table { border:1px solid #dfece3; border-radius:11px; overflow:hidden; }
+.ledger-header { display:grid; grid-template-columns:1fr 1fr 1.5fr; gap:12px; padding:11px 13px; background:#e8f4ec; color:#286044; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+.account-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; padding-top:15px; border-top:1px solid #dfece3; }
+.account-empty { display:grid; place-items:center; gap:10px; min-height:230px; color:#739883; text-align:center; }
+.account-editor { margin-top:18px; }
 @media (min-width: 1050px) { .admin-top-actions { align-items:stretch; flex-wrap:wrap; max-width:700px; justify-content:flex-end; } }
 @media (max-width: 700px) { .admin-top-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; } .admin-top-actions .btn-secondary { justify-content:center; min-height:46px; } .page-footer { flex-direction:column; } .report-heading,.report-toolbar { flex-direction:column; } .report-add { width:100% !important; } .report-form,.ledger-entry-form { grid-template-columns:1fr; } .ledger-row { grid-template-columns:1fr; gap:3px; } }
 
