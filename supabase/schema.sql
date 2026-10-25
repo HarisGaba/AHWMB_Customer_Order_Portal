@@ -1,5 +1,16 @@
 create extension if not exists pgcrypto;
 
+create table if not exists public.customers (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text not null default '',
+  address text not null default '',
+  created_at timestamptz not null default now()
+);
+create unique index if not exists customers_name_unique on public.customers (name);
+
+alter table public.customers enable row level security;
+
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   order_ref text not null unique,
@@ -41,6 +52,16 @@ language sql stable security definer set search_path = public
 as $$
   select lower(coalesce(auth.jwt() ->> 'email', '')) in ('ahmedyounus1978@gmail.com', 'ahwmb1965@gmail.com');
 $$;
+
+drop policy if exists "Admins can view customers" on public.customers;
+create policy "Admins can view customers" on public.customers for select to authenticated using (public.is_ahwmb_admin());
+drop policy if exists "Admins can add customers" on public.customers;
+create policy "Admins can add customers" on public.customers for insert to authenticated with check (public.is_ahwmb_admin());
+drop policy if exists "Admins can update customers" on public.customers;
+create policy "Admins can update customers" on public.customers for update to authenticated using (public.is_ahwmb_admin()) with check (public.is_ahwmb_admin());
+drop policy if exists "Admins can delete customers" on public.customers;
+create policy "Admins can delete customers" on public.customers for delete to authenticated using (public.is_ahwmb_admin());
+grant select, insert, update, delete on public.customers to authenticated;
 
 -- Customer submission is intentionally atomic and does not expose order rows to anon users.
 create or replace function public.submit_order(
