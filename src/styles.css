@@ -2600,6 +2600,11 @@ input, select, textarea, button { line-height:1.25; }
 .ledger-entry-form { display:grid; grid-template-columns:1fr 1fr 1.3fr auto; gap:10px; margin-bottom:14px; }
 .ledger-rows { display:grid; gap:6px; }
 .ledger-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; padding:10px 12px; background:#fff; border:1px solid #e3eee7; border-radius:9px; }
+.ledger-row-actions { display:flex; gap:6px; justify-content:flex-end; }
+.ledger-table .ledger-row { grid-template-columns:1fr 1fr 1.5fr auto; align-items:center; }
+.ledger-edit-btn,.ledger-delete-btn { border:0; border-radius:7px; padding:5px 9px; cursor:pointer; font:inherit; font-size:12px; font-weight:800; }
+.ledger-edit-btn { background:#e8f4ec; color:#167044; }
+.ledger-delete-btn { background:#fff0f0; color:#b44343; }
 .stock-location-select { min-width:190px; min-height:46px; border:1px solid #cfe4d8; border-radius:12px; padding:0 13px; background:#fff; color:var(--c-green); font:inherit; font-weight:800; }
 .stock-location-label { display:flex; align-items:center; min-height:46px; padding:0 14px; border-radius:11px; background:#edf8f0; color:#286044; }
 .stock-bags { background:#f2f7f4; color:#287049; font-weight:800; }
@@ -2608,7 +2613,7 @@ input, select, textarea, button { line-height:1.25; }
 .report-suggestions { top:54px; }
 .ledger-card--top { margin-top:0; }
 .ledger-table { border:1px solid #dfece3; border-radius:11px; overflow:hidden; }
-.ledger-header { display:grid; grid-template-columns:1fr 1fr 1.5fr; gap:12px; padding:11px 13px; background:#e8f4ec; color:#286044; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+.ledger-header { display:grid; grid-template-columns:1fr 1fr 1.5fr auto; gap:12px; padding:11px 13px; background:#e8f4ec; color:#286044; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
 .account-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; padding-top:15px; border-top:1px solid #dfece3; }
 .account-empty { display:grid; place-items:center; gap:10px; min-height:230px; color:#739883; text-align:center; }
 .account-editor { margin-top:18px; }
