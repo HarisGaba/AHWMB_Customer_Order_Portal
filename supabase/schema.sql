@@ -9,6 +9,15 @@ create table if not exists public.customers (
 );
 create unique index if not exists customers_name_unique on public.customers (name);
 
+create table if not exists public.products (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  category text not null default 'EXTRA ITEMS',
+  created_at timestamptz not null default now()
+);
+create unique index if not exists products_name_unique on public.products (lower(name));
+alter table public.products enable row level security;
+
 alter table public.customers enable row level security;
 
 create table if not exists public.orders (
@@ -62,6 +71,14 @@ create policy "Admins can update customers" on public.customers for update to au
 drop policy if exists "Admins can delete customers" on public.customers;
 create policy "Admins can delete customers" on public.customers for delete to authenticated using (public.is_ahwmb_admin());
 grant select, insert, update, delete on public.customers to authenticated;
+drop policy if exists "Admins can view products" on public.products;
+create policy "Admins can view products" on public.products for select to authenticated using (public.is_ahwmb_admin());
+drop policy if exists "Admins can add products" on public.products;
+create policy "Admins can add products" on public.products for insert to authenticated with check (public.is_ahwmb_admin());
+grant select, insert on public.products to authenticated;
+grant select on public.products to anon;
+drop policy if exists "Anyone can view products" on public.products;
+create policy "Anyone can view products" on public.products for select to anon, authenticated using (true);
 
 -- Customer submission is intentionally atomic and does not expose order rows to anon users.
 create or replace function public.submit_order(

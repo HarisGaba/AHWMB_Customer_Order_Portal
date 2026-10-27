@@ -9,6 +9,8 @@ import {
 import { supabase } from './lib/supabase'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
 
+let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ADMIN_EMAILS = ['ahmedyounus1978@gmail.com', 'ahwmb1965@gmail.com']
 const SHOPKEEPER_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.env.VITE_SHOPKEEPER_WHATSAPP || '923001234567'
@@ -187,8 +189,8 @@ const unitRateLabel = (unit: UnitType) =>
 
 const productSuggestions = (query: string) => {
   const normalized = query.trim().toLowerCase()
-  if (!normalized) return PRODUCT_CATALOG.slice(0, 12)
-  return PRODUCT_CATALOG
+  if (!normalized) return runtimeCatalog.slice(0, 12)
+  return runtimeCatalog
     .filter(product => product.name.toLowerCase().includes(normalized))
     .sort((a, b) => {
       const aStarts = a.name.toLowerCase().startsWith(normalized) ? 0 : 1
@@ -769,7 +771,7 @@ async function drawInvoice(
   financials: InvoicePayload['financials'],
   filename: string,
 ): Promise<Blob> {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5', compress: true })
   await document.fonts.ready
   // Browser shaping preserves Urdu joins and Unicode glyphs unsupported by Times.
   const unicodeName = (text: string, width: number) => {
@@ -806,7 +808,7 @@ async function drawInvoice(
     })
     return { canvas, height: canvas.height / scale }
   }
-  const PW = 210, PH = 297, M = 12
+  const PW = 148, PH = 210, M = 8
 
   // Double-border frame with corner ornaments
   const drawFrame = () => {
@@ -827,7 +829,7 @@ async function drawInvoice(
 
   // SALES INVOICE title box
   const cx = PW/2, titleY = M+12
-  doc.setFont('times','bold'); doc.setFontSize(22); doc.setTextColor(0)
+  doc.setFont('times','bold'); doc.setFontSize(17); doc.setTextColor(0)
   doc.text('SALES INVOICE', cx, titleY+7, {align:'center'})
   doc.setLineWidth(0.7); doc.rect(cx-40, titleY, 80, 11)
 
@@ -836,11 +838,11 @@ async function drawInvoice(
   const bL = M+9, bW = PW-M*2-18, divX = bL + bW*0.63
   doc.setLineWidth(0.5); doc.rect(bL, barY, bW, barH)
   doc.line(divX, barY, divX, barY+barH)
-  doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(0)
+  doc.setFont('times','bold'); doc.setFontSize(8.5); doc.setTextColor(0)
   doc.text('Customer Name:', bL+4, barY+6)
   const nameLines = doc.splitTextToSize(order.customer_name || '—', divX - (bL+34) - 3)
   const customerImage = unicodeName(order.customer_name || '', divX - (bL+34) - 3)
-  doc.setFontSize(11)
+  doc.setFontSize(9)
   if (customerImage) {
     doc.addImage(customerImage.canvas, 'PNG', bL+34, barY+1, divX-(bL+34)-3, Math.min(7, customerImage.height))
   } else doc.text(nameLines[0] ?? '', bL+34, barY+6)
@@ -850,23 +852,23 @@ async function drawInvoice(
   doc.setLineWidth(0.3); doc.line(divX+18, barY+8, bL+bW-3, barY+8)
 
   // ── Items table (pure jsPDF, no autoTable) ────────────────────────────
-  const TL = M+9, TW = 168
-  // Column left-edges and widths: S.No=14, Item=64, Qty=28, Rate=34, Amt=34
-  const CX = [TL, TL+14, TL+74, TL+102, TL+135]
-  const CW = [14,    60,    28,    33,     33]
-  const HDR_H = 12
+  const TL = M+5, TW = PW-M*2-10
+  // Compact A5 columns: S.No, Item, Quantity, Rate, Amount.
+  const CX = [TL, TL+10, TL+50, TL+75, TL+101]
+  const CW = [10,    40,    25,    26,     26]
+  const HDR_H = 10
 
   const drawItemsHeader = (y: number): number => {
     doc.setFillColor(0); doc.setDrawColor(0); doc.setLineWidth(0.4)
     doc.rect(TL, y, TW, HDR_H, 'FD')
     for (let i = 1; i < 5; i++) doc.line(CX[i], y, CX[i], y+HDR_H)
-    doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(255)
+    doc.setFont('times','bold'); doc.setFontSize(7.5); doc.setTextColor(255)
     const hdrs = ['S.No','Item','Quantity','Per KG/Gram/Piece','Amount (PKR)']
     for (let i = 0; i < 5; i++) {
       const mx = CX[i] + CW[i]/2
       if (i === 3) {
         doc.text('Per', mx, y+4.5, {align:'center'})
-        doc.text('KG/Gram/Piece', mx, y+9.5, {align:'center'})
+        doc.text('KG/Gram/Piece', mx, y+8, {align:'center'})
       } else {
         doc.text(hdrs[i], mx, y+HDR_H/2+2, {align:'center'})
       }
@@ -877,13 +879,13 @@ async function drawInvoice(
 
   let curY = barY + barH + 4
   curY = drawItemsHeader(curY)
-  doc.setFont('times','bold'); doc.setFontSize(11); doc.setTextColor(0)
+  doc.setFont('times','bold'); doc.setFontSize(8.5); doc.setTextColor(0)
 
   for (let idx = 0; idx < items.length; idx++) {
     const item = items[idx]
     const nameLines2 = doc.splitTextToSize(item.name || '—', CW[1]-4)
     const nameImage = unicodeName(item.name || '', CW[1]-4)
-    const rh = Math.max(9, (nameImage ? nameImage.height : nameLines2.length * 5.5) + 5)
+    const rh = Math.max(7, (nameImage ? Math.min(nameImage.height, 6) : nameLines2.length * 4) + 3)
     // Page break
     if (curY + rh > PH - M - 40) {
       doc.addPage(); drawFrame(); curY = M+16
@@ -893,11 +895,11 @@ async function drawInvoice(
     doc.setDrawColor(0); doc.setLineWidth(0.4)
     doc.rect(TL, curY, TW, rh)
     for (let i = 1; i < 5; i++) doc.line(CX[i], curY, CX[i], curY+rh)
-    const midY = curY + rh/2 + 2
+    const midY = curY + rh/2 + 1.5
     doc.text(String(idx+1),                                    CX[0]+CW[0]/2, midY, {align:'center'})
     if (nameImage) {
-      doc.addImage(nameImage.canvas, 'PNG', CX[1]+2, curY+2.5, CW[1]-4, nameImage.height)
-    } else doc.text(nameLines2, CX[1]+2, curY+3.5+3)
+      doc.addImage(nameImage.canvas, 'PNG', CX[1]+1.5, curY+1.5, CW[1]-3, Math.min(nameImage.height, rh-2))
+    } else doc.text(nameLines2, CX[1]+1.5, curY+2.5+2.5)
     doc.text(pdfQuantityText(item.quantity_value, item.unit_type), CX[2]+CW[2]/2, midY, {align:'center'})
     doc.text(item.unit_price > 0 ? invoiceNumber(item.unit_price) : '—', CX[3]+CW[3]/2, midY, {align:'center'})
     doc.text(invoiceNumber(item.total),                        CX[4]+CW[4]/2, midY, {align:'center'})
@@ -906,13 +908,13 @@ async function drawInvoice(
 
   // ── Financials (5-col) ────────────────────────────────────────────────
   const FCW = TW / 5   // 34.8 mm per column
-  const FH  = 9, FRH = 10
+  const FH  = 8, FRH = 9
   if (curY + 5 + FH + FRH + 28 > PH - M) { doc.addPage(); drawFrame(); curY = M+16 }
   const fY = curY + 5
 
   doc.setFillColor(0); doc.setDrawColor(0); doc.setLineWidth(0.4)
   doc.rect(TL, fY, TW, FH, 'FD')
-  doc.setFont('times','bold'); doc.setFontSize(8.5); doc.setTextColor(255)
+  doc.setFont('times','bold'); doc.setFontSize(6.2); doc.setTextColor(255)
   const fHdrs = ['TOTAL AMOUNT','BALANCE','TOTAL BALANCE','DEPOSIT','REMAINING BALANCE']
   for (let i = 0; i < 5; i++) {
     const fx = TL + i*FCW
@@ -922,7 +924,7 @@ async function drawInvoice(
   }
   const fDY = fY + FH
   doc.rect(TL, fDY, TW, FRH)
-  doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(0)
+  doc.setFont('times','bold'); doc.setFontSize(8); doc.setTextColor(0)
   const fVals = [
     `Rs. ${invoiceNumber(financials.totalAmount)}`,
     `Rs. ${invoiceNumber(financials.balance)}`,
@@ -939,12 +941,12 @@ async function drawInvoice(
   // ── Remaining balance box ─────────────────────────────────────────────
   const rY = fDY + FRH + 3, rH = 10
   doc.setLineWidth(0.6); doc.rect(TL, rY, TW, rH)
-  doc.setFont('times','bold'); doc.setFontSize(13); doc.setTextColor(0)
+  doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(0)
   doc.text('Remaining Balance:', TL+4, rY+rH/2+2)
   doc.text(`Rs. ${invoiceNumber(financials.remainingBalance)}`, TL+TW-3, rY+rH/2+2, {align:'right'})
 
   // ── Footer ────────────────────────────────────────────────────────────
-  doc.setFontSize(18); doc.setFont('times','bolditalic'); doc.setTextColor(0)
+  doc.setFontSize(13); doc.setFont('times','bolditalic'); doc.setTextColor(0)
   doc.text('Thank You', PW/2, rY+rH+14, {align:'center'})
 
   // Resolve the blob before triggering the browser download. This avoids
@@ -1074,15 +1076,15 @@ function CustomerPage({
   const [successRef, setSuccessRef] = useState('')
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogOpen, setCatalogOpen] = useState(false)
-  const [expandedCategories] = useState<Set<string>>(() => new Set(PRODUCT_CATALOG.map(product => product.category)))
+  const [expandedCategories] = useState<Set<string>>(() => new Set(runtimeCatalog.map(product => product.category)))
   const [orderSearch, setOrderSearch] = useState('')
   const [orderSearchOpen, setOrderSearchOpen] = useState(false)
   const [suggestionRowId, setSuggestionRowId] = useState<string | null>(null)
 
   const catalogMatches = useMemo(() => {
     const query = catalogSearch.trim().toLowerCase()
-    if (!query) return PRODUCT_CATALOG.slice(0, 10)
-    return PRODUCT_CATALOG.filter(product =>
+    if (!query) return runtimeCatalog.slice(0, 10)
+    return runtimeCatalog.filter(product =>
       `${product.name} ${product.category}`.toLowerCase().includes(query)
     ).slice(0, 12)
   }, [catalogSearch])
@@ -1090,14 +1092,14 @@ function CustomerPage({
   const orderSearchMatches = useMemo(() => {
     const query = orderSearch.trim().toLowerCase()
     if (!query) return []
-    return PRODUCT_CATALOG.filter(product =>
+    return runtimeCatalog.filter(product =>
       `${product.name} ${product.category}`.toLowerCase().includes(query)
     ).slice(0, 12)
   }, [orderSearch])
 
   const catalogGroups = useMemo(() => {
     const groups = new Map<string, CatalogProduct[]>()
-    PRODUCT_CATALOG.forEach(product => {
+    runtimeCatalog.forEach(product => {
       const group = groups.get(product.category) || []
       group.push(product)
       groups.set(product.category, group)
@@ -1531,7 +1533,7 @@ function CustomerPage({
               autoComplete="off"
             />
             <datalist id="ahwmb-product-catalog">
-              {PRODUCT_CATALOG.map(product => <option key={product.name} value={product.name}>{product.category}</option>)}
+              {runtimeCatalog.map(product => <option key={product.name} value={product.name}>{product.category}</option>)}
             </datalist>
             {catalogOpen && catalogMatches.length > 0 && (
               <div className="catalog-results" role="listbox">
@@ -1540,7 +1542,7 @@ function CustomerPage({
             )}
             <div className="catalog-groups" aria-label="Browse products by category">
               {catalogGroups.map(([category, products]) => {
-                const isOpen = expandedCategories.has(category)
+                const isOpen = expandedCategories.has(category) || !PRODUCT_CATALOG.some(product => product.category === category)
                 return (
                   <section className={`catalog-group ${isOpen ? 'catalog-group--open' : ''}`} key={category}>
                     <div className="catalog-group-header" aria-expanded="true">
@@ -2212,6 +2214,24 @@ function StockReport() {
   return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Stock Report</h2><p className="panel-sub">Manage stock independently by storage location.</p></div><select className="stock-location-select" value={site} onChange={e => setSite(e.target.value as 'Jodia Bazaar' | 'Godam Site')}><option>Jodia Bazaar</option><option>Godam Site</option></select></div><div className="site-tabs"><span className="stock-location-label">Saving in: <strong>{site}</strong></span><button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button></div><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Item</th><th>Weight</th><th>Quantity</th><th>Bags</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td><input className="report-cell-input" value={row.item} onChange={e => update(row.id, 'item', e.target.value)} placeholder="e.g. Chana Dal" /></td><td><input className="report-cell-input" type="number" min="1" value={row.weight} onChange={e => update(row.id, 'weight', e.target.value)} placeholder="50 kg" /></td><td><input className="report-cell-input" type="number" min="0" value={row.quantity} onChange={e => update(row.id, 'quantity', e.target.value)} placeholder="500 kg" /></td><td><input className="report-cell-input stock-bags" type="number" value={row.bags} readOnly aria-label="Auto calculated bags" /></td></tr>)}</tbody></table></div></section>
 }
 
+function AdminProducts({ onChanged }: { onChanged: () => void }) {
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('EXTRA ITEMS')
+  const [saving, setSaving] = useState(false)
+  const [query, setQuery] = useState('')
+  const categories = [...new Set(runtimeCatalog.map(product => product.category))]
+  const matches = runtimeCatalog.filter(product => `${product.name} ${product.category}`.toLowerCase().includes(query.toLowerCase()))
+  const addProduct = async () => {
+    if (!name.trim() || !supabase) return
+    setSaving(true)
+    const product = { name: name.trim(), category }
+    const { error } = await supabase.from('products').insert(product)
+    if (!error) { runtimeCatalog = [...runtimeCatalog, product].sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)); setName(''); onChanged() }
+    setSaving(false)
+  }
+  return <section className="panel report-panel products-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Products</h2><p className="panel-sub">Add products to the shared customer and admin product menu.</p></div><span className="report-count">{runtimeCatalog.length} products</span></div><div className="report-form product-form"><input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="Product name" /><select className="field-input" value={category} onChange={e => setCategory(e.target.value)}>{categories.map(value => <option key={value}>{value}</option>)}</select><button type="button" className="btn-submit report-add" onClick={() => void addProduct()} disabled={saving}><Plus size={17} /> {saving ? 'Saving...' : 'Add Product'}</button></div><input className="report-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search products..." /><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Product Name</th><th>Category</th></tr></thead><tbody>{matches.map(product => <tr key={`${product.category}-${product.name}`}><td><strong>{product.name}</strong></td><td>{product.category}</td></tr>)}</tbody></table></div></section>
+}
+
 // ─── Admin Page ───────────────────────────────────────────────────────────────
 function AdminPage({
   language, setLanguage, onAuth, isAuthenticated,
@@ -2236,7 +2256,8 @@ function AdminPage({
   const [printPayload, setPrintPayload] = useState<InvoicePayload | null>(null)
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [adminView, setAdminView] = useState<'orders' | 'reports' | 'create-order' | 'customer-report' | 'purchase-report' | 'stock-report'>('orders')
+  const [adminView, setAdminView] = useState<'orders' | 'reports' | 'create-order' | 'customer-report' | 'purchase-report' | 'stock-report' | 'products'>('orders')
+  const [, setCatalogVersion] = useState(0)
   const [editCustomerOrder, setEditCustomerOrder] = useState<OrderRecord | null>(null)
   const [editCustomerName, setEditCustomerName] = useState('')
   const [editCustomerPhone, setEditCustomerPhone] = useState('')
@@ -2524,7 +2545,7 @@ function AdminPage({
             <span className="admin-emails">{ADMIN_EMAILS.join(' · ')}</span>
           </div>
           <div className="admin-top-actions">
-            {([['orders', 'Orders', ReceiptText], ['create-order', 'Create Order', Plus], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['purchase-report', 'Purchase Report', ReceiptText], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
+            {([['orders', 'Orders', ReceiptText], ['create-order', 'Create Order', Plus], ['products', 'Products', ShoppingBag], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['purchase-report', 'Purchase Report', ReceiptText], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
             {adminView === 'orders' && <button type="button" className="btn-secondary" onClick={() => void refresh()}><RefreshCw size={16} /> {t.refresh}</button>}
             <button type="button" className="btn-secondary btn-danger" onClick={onAuth}>
               <LogOut size={16} /> {t.logout}
@@ -2541,6 +2562,8 @@ function AdminPage({
           ? <PurchaseReport />
           : adminView === 'stock-report'
           ? <StockReport />
+          : adminView === 'products'
+          ? <AdminProducts onChanged={() => setCatalogVersion(value => value + 1)} />
           : adminView === 'create-order'
           ? <AdminCreateOrder language={language} onSuccess={() => { setAdminView('orders'); void refresh() }} onBack={() => setAdminView('orders')} />
           : <div className="admin-grid">
@@ -3199,6 +3222,7 @@ function AdminCreateOrder({
 // ─── App Root ─────────────────────────────────────────────────────────────────
 export default function App() {
   const path = usePath()
+  const [, setCatalogVersion] = useState(0)
   const [language, setLanguage] = useState<Language>(() => {
     try { return (localStorage.getItem('ahwmb-language-v2') as Language) || 'en' }
     catch { return 'en' }
@@ -3209,6 +3233,13 @@ export default function App() {
     try { localStorage.setItem('ahwmb-language-v2', language) }
     catch { /* storage unavailable */ }
   }, [language])
+
+  useEffect(() => {
+    if (!supabase) return
+    supabase.from('products').select('name,category').order('name').then(({ data }) => {
+      if (data?.length) { runtimeCatalog = [...PRODUCT_CATALOG, ...data].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index); setCatalogVersion(value => value + 1) }
+    })
+  }, [])
 
   useEffect(() => {
     if (!supabase) return
