@@ -2248,7 +2248,14 @@ function AdminProducts({ onChanged }: { onChanged: () => void }) {
       setName(''); setMessage('Product added locally. Connect Supabase to save it permanently.'); onChanged(); setSaving(false); return
     }
     const { error } = await supabase.from('products').insert(product)
-    if (error) { setMessage(error.message.includes('duplicate') ? 'This product already exists.' : `Could not save product: ${error.message}`); setSaving(false); return }
+    if (error) {
+      if (error.message.toLowerCase().includes('could not find the table') || error.message.toLowerCase().includes('relation') && error.message.toLowerCase().includes('products')) {
+        runtimeCatalog = [...runtimeCatalog, product].filter((item, index, all) => all.findIndex(existing => existing.name.toLowerCase() === item.name.toLowerCase()) === index)
+        try { localStorage.setItem('ahwmb-extra-products', JSON.stringify(runtimeCatalog.filter(item => !PRODUCT_CATALOG.some(base => base.name.toLowerCase() === item.name.toLowerCase())))) } catch { /* storage unavailable */ }
+        setName(''); setMessage('Product added on this device. Run the products SQL migration to save it permanently.'); onChanged(); setSaving(false); return
+      }
+      setMessage(error.message.includes('duplicate') ? 'This product already exists.' : `Could not save product: ${error.message}`); setSaving(false); return
+    }
     runtimeCatalog = [...runtimeCatalog, product].filter((item, index, all) => all.findIndex(existing => existing.name.toLowerCase() === item.name.toLowerCase()) === index).sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
     setName(''); setMessage('Product added successfully.'); onChanged()
     setSaving(false)
@@ -3259,9 +3266,18 @@ export default function App() {
   }, [language])
 
   useEffect(() => {
+    let localProducts: CatalogProduct[] = []
+    try { localProducts = JSON.parse(localStorage.getItem('ahwmb-extra-products') || '[]') as CatalogProduct[] } catch { /* storage unavailable */ }
+    if (localProducts.length) {
+      runtimeCatalog = [...PRODUCT_CATALOG, ...localProducts].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index)
+      setCatalogVersion(value => value + 1)
+    }
     if (!supabase) return
     supabase.from('products').select('name,category').order('name').then(({ data }) => {
-      if (data?.length) { runtimeCatalog = [...PRODUCT_CATALOG, ...data].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index); setCatalogVersion(value => value + 1) }
+      if (data?.length || localProducts.length) {
+        runtimeCatalog = [...PRODUCT_CATALOG, ...localProducts, ...(data || [])].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index)
+        setCatalogVersion(value => value + 1)
+      }
     })
   }, [])
 
