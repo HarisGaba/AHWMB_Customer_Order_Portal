@@ -1908,6 +1908,10 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
 
   // Load all dates that have expense data (for calendar dots)
   useEffect(() => {
+    try {
+      const localProducts = JSON.parse(localStorage.getItem('ahwmb-extra-products') || '[]') as CatalogProduct[]
+      if (localProducts.length) { runtimeCatalog = [...PRODUCT_CATALOG, ...localProducts].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index); setCatalogVersion(value => value + 1) }
+    } catch { /* storage unavailable */ }
     if (!supabase) return
     const twoMonthsAgo = (() => {
       const d = new Date(); d.setDate(d.getDate() - 60)
@@ -2228,18 +2232,28 @@ function AdminProducts({ onChanged }: { onChanged: () => void }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState('EXTRA ITEMS')
   const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
   const [query, setQuery] = useState('')
   const categories = [...new Set(runtimeCatalog.map(product => product.category))]
   const matches = runtimeCatalog.filter(product => `${product.name} ${product.category}`.toLowerCase().includes(query.toLowerCase()))
   const addProduct = async () => {
-    if (!name.trim() || !supabase) return
+    const trimmedName = name.trim()
+    if (!trimmedName) { setMessage('Enter a product name first.'); return }
     setSaving(true)
-    const product = { name: name.trim(), category }
+    setMessage('')
+    const product = { name: trimmedName, category }
+    if (!supabase) {
+      runtimeCatalog = [...runtimeCatalog, product].filter((item, index, all) => all.findIndex(existing => existing.name.toLowerCase() === item.name.toLowerCase()) === index)
+      try { localStorage.setItem('ahwmb-extra-products', JSON.stringify(runtimeCatalog.filter(item => !PRODUCT_CATALOG.some(base => base.name.toLowerCase() === item.name.toLowerCase())))) } catch { /* storage unavailable */ }
+      setName(''); setMessage('Product added locally. Connect Supabase to save it permanently.'); onChanged(); setSaving(false); return
+    }
     const { error } = await supabase.from('products').insert(product)
-    if (!error) { runtimeCatalog = [...runtimeCatalog, product].sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)); setName(''); onChanged() }
+    if (error) { setMessage(error.message.includes('duplicate') ? 'This product already exists.' : `Could not save product: ${error.message}`); setSaving(false); return }
+    runtimeCatalog = [...runtimeCatalog, product].filter((item, index, all) => all.findIndex(existing => existing.name.toLowerCase() === item.name.toLowerCase()) === index).sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+    setName(''); setMessage('Product added successfully.'); onChanged()
     setSaving(false)
   }
-  return <section className="panel report-panel products-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Products</h2><p className="panel-sub">Add products to the shared customer and admin product menu.</p></div><span className="report-count">{runtimeCatalog.length} products</span></div><div className="report-form product-form"><input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="Product name" /><select className="field-input" value={category} onChange={e => setCategory(e.target.value)}>{categories.map(value => <option key={value}>{value}</option>)}</select><button type="button" className="btn-submit report-add" onClick={() => void addProduct()} disabled={saving}><Plus size={17} /> {saving ? 'Saving...' : 'Add Product'}</button></div><input className="report-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search products..." /><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Product Name</th><th>Category</th></tr></thead><tbody>{matches.map(product => <tr key={`${product.category}-${product.name}`}><td><strong>{product.name}</strong></td><td>{product.category}</td></tr>)}</tbody></table></div></section>
+  return <section className="panel report-panel products-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Products</h2><p className="panel-sub">Add products to the shared customer and admin product menu.</p></div><span className="report-count">{runtimeCatalog.length} products</span></div><div className="report-form product-form"><input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="Product name" /><select className="field-input" value={category} onChange={e => setCategory(e.target.value)}>{categories.map(value => <option key={value}>{value}</option>)}</select><button type="button" className="btn-submit report-add" onClick={() => void addProduct()} disabled={saving}><Plus size={17} /> {saving ? 'Saving...' : 'Add Product'}</button></div>{message && <p className="form-message">{message}</p>}<input className="report-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search products..." /><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Product Name</th><th>Category</th></tr></thead><tbody>{matches.map(product => <tr key={`${product.category}-${product.name}`}><td><strong>{product.name}</strong></td><td>{product.category}</td></tr>)}</tbody></table></div></section>
 }
 
 // ─── Admin Page ───────────────────────────────────────────────────────────────

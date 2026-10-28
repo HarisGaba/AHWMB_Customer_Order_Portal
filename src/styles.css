@@ -2500,6 +2500,7 @@ input, select, textarea, button { line-height:1.25; }
 .image-hero-cta { display:inline-flex; align-items:center; gap:14px; min-height:50px; padding:10px 20px; border-radius:10px; background:#e5b936; color:#123b27; font-size:16px; font-weight:950; text-decoration:none; box-shadow:0 4px 0 #a57916; }
 .image-hero-cta span { font-size:24px; line-height:1; }
 .image-hero-cta:hover { background:#f4cf63; transform:translateY(-1px); }
+.form-message { margin: 10px 0 0; color: #176b48; font-size: 13px; font-weight: 750; }
 @media (max-width:767px) {
   .image-hero { min-height:420px; border-radius:18px; }
   .image-hero > img { object-position:62% center; }
