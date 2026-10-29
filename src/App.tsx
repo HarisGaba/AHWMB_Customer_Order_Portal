@@ -12,7 +12,6 @@ import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals
 let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const ADMIN_EMAILS = ['ahmedyounus1978@gmail.com', 'ahwmb1965@gmail.com']
 const SHOPKEEPER_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.env.VITE_SHOPKEEPER_WHATSAPP || '923001234567'
 const SAVED_CUSTOMERS = [
   ['AHMED STORE', 'MANZOOR COLONY'], ['NAZAR KHAN', 'MANZOOR COLONY'], ['HAJI HAIDER GUL', 'CANT'],
@@ -22,11 +21,11 @@ const SAVED_CUSTOMERS = [
   ['HAKEEM SHAH', 'TARIQ ROAD'], ['FAHIM GABA', 'GULSHAN E JAMAL'], ['IRFAN GABA', 'GULSHAN E JAMAL'], ['IMRAN GABA', 'GULSHAN E JAMAL'],
   ['JAWED MOSMIYAT', 'MOSMIYAT'], ['UMER BHATIYABAD', 'BHATIYABAD'], ['BAJAJ STORE', 'MIR PUR MATHELO'], ['JANNAT SUPER STORE', 'METROWIL'],
   ['UBAID MULANA', 'HUSAINABAD'], ['ILYAS BHATIYABAD', 'BHITAYABAD'], ['TAYYAB STORE', 'HUSAINABAD'], ['M RAFEEQ', 'MACHAR COLONY'],
-  ['IDRESS BHAI', 'TARIQ ROAD'], ['IBRAHIM PASATA', 'NOT FOUND'], ['MAHRAJ', 'KARADAR'], ['BABA STORE', 'LIYAQTABAD'],
-  ['FAROOQ TEA POINT', 'NOT FOUND'], ['INSAF HOTEL', 'JODIA BAZAR'], ['TARIQ BROTHERS', 'JODIA BAZAR'], ['GHULAM ALI', 'DEFENCE'],
-  ['IQBAL MANZOOR ENTERPRISES', 'NOT FOUND'], ['KHUWAJA MALIR', 'MALIR'], ['ZAIQA FOODS', 'NOT FOUND'], ['IMRAN BABA BHIT', 'BHIT'],
-  ['M ALI KHATRI', 'NOT FOUND'], ['KHALID MARRIOT ROAD', 'MARRIOT ROAD'], ['ANWAR BHITAYABAD', 'BHITAYABAD'], ['TAHIRA BAJI', 'PHASE 8'],
-  ['HAJI MURAD', 'NOT FOUND'], ['KASHIF BUFERZONE', 'BUFERZONE'], ['HASHIM SHAMMIM', 'NOT FOUND'], ['NISAR FILTER', 'GHARO'],
+  ['IDRESS BHAI', 'TARIQ ROAD'], ['IBRAHIM PASATA', ''], ['MAHRAJ', 'KARADAR'], ['BABA STORE', 'LIYAQTABAD'],
+  ['FAROOQ TEA POINT', ''], ['INSAF HOTEL', 'JODIA BAZAR'], ['TARIQ BROTHERS', 'JODIA BAZAR'], ['GHULAM ALI', 'DEFENCE'],
+  ['IQBAL MANZOOR ENTERPRISES', ''], ['KHUWAJA MALIR', 'MALIR'], ['ZAIQA FOODS', ''], ['IMRAN BABA BHIT', 'BHIT'],
+  ['M ALI KHATRI', ''], ['KHALID MARRIOT ROAD', 'MARRIOT ROAD'], ['ANWAR BHITAYABAD', 'BHITAYABAD'], ['TAHIRA BAJI', 'PHASE 8'],
+  ['HAJI MURAD', ''], ['KASHIF BUFERZONE', 'BUFERZONE'], ['HASHIM SHAMMIM', ''], ['NISAR FILTER', 'GHARO'],
 ].map(([name, address]) => ({ name, address }))
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,6 +85,11 @@ const normalizePhone = (value: string) => {
 const validPhone = (value: string) => /^923\d{9}$/.test(normalizePhone(value))
 
 const formatMoney = (value: number) => `Rs. ${Math.round(value || 0).toLocaleString('en-PK')}`
+const isCurrentAdmin = async () => {
+  if (!supabase) return false
+  const { data, error } = await supabase.rpc('is_ahwmb_admin')
+  return !error && Boolean(data)
+}
 
 const readableError = (error: unknown): string => {
   if (error instanceof Error) return error.message
@@ -113,7 +117,6 @@ const formatDateShort = (value: string | Date) =>
   }).format(new Date(value))
 
 const createOrderRef = () => `#AHWMB-${Date.now().toString(36).toUpperCase().slice(-4)}${Math.floor(10 + Math.random() * 90)}`
-const isAdminEmail = (email?: string | null) => ADMIN_EMAILS.includes((email || '').toLowerCase())
 const parseQuantity = (value: string) => {
   const match = value.replace(',', '.').match(/\d+(?:\.\d+)?/)
   return match ? Number(match[0]) : 0
@@ -219,10 +222,10 @@ const safeItems = (items: unknown): OrderItem[] => {
     const rawQuantity = String(v.quantity || '')
     const quantityValue = Number(v.quantity_value) || parseQuantity(rawQuantity)
     const rawUnit = v.unit_type
-    const candidateUnit = rawUnit === 'KG' || rawUnit === 'GRAMS' || rawUnit === 'LITRE' || rawUnit === 'PCS' || rawUnit === 'PACKETS' || rawUnit === 'NONE'
+    const candidateUnit = rawUnit === 'KG' || rawUnit === 'GRAMS' || rawUnit === 'LITRE' || rawUnit === 'PCS' || rawUnit === 'PACKETS' || rawUnit === 'BAGS' || rawUnit === 'NONE'
       ? rawUnit : parseUnit(rawQuantity)
     // Keep submissions aligned with the existing Supabase check constraint.
-    const unitType: UnitType = candidateUnit === 'KG' || candidateUnit === 'GRAMS' || candidateUnit === 'LITRE' || candidateUnit === 'PCS' || candidateUnit === 'PACKETS' || candidateUnit === 'NONE'
+    const unitType: UnitType = candidateUnit === 'KG' || candidateUnit === 'GRAMS' || candidateUnit === 'LITRE' || candidateUnit === 'PCS' || candidateUnit === 'PACKETS' || candidateUnit === 'BAGS' || candidateUnit === 'NONE'
       ? candidateUnit : 'NONE'
     const unitPrice = Number(v.unit_price ?? v.rate) || 0
     const total = unitType === 'GRAMS'
@@ -1210,7 +1213,6 @@ function CustomerPage({
       void notifyNewOrder({ order_ref: orderRef, customer_name: name.trim(), customer_phone: phone.trim(), customer_address: address.trim() })
       setSuccessRef(orderRef)
     } catch (err) {
-      console.error('Order submit error:', err)
       const message = readableError(err)
       addToast(message && message !== '[object Object]' ? `Order could not be saved: ${message}` : t.errors.submit, 'error')
     } finally {
@@ -1229,6 +1231,13 @@ function CustomerPage({
             <source media="(min-width: 768px)" srcSet="/images/ahwmb-hero-desktop.png" />
             <img src="/images/ahwmb-hero.png" alt="AHWMB premium rice, pulses and spices delivery" />
           </picture>
+          <div className="image-hero-shade" aria-hidden="true" />
+          <div className="image-hero-copy" dir={isRtl ? 'rtl' : 'ltr'}>
+            <span className="image-hero-kicker">{isRtl ? 'جوڑیا بازار · کراچی' : 'JODIA BAZAAR · KARACHI'}</span>
+            <h2>{isRtl ? <>اعلیٰ معیار کے چاول، دالیں <strong>اور مصالحے</strong></> : <>Premium Rice,<br />Pulses <strong>&amp; Spices</strong></>}</h2>
+            <p>{isRtl ? 'آدم حاجی ولی محمد اینڈ برادرز سے براہ راست آرڈر کریں — 1965 سے قابل اعتماد ہول سیل سپلائرز۔' : 'Order directly from Adam Haji Wali Muhammad & Brothers — trusted wholesale suppliers since 1965.'}</p>
+            <a href="#customer-details" className="image-hero-cta"><span>🛒</span>{isRtl ? ' اپنا آرڈر دیں' : ' Place Your Order'}</a>
+          </div>
         </section>
         {/* Customer details */}
         <section className="card" id="customer-details">
@@ -1590,7 +1599,7 @@ function CustomerPage({
             </div>
           </div>
           <button
-            className="btn-submit"
+            className={`btn-submit ${saving ? 'is-submitting' : ''}`}
             type="button"
             onClick={addToCart}
             disabled={saving}
@@ -1650,7 +1659,7 @@ function LoginPage({
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
       if (authError || !data.user) { setError(t.errors.login); return }
-      if (!isAdminEmail(data.user.email)) {
+      if (!(await isCurrentAdmin())) {
         await supabase.auth.signOut()
         setError(t.errors.permission)
         return
@@ -2384,8 +2393,7 @@ function AdminPage({
   const refresh = useCallback(async () => {
     if (!supabase) { setLoading(false); return }
     const { data: session } = await supabase.auth.getSession()
-    const email = session.session?.user.email
-    if (!session.session || !isAdminEmail(email)) {
+    if (!session.session || !(await isCurrentAdmin())) {
       setAuthorized(false); setLoading(false); navigate('/login'); return
     }
     setAuthorized(true)
@@ -2602,7 +2610,6 @@ function AdminPage({
         }))
         addToast('Invoice saved and PDF downloaded successfully.', 'success')
       } catch (invoiceErr) {
-        console.error('PDF generation error:', invoiceErr)
         addToast('The invoice could not be exported. Please try again.', 'error')
       }
     } catch (err) {
@@ -2645,7 +2652,6 @@ function AdminPage({
           <div>
             <p className="admin-eyebrow">AHWMB</p>
             <h2 className="admin-heading">{t.adminTitle}</h2>
-            <span className="admin-emails">{ADMIN_EMAILS.join(' · ')}</span>
           </div>
           <div className="admin-top-actions">
             {([['orders', 'Orders', ReceiptText], ['create-order', 'Create Order', Plus], ['products', 'Products', ShoppingBag], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['purchase-report', 'Purchase Report', ReceiptText], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
@@ -2694,7 +2700,9 @@ function AdminPage({
               </div>
             </div>
 
-            {shownOrders.length === 0 ? (
+            {loading ? (
+              <div>{Array.from({ length: 5 }).map((_, index) => <div key={index} className="skeleton" style={{ height: 72, marginBottom: 8, borderRadius: 10 }} />)}</div>
+            ) : shownOrders.length === 0 ? (
               <div className="empty-state">
                 <ReceiptText size={36} />
                 <p>{t.noOrders}</p>
@@ -3357,12 +3365,8 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) return
-    supabase.auth.getSession().then(({ data }) => {
-      setIsAuthenticated(Boolean(data.session?.user && isAdminEmail(data.session.user.email)))
-    })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAuthenticated(Boolean(session?.user && isAdminEmail(session.user.email)))
-    })
+    supabase.auth.getSession().then(async ({ data }) => { setIsAuthenticated(Boolean(data.session && await isCurrentAdmin())) })
+    const { data: listener } = supabase.auth.onAuthStateChange(() => { void isCurrentAdmin().then(setIsAuthenticated) })
     return () => listener.subscription.unsubscribe()
   }, [])
 

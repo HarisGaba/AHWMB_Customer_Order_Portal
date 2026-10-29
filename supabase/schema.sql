@@ -47,7 +47,7 @@ create table if not exists public.order_items (
   name text not null,
   quantity text not null default '',
   quantity_value numeric not null default 0,
-  unit_type text not null default 'KG' check (unit_type in ('KG', 'GRAMS', 'LITRE', 'PCS', 'PACKETS', 'NONE')),
+  unit_type text not null default 'KG' check (unit_type in ('KG', 'GRAMS', 'LITRE', 'PCS', 'PACKETS', 'BAGS', 'NONE')),
   unit_price numeric not null default 0,
   total numeric not null default 0,
   created_at timestamptz not null default now()
