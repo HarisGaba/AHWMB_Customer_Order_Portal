@@ -2230,7 +2230,8 @@ function CustomerReport() {
 }
 
 function CustomerReportV2() {
-  const [customers, setCustomers] = useState<SavedCustomer[]>([])
+  const defaultCustomers = SAVED_CUSTOMERS.map(customer => ({ ...customer, phone: '' }))
+  const [customers, setCustomers] = useState<SavedCustomer[]>(defaultCustomers)
   const [query, setQuery] = useState('')
   const [selectedName, setSelectedName] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -2238,9 +2239,11 @@ function CustomerReportV2() {
   const [message, setMessage] = useState('')
   const [draft, setDraft] = useState<SavedCustomer>({ name: '', phone: '', address: '' })
   useEffect(() => {
-    const fallback = SAVED_CUSTOMERS.map(customer => ({ ...customer, phone: '' }))
-    try { setCustomers(JSON.parse(localStorage.getItem('ahwmb-saved-customers') || 'null') || fallback) } catch { setCustomers(fallback) }
-    if (supabase) supabase.from('customers').select('name,phone,address').order('name').then(({ data }) => { if (data) setCustomers(data.map(item => ({ name: item.name, phone: item.phone || '', address: item.address || '' }))) })
+    let stored: SavedCustomer[] = []
+    try { stored = JSON.parse(localStorage.getItem('ahwmb-saved-customers') || '[]') as SavedCustomer[] } catch { /* storage unavailable */ }
+    const merge = (items: SavedCustomer[]) => items.filter((item, index, all) => all.findIndex(existing => existing.name.toLowerCase() === item.name.toLowerCase()) === index).sort((a, b) => a.name.localeCompare(b.name))
+    setCustomers(merge([...defaultCustomers, ...stored]))
+    if (supabase) supabase.from('customers').select('name,phone,address').order('name').then(({ data }) => { if (data) setCustomers(merge([...defaultCustomers, ...stored, ...data.map(item => ({ name: item.name, phone: item.phone || '', address: item.address || '' }))])) })
   }, [])
   const matches = customers.filter(item => item.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
   const selected = customers.find(item => item.name === selectedName)
@@ -2634,7 +2637,7 @@ function AdminPage({
         {adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('orders')} />
           : adminView === 'customer-report'
-          ? <CustomerReportV2 />
+          ? <CustomerReport />
           : adminView === 'purchase-report'
           ? <PurchaseReport />
           : adminView === 'stock-report'
