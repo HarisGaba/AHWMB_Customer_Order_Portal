@@ -2260,6 +2260,29 @@ function CustomerReportV2() {
   return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Customer Report</h2><p className="panel-sub">Search saved customers and open their account ledger.</p></div><button type="button" className="btn-submit report-add" onClick={() => { setDraft({ name: '', phone: '', address: '' }); setMessage(''); setFormOpen(true) }}><Plus size={17} /> Add Customer</button></div>{message && <p className="form-message">{message}</p>}<div className="account-search-wrap"><input className="report-search account-search" value={query} onChange={event => { setQuery(event.target.value); setSelectedName('') }} placeholder="Search customer name, e.g. Ahmed Store" />{query && !selectedName && matches.length > 0 && <div className="customer-suggestions report-suggestions">{matches.map(item => <button type="button" key={item.name} onClick={() => { setSelectedName(item.name); setQuery(item.name) }}><strong>{item.name}</strong><small>{item.address}</small></button>)}</div>}</div>{selected ? <div className="ledger-card ledger-card--top"><div className="report-heading"><div><p className="admin-eyebrow">CUSTOMER ACCOUNT</p><h3 className="panel-title">{selected.name}</h3><p className="panel-sub">{selected.phone || 'No contact saved'} · {selected.address}</p></div><button type="button" className="btn-secondary" onClick={() => { setSelectedName(''); setQuery('') }}>Close</button></div><div className="account-empty"><UserRound size={36} /><p>Customer account selected. Existing ledger entries remain available in the Customer Report workflow.</p></div></div> : <div className="account-empty"><UserRound size={42} /><p>Search and select a customer to open the account.</p></div>}{formOpen && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-box admin-entry-modal"><h2 className="modal-title">Add Customer</h2><label className="field"><span className="field-label">Customer name *</span><input className="field-input" value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} autoFocus /></label><label className="field"><span className="field-label">Phone number</span><input className="field-input" value={draft.phone} onChange={event => setDraft({ ...draft, phone: event.target.value })} /></label><label className="field"><span className="field-label">Address</span><textarea className="field-textarea" value={draft.address} onChange={event => setDraft({ ...draft, address: event.target.value })} rows={3} /></label><div className="modal-actions"><button type="button" className="btn-secondary" onClick={() => setFormOpen(false)}>Cancel</button><button type="button" className="btn-submit" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save Customer'}</button></div></div></div>}</section>
 }
 
+function CustomerReportWithAdd() {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [draft, setDraft] = useState<SavedCustomer>({ name: '', phone: '', address: '' })
+  const save = async () => {
+    const customer = { name: draft.name.trim(), phone: draft.phone.trim(), address: draft.address.trim() }
+    if (!customer.name) { setMessage('Customer name is required.'); return }
+    setSaving(true); setMessage('')
+    if (supabase) {
+      const { error } = await supabase.from('customers').upsert(customer, { onConflict: 'name' })
+      if (error) { setMessage(error.message); setSaving(false); return }
+    }
+    try {
+      const existing = JSON.parse(localStorage.getItem('ahwmb-saved-customers') || '[]') as SavedCustomer[]
+      const merged = [...existing.filter(item => item.name.toLowerCase() !== customer.name.toLowerCase()), customer]
+      localStorage.setItem('ahwmb-saved-customers', JSON.stringify(merged))
+    } catch { /* storage unavailable */ }
+    setOpen(false); setDraft({ name: '', phone: '', address: '' }); setMessage('Customer added successfully.'); setSaving(false)
+  }
+  return <div className="customer-report-shell"><button type="button" className="btn-submit customer-add-top" onClick={() => { setMessage(''); setOpen(true) }}><Plus size={17} /> Add Customer</button><CustomerReport />{message && <p className="form-message customer-add-message">{message}</p>}{open && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-box admin-entry-modal"><h2 className="modal-title">Add Customer</h2><label className="field"><span className="field-label">Customer name *</span><input className="field-input" value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} autoFocus /></label><label className="field"><span className="field-label">Phone number</span><input className="field-input" value={draft.phone} onChange={event => setDraft({ ...draft, phone: event.target.value })} /></label><label className="field"><span className="field-label">Address</span><textarea className="field-textarea" value={draft.address} onChange={event => setDraft({ ...draft, address: event.target.value })} rows={3} /></label><div className="modal-actions"><button type="button" className="btn-secondary" onClick={() => setOpen(false)}>Cancel</button><button type="button" className="btn-submit" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save Customer'}</button></div></div></div>}</div>
+}
+
 function PurchaseReport() {
   const [rows, setRows] = useState([{ id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }])
   const update = (id: string, key: 'party' | 'area' | 'item' | 'amount' | 'date', value: string) => setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row))
@@ -2637,7 +2660,7 @@ function AdminPage({
         {adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('orders')} />
           : adminView === 'customer-report'
-          ? <CustomerReport />
+          ? <CustomerReportWithAdd />
           : adminView === 'purchase-report'
           ? <PurchaseReport />
           : adminView === 'stock-report'
