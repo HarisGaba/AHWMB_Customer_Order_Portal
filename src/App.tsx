@@ -504,25 +504,25 @@ function InvoiceDocument({ order, items, financials }: InvoicePayload) {
 const invoicePrintCss = `
   @page { size: A4 portrait; margin: 10mm; }
   *, *::before, *::after { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  html, body { margin: 0; background: #fff; color: #000; font-family: Georgia, 'Times New Roman', serif; font-weight: 700; }
+  html, body { margin: 0; background: #fff; color: #000; font-family: Georgia, 'Times New Roman', serif; font-weight: 750; }
   .invoice-document { width: 100%; max-width: 190mm; margin: 0 auto; padding: 6mm; border: 3px double #050505; font-size: 11px; }
   .invoice-header { text-align: center; margin-bottom: 4mm; }
   .invoice-header h1 { display: inline-block; margin: 0 auto; border: 2.5px solid #050505; padding: 2mm 10mm; font-size: 22px; line-height: 1.2; font-weight: 900; letter-spacing: .05em; }
   /* Customer bar — fixed two-column layout, no overflow */
-  .invoice-customer-bar { width: calc(100% - 8mm); border-collapse: collapse; border: 2px solid #050505; margin: 4mm auto; font-size: 12px; font-weight: 700; table-layout: fixed; }
-  .invoice-customer-bar td { padding: 3mm 4mm; font-weight: 700; color: #000; vertical-align: middle; overflow: hidden; }
+  .invoice-customer-bar { width: calc(100% - 8mm); border-collapse: collapse; border: 2px solid #050505; margin: 4mm auto; font-size: 12px; font-weight: 750; table-layout: fixed; }
+  .invoice-customer-bar td { padding: 3mm 4mm; font-weight: 750; color: #000; vertical-align: middle; overflow: hidden; }
   .invoice-customer-bar td:first-child { width: 63%; }
   .invoice-customer-bar td:last-child  { width: 37%; border-left: 2px solid #050505; }
-  .inv-clabel { font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .inv-clabel { font-size: 11px; font-weight: 750; white-space: nowrap; }
   .inv-cval   { display: block; border-bottom: 1.5px solid #050505; padding-bottom: 1mm; margin-top: 1mm; font-size: 13px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .invoice-table { width: calc(100% - 8mm); margin-left:auto; margin-right:auto; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
   .invoice-table thead { display: table-header-group; }
   .invoice-table tr { page-break-inside: avoid; page-break-after: auto; }
   .invoice-financials { width: calc(100% - 8mm); margin-left:auto; margin-right:auto; border-collapse: collapse; border: 2px solid #050505; margin-top: 5mm; page-break-inside: avoid; }
-  .invoice-financials td { width: 20%; border-right: 1px solid #050505; text-align: center; font-weight: 700; color: #000; }
+  .invoice-financials td { width: 20%; border-right: 1px solid #050505; text-align: center; font-weight: 750; color: #000; }
   .invoice-financials td:last-child { border-right: 0; }
   .invoice-financials strong { display: block; background: #000; color: #fff; font-weight: 900; padding: 2mm 1mm; font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
-  .invoice-financials span { display: block; padding: 4mm 1mm; font-size: 13px; color: #000; font-weight: 700; }
+  .invoice-financials span { display: block; padding: 4mm 1mm; font-size: 13px; color: #000; font-weight: 750; }
   .invoice-total-amount { width: calc(100% - 8mm); margin-left:auto; margin-right:auto; border-collapse: collapse; border: 2px solid #050505; margin-top: 4mm; font-size: 16px; font-weight: 900; page-break-inside: avoid; }
   .invoice-total-amount td { padding: 4mm 7mm; font-weight: 900; color: #000; }
   .invoice-total-amount td:last-child { text-align: right; }
@@ -1074,6 +1074,8 @@ function CustomerPage({
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
   const [successRef, setSuccessRef] = useState('')
+  const [cartOpen, setCartOpen] = useState(false)
+  const [cartPrompt, setCartPrompt] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [expandedCategories] = useState<Set<string>>(() => new Set(runtimeCatalog.map(product => product.category)))
@@ -1124,6 +1126,17 @@ function CustomerPage({
     [rows]
   )
   const hasContent = filledRows.length > 0 || notes.trim().length > 0
+
+  const addToCart = () => {
+    const next: FormErrors = {}
+    if (!name.trim()) next.name = t.errors.name
+    if (!validPhone(phone)) next.phone = t.errors.phone
+    if (!address.trim()) next.address = t.errors.address
+    if (!hasContent || filledRows.some(r => !r.itemName.trim() || !r.quantityValue.trim())) next.items = t.errors.items
+    setErrors(next)
+    if (Object.keys(next).length) return
+    setCartPrompt(true)
+  }
 
   const updateRow = (id: string, field: keyof Pick<OrderRow, 'itemName' | 'quantityValue' | 'unitType'>, value: string) => {
     setRows(curr => {
@@ -1198,7 +1211,8 @@ function CustomerPage({
       setSuccessRef(orderRef)
     } catch (err) {
       console.error('Order submit error:', err)
-      addToast(t.errors.submit, 'error')
+      const message = readableError(err)
+      addToast(message && message !== '[object Object]' ? `Order could not be saved: ${message}` : t.errors.submit, 'error')
     } finally {
       setSaving(false)
     }
@@ -1566,24 +1580,24 @@ function CustomerPage({
           </div>
         </section>
 
-        {/* Submit */}
+        {/* Cart / Submit */}
         <section className="submit-card">
           <div className="submit-copy">
             <PackageCheck size={24} />
             <div>
-              <strong>{t.submit}</strong>
-              <span>{t.successHint}</span>
+              <strong>{cartOpen ? 'Your Cart' : 'Review Your Order'}</strong>
+              <span>{filledRows.length} item{filledRows.length === 1 ? '' : 's'} ready to review</span>
             </div>
           </div>
           <button
             className="btn-submit"
             type="button"
-            onClick={() => void submit()}
+            onClick={addToCart}
             disabled={saving}
           >
             {saving ? <RefreshCw size={21} className="spin" /> : <Send size={21} />}
             {saving && <span className="submit-rickshaw" aria-hidden="true"><i /><b /><em /></span>}
-            <span>{saving ? t.submitting : t.submit}</span>
+            <span>{saving ? t.submitting : 'Add to Cart'}</span>
             <FileDown size={19} />
           </button>
         </section>
@@ -1593,6 +1607,10 @@ function CustomerPage({
           <div><span>For any queries or questions, please contact us</span><a href="tel:03223928421">0322-3928421</a></div>
         </footer>
       </div>
+
+      {cartPrompt && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-box cart-prompt"><div className="modal-check"><ShoppingBag size={32} /></div><h2 className="modal-title">Check Your Items in the Cart</h2><p className="modal-hint">Review quantities and details before placing your order.</p><div className="modal-actions"><button className="btn-modal-close" type="button" onClick={() => setCartPrompt(false)}>Continue Shopping</button><button className="btn-submit cart-prompt-btn" type="button" onClick={() => { setCartPrompt(false); setCartOpen(true) }}>Open Cart</button></div></div></div>}
+
+      {cartOpen && <aside className="cart-drawer" aria-label="Shopping cart"><div className="cart-drawer-head"><div><p className="admin-eyebrow">AHWMB</p><h2>Shopping Cart</h2></div><button type="button" className="icon-btn" onClick={() => setCartOpen(false)} aria-label="Close cart"><X size={22} /></button></div><div className="cart-drawer-body">{filledRows.length === 0 ? <p className="account-empty">Your cart is empty.</p> : filledRows.map(row => <div className="cart-item" key={row.id}><div><strong>{row.itemName}</strong><div className="cart-item-controls"><input type="number" min="0" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} aria-label={`Quantity for ${row.itemName}`} /><select value={row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value as UnitType)} aria-label={`Unit for ${row.itemName}`}>{UNIT_OPTIONS.filter(option => option.value !== 'NONE' && option.value !== 'BAGS').map(option => <option key={option.value} value={option.value}>{option.en}</option>)}</select></div></div><button type="button" className="cart-remove" onClick={() => setRows(current => current.filter(item => item.id !== row.id))}><Trash2 size={17} /></button></div>)}</div><div className="cart-drawer-foot"><button type="button" className="btn-secondary" onClick={() => { setCartOpen(false); document.getElementById('customer-details')?.scrollIntoView({ behavior: 'smooth' }) }}>Continue Shopping</button><button type="button" className="btn-submit" onClick={() => void submit()} disabled={saving || filledRows.length === 0}>{saving ? 'Submitting…' : 'Place Order'}</button></div></aside>}
 
       {successRef && (
         <SuccessModal
