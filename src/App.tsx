@@ -2229,6 +2229,34 @@ function CustomerReport() {
   return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Customer Report</h2><p className="panel-sub">Search a customer to open their account ledger.</p></div></div><div className="account-search-wrap"><input className="report-search account-search" value={query} onChange={e => { setQuery(e.target.value); setSelectedName('') }} placeholder="Search customer name, e.g. Ahmed Store" />{query && !selectedName && matches.length > 0 && <div className="customer-suggestions report-suggestions">{matches.map(customer => <button type="button" key={customer.name} onClick={() => { setSelectedName(customer.name); setQuery(customer.name) }}><strong>{customer.name}</strong><small>{customer.address}</small></button>)}</div>}</div>{selectedCustomer ? <div className="ledger-card ledger-card--top"><div className="report-heading"><div><p className="admin-eyebrow">CUSTOMER ACCOUNT</p><h3 className="panel-title">{selectedCustomer.name}</h3><p className="panel-sub">{selectedCustomer.phone || 'No contact saved'} · {selectedCustomer.address}</p></div><button type="button" className="btn-secondary" onClick={() => { setSelectedName(''); setQuery('') }}>Close</button></div><div className="ledger-summary"><span>Cash: <strong className="money-positive">+ Rs. {cashTotal.toLocaleString('en-PK')}</strong></span><span>Balance: <strong className="money-negative">− Rs. {balanceTotal.toLocaleString('en-PK')}</strong></span><span>Net: <strong className={netTotal >= 0 ? 'money-positive' : 'money-negative'}>{netTotal >= 0 ? '+' : '−'} Rs. {Math.abs(netTotal).toLocaleString('en-PK')}</strong></span></div><div className="ledger-entry-form"><input className="report-cell-input" type="date" value={entry.date} onChange={e => setEntry({ ...entry, date: e.target.value })} /><input className="report-cell-input" type="number" value={entry.amount} onChange={e => setEntry({ ...entry, amount: e.target.value })} placeholder="Amount" /><select className="report-cell-input" value={entry.type} onChange={e => setEntry({ ...entry, type: e.target.value as 'cash' | 'balance' })}><option value="cash">Cash (+ received)</option><option value="balance">Balance (− due)</option></select><button type="button" className="btn-submit report-add" onClick={addEntry}><Plus size={17} /> Add Entry</button></div><div className="ledger-table"><div className="ledger-header"><span>Date</span><span>Amount</span><span>Cash / Balance</span></div>{customerEntries.map(item => <div className="ledger-row" key={item.id}><span>{item.date}</span><span>Rs. {Number(item.amount).toLocaleString('en-PK')}</span><span className={item.type === 'cash' ? 'money-positive' : 'money-negative'}>{item.type === 'cash' ? 'Cash +' : 'Balance −'}</span><span className="ledger-row-actions"><button type="button" className="ledger-edit-btn" onClick={() => editLedgerEntry(item)}>Edit</button><button type="button" className="ledger-delete-btn" onClick={() => deleteLedgerEntry(item.id)}>Delete</button></span></div>)}</div><div className="account-actions"><button type="button" className="btn-secondary" onClick={() => { const index = customers.findIndex(customer => customer.name === selectedName); setEditing(index); setDraft(selectedCustomer) }}><Check size={16} /> Edit Customer</button><button type="button" className="btn-submit report-add" onClick={() => { setEditing(null); setDraft({ name: '', address: '', phone: '' }) }}><Plus size={17} /> Add Customer</button></div></div> : <div className="account-empty"><UserRound size={42} /><p>Search and select a customer to open the account.</p></div>}{draft.name || editing !== null ? <div className="report-form account-editor"><input className="field-input" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Customer name" /><input className="field-input" value={draft.phone} onChange={e => setDraft({ ...draft, phone: e.target.value })} placeholder="Contact number" /><input className="field-input" value={draft.address} onChange={e => setDraft({ ...draft, address: e.target.value })} placeholder="Address" /><button type="button" className="btn-secondary" onClick={saveCustomer}><Check size={16} /> {editing === null ? 'Save Customer' : 'Update Customer'}</button></div> : null}</section>
 }
 
+function CustomerReportV2() {
+  const [customers, setCustomers] = useState<SavedCustomer[]>([])
+  const [query, setQuery] = useState('')
+  const [selectedName, setSelectedName] = useState('')
+  const [formOpen, setFormOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [draft, setDraft] = useState<SavedCustomer>({ name: '', phone: '', address: '' })
+  useEffect(() => {
+    const fallback = SAVED_CUSTOMERS.map(customer => ({ ...customer, phone: '' }))
+    try { setCustomers(JSON.parse(localStorage.getItem('ahwmb-saved-customers') || 'null') || fallback) } catch { setCustomers(fallback) }
+    if (supabase) supabase.from('customers').select('name,phone,address').order('name').then(({ data }) => { if (data) setCustomers(data.map(item => ({ name: item.name, phone: item.phone || '', address: item.address || '' }))) })
+  }, [])
+  const matches = customers.filter(item => item.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+  const selected = customers.find(item => item.name === selectedName)
+  const save = async () => {
+    const customer = { name: draft.name.trim(), phone: draft.phone.trim(), address: draft.address.trim() }
+    if (!customer.name) { setMessage('Customer name is required.'); return }
+    if (customers.some(item => item.name.toLowerCase() === customer.name.toLowerCase())) { setMessage('This customer already exists.'); return }
+    setSaving(true); setMessage('')
+    if (supabase) { const { error } = await supabase.from('customers').insert(customer); if (error) { setMessage(error.message); setSaving(false); return } }
+    const next = [...customers, customer].sort((a, b) => a.name.localeCompare(b.name)); setCustomers(next)
+    try { localStorage.setItem('ahwmb-saved-customers', JSON.stringify(next)) } catch { /* storage unavailable */ }
+    setQuery(customer.name); setSelectedName(customer.name); setDraft({ name: '', phone: '', address: '' }); setFormOpen(false); setMessage('Customer added successfully.'); setSaving(false)
+  }
+  return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Customer Report</h2><p className="panel-sub">Search saved customers and open their account ledger.</p></div><button type="button" className="btn-submit report-add" onClick={() => { setDraft({ name: '', phone: '', address: '' }); setMessage(''); setFormOpen(true) }}><Plus size={17} /> Add Customer</button></div>{message && <p className="form-message">{message}</p>}<div className="account-search-wrap"><input className="report-search account-search" value={query} onChange={event => { setQuery(event.target.value); setSelectedName('') }} placeholder="Search customer name, e.g. Ahmed Store" />{query && !selectedName && matches.length > 0 && <div className="customer-suggestions report-suggestions">{matches.map(item => <button type="button" key={item.name} onClick={() => { setSelectedName(item.name); setQuery(item.name) }}><strong>{item.name}</strong><small>{item.address}</small></button>)}</div>}</div>{selected ? <div className="ledger-card ledger-card--top"><div className="report-heading"><div><p className="admin-eyebrow">CUSTOMER ACCOUNT</p><h3 className="panel-title">{selected.name}</h3><p className="panel-sub">{selected.phone || 'No contact saved'} · {selected.address}</p></div><button type="button" className="btn-secondary" onClick={() => { setSelectedName(''); setQuery('') }}>Close</button></div><div className="account-empty"><UserRound size={36} /><p>Customer account selected. Existing ledger entries remain available in the Customer Report workflow.</p></div></div> : <div className="account-empty"><UserRound size={42} /><p>Search and select a customer to open the account.</p></div>}{formOpen && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-box admin-entry-modal"><h2 className="modal-title">Add Customer</h2><label className="field"><span className="field-label">Customer name *</span><input className="field-input" value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} autoFocus /></label><label className="field"><span className="field-label">Phone number</span><input className="field-input" value={draft.phone} onChange={event => setDraft({ ...draft, phone: event.target.value })} /></label><label className="field"><span className="field-label">Address</span><textarea className="field-textarea" value={draft.address} onChange={event => setDraft({ ...draft, address: event.target.value })} rows={3} /></label><div className="modal-actions"><button type="button" className="btn-secondary" onClick={() => setFormOpen(false)}>Cancel</button><button type="button" className="btn-submit" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save Customer'}</button></div></div></div>}</section>
+}
+
 function PurchaseReport() {
   const [rows, setRows] = useState([{ id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }])
   const update = (id: string, key: 'party' | 'area' | 'item' | 'amount' | 'date', value: string) => setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row))
@@ -2606,7 +2634,7 @@ function AdminPage({
         {adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('orders')} />
           : adminView === 'customer-report'
-          ? <CustomerReport />
+          ? <CustomerReportV2 />
           : adminView === 'purchase-report'
           ? <PurchaseReport />
           : adminView === 'stock-report'
@@ -3024,7 +3052,9 @@ function AdminCreateOrder({
   const customerMatches = useMemo(() => {
     const query = name.trim().toLowerCase()
     if (!query) return []
-    return SAVED_CUSTOMERS.filter(customer => customer.name.toLowerCase().includes(query)).slice(0, 8)
+    let saved = SAVED_CUSTOMERS
+    try { saved = [...saved, ...(JSON.parse(localStorage.getItem('ahwmb-saved-customers') || '[]') as typeof SAVED_CUSTOMERS)] } catch { /* storage unavailable */ }
+    return saved.filter((customer, index, all) => all.findIndex(item => item.name.toLowerCase() === customer.name.toLowerCase()) === index).filter(customer => customer.name.toLowerCase().includes(query)).slice(0, 8)
   }, [name])
 
   const updateRow = (id: string, field: keyof Omit<AdminOrderRow, 'id'>, value: string) => {
