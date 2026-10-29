@@ -2520,7 +2520,7 @@ input, select, textarea, button { line-height:1.25; }
 .admin-entry-modal .field { display:block; margin:14px 0; }
 .admin-entry-modal .field-label { display:block; margin-bottom:6px; }
 .customer-report-shell { position:relative; }
-.customer-add-top { position:absolute; z-index:2; top:38px; right:32px; min-height:44px; padding:9px 18px; }
+.customer-add-top { position:absolute; z-index:2; top:18px; right:32px; width:auto !important; min-width:150px; min-height:44px; padding:9px 18px; display:inline-flex; align-items:center; justify-content:center; }
 .customer-add-message { margin:8px 0 0 20px; }
 @media (max-width:767px) { .customer-add-top { top:28px; right:20px; } }
 @media (max-width:767px) { .cart-drawer { width:100%; } .cart-drawer-foot { padding-bottom:calc(16px + env(safe-area-inset-bottom)); } }
