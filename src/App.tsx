@@ -14,12 +14,6 @@ let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SHOPKEEPER_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.env.VITE_SHOPKEEPER_WHATSAPP || '923001234567'
-const DEFAULT_RIDERS = [
-  { id: 'r1', name: 'Imran', phone: '' },
-  { id: 'r2', name: 'Farhan', phone: '' },
-  { id: 'r3', name: 'Salman', phone: '' },
-  { id: 'r4', name: 'Ali', phone: '' },
-]
 const SAVED_CUSTOMERS = [
   ['AHMED STORE', 'MANZOOR COLONY'], ['NAZAR KHAN', 'MANZOOR COLONY'], ['HAJI HAIDER GUL', 'CANT'],
   ['QAPAS ALTAF COMPANY', 'PORT QASIM'], ['DARAKSHAN/PEHALVI HOTEL', 'SADAR'], ['SAIFUULAH DEFENSE', 'DEFENCE'],
@@ -320,7 +314,7 @@ const copy = {
     savePrint: 'Save & Print Invoice', sharePdf: 'Share PDF File', balance: 'Balance', deposit: 'Deposit', remaining: 'Remaining Balance', saving: 'Generating PDF…', refresh: 'Refresh', reports: 'Daily Reports', ordersView: 'Orders',
     grand: 'Grand Total', status: 'Status', created: 'Date',
     customerLabel: 'Customer', delivery: 'Address', itemCount: 'items',
-    openLocation: 'Open map', riderWhatsApp: 'Send to rider',
+    openLocation: 'Open map',
     successHint: 'The shopkeeper can now see your order.',
     errors: {
       name: 'Please enter your name.',
@@ -371,7 +365,7 @@ const copy = {
     savePrint: 'محفوظ کریں اور رسید پرنٹ کریں', sharePdf: 'PDF فائل شیئر کریں', balance: 'کل بیلنس', deposit: 'جمع رقم', remaining: 'باقی بیلنس', saving: 'PDF بن رہی ہے…', refresh: 'تازہ کریں', reports: 'روزانہ رپورٹس', ordersView: 'آرڈرز',
     grand: 'کل رقم', status: 'حالت', created: 'تاریخ',
     customerLabel: 'گاہک', delivery: 'پتہ', itemCount: 'اشیاء',
-    openLocation: 'مقام کھولیں', riderWhatsApp: 'رائڈر کو بھیجیں',
+    openLocation: 'مقام کھولیں',
     successHint: 'دکاندار اب آپ کا آرڈر دیکھ سکتا ہے۔',
     errors: {
       name: 'اپنا نام لکھیں۔',
@@ -1604,7 +1598,7 @@ function CustomerPage({
           </div>
 
           <div className="order-card-list">
-            {rows.map((row, index) => <article className="order-card" key={`mobile-${row.id}`}><div className="order-card-row order-card-row--name"><span className="order-card-badge">{index + 1}</span><div className="item-typeahead"><input className="cell-input" value={row.itemName} onFocus={() => setSuggestionRowId(row.id)} onBlur={() => window.setTimeout(() => setSuggestionRowId(null), 150)} onChange={e => updateRow(row.id, 'itemName', e.target.value)} placeholder={t.itemPh} aria-label={`${t.item} ${index + 1}`} autoComplete="off" />{suggestionRowId === row.id && <ProductSuggestionMenu query={row.itemName} onSelect={value => { updateRow(row.id, 'itemName', value); setSuggestionRowId(null) }} />}</div></div><div className="order-card-row"><input className="cell-input" type="number" min="0" step="0.001" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} placeholder={t.quantityPh} aria-label={`${t.quantity} ${index + 1}`} /><select className="cell-select" value={row.unitType === 'NONE' ? '' : row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value || 'NONE')} aria-label={`${t.unit} ${index + 1}`}><option value="">Select Unit</option>{UNIT_OPTIONS.filter(option => option.value !== 'NONE' && option.value !== 'BAGS').map(option => <option key={option.value} value={option.value}>{option[language === 'ur' ? 'ur' : 'en']}</option>)}</select></div><div className="order-card-row"><input className="cell-input" placeholder="Rate (Rs.)" readOnly value="" /><output className="order-card-total">—</output></div><button type="button" className="order-card-remove" onClick={() => setRows(current => current.length > 1 ? current.filter(item => item.id !== row.id) : [createRow()])}>🗑 Remove</button></article>)}
+            {rows.map((row, index) => <article className="order-card" key={`mobile-${row.id}`}><div className="order-card-row order-card-row--name"><span className="order-card-badge">{index + 1}</span><div className="item-typeahead"><input className="cell-input" value={row.itemName} onFocus={() => setSuggestionRowId(row.id)} onBlur={() => window.setTimeout(() => setSuggestionRowId(null), 150)} onChange={e => updateRow(row.id, 'itemName', e.target.value)} placeholder={t.itemPh} aria-label={`${t.item} ${index + 1}`} autoComplete="off" />{suggestionRowId === row.id && <ProductSuggestionMenu query={row.itemName} onSelect={value => { updateRow(row.id, 'itemName', value); setSuggestionRowId(null) }} />}</div></div><div className="order-card-row"><input className="cell-input" type="number" min="0" step="0.001" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} placeholder={t.quantityPh} aria-label={`${t.quantity} ${index + 1}`} /><select className="cell-select" value={row.unitType === 'NONE' ? '' : row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value || 'NONE')} aria-label={`${t.unit} ${index + 1}`}><option value="">Select Unit</option>{UNIT_OPTIONS.filter(option => option.value !== 'NONE' && option.value !== 'BAGS').map(option => <option key={option.value} value={option.value}>{option[language === 'ur' ? 'ur' : 'en']}</option>)}</select></div><button type="button" className="order-card-remove" onClick={() => setRows(current => current.length > 1 ? current.filter(item => item.id !== row.id) : [createRow()])}>🗑 Remove</button></article>)}
           </div>
 
           <div className="table-help">
@@ -1777,7 +1771,7 @@ function CustomerPage({
         />
       )}
       <ConfirmDialog state={confirmDialog} onCancel={() => setConfirmDialog(current => ({ ...current, isOpen: false }))} />
-      <div className={`sticky-total-bar ${showStickyTotal ? 'is-visible' : ''}`} aria-live="polite"><div className="sticky-total-inner"><div className="sticky-total-left"><span className="sticky-item-count">{filledRows.length} {isRtl ? 'اشیاء' : `item${filledRows.length === 1 ? '' : 's'}`}</span></div><div className="sticky-total-right"><span className="sticky-total-label">{isRtl ? 'کل:' : 'Total:'}</span><span className="sticky-total-amount">Rs. {grandTotal.toLocaleString('en-PK')}</span></div></div></div>
+      <div className={`sticky-total-bar ${showStickyTotal ? 'is-visible' : ''}`} aria-live="polite"><div className="sticky-total-inner"><div className="sticky-total-left"><span className="sticky-item-count">{filledRows.length} {isRtl ? 'اشیاء' : `item${filledRows.length === 1 ? '' : 's'}`}</span></div><button type="button" className="sticky-cart-button" onClick={() => setCartOpen(true)}><ShoppingBag size={20} /> {isRtl ? 'کارٹ دیکھیں' : 'View Cart'}</button></div></div>
      </main>
   )
 }
@@ -2521,20 +2515,6 @@ function AdminPage({
   const [editCustomerPhone, setEditCustomerPhone] = useState('')
   const [editCustomerAddress, setEditCustomerAddress] = useState('')
   const [savingCustomer, setSavingCustomer] = useState(false)
-  const [riders, setRiders] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('ahwmb_riders') || 'null') || DEFAULT_RIDERS } catch { return DEFAULT_RIDERS }
-  })
-  const [riderAssignments, setRiderAssignments] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem('ahwmb_rider_assignments') || '{}') } catch { return {} }
-  })
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [riderFormOpen, setRiderFormOpen] = useState(false)
-  const [newRiderName, setNewRiderName] = useState('')
-  const [newRiderPhone, setNewRiderPhone] = useState('')
-
-  useEffect(() => { localStorage.setItem('ahwmb_riders', JSON.stringify(riders)) }, [riders])
-  useEffect(() => { localStorage.setItem('ahwmb_rider_assignments', JSON.stringify(riderAssignments)) }, [riderAssignments])
-
   // Centralized, rounded calculation for all five financial fields.
   const financials = useMemo(() => calculateFinancials(sumLineTotals(pricedItems), balance, deposit), [pricedItems, balance, deposit])
   const grandTotal = financials.totalAmount
@@ -2583,38 +2563,6 @@ function AdminPage({
     setBalance(Number(order.balance) || 0)
     setDeposit(Number(order.deposit) || 0)
     setLastPdf(null)
-  }
-
-  const assignRider = (orderId: string, riderId: string) => {
-    setRiderAssignments(current => {
-      const updated = { ...current }
-      if (riderId) updated[orderId] = riderId
-      else delete updated[orderId]
-      return updated
-    })
-    const riderName = riders.find(rider => rider.id === riderId)?.name
-    if (riderName) addToast(`Order assigned to ${riderName}`, 'success')
-  }
-
-  const sendToRider = (order: OrderRecord, riderId: string) => {
-    const rider = riders.find(item => item.id === riderId)
-    if (!rider) return
-    const message = `*AHWMB Delivery Assignment*\n\nOrder: ${order.order_ref}\nCustomer: ${order.customer_name}\nPhone: ${order.customer_phone}\nAddress: ${order.customer_address}\n${order.location_link ? `Map: ${order.location_link}\n` : ''}\nItems: ${order.items.length} items\nTotal: Rs.${(order.grand_total || 0).toLocaleString()}\n\n_Please confirm delivery._`
-    const phone = normalizePhone(rider.phone || '')
-    window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : `https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
-  }
-
-  const addRider = () => {
-    const name = newRiderName.trim()
-    if (!name) return
-    setRiders(current => [...current, { id: `r-${crypto.randomUUID()}`, name, phone: newRiderPhone.trim() }])
-    setNewRiderName(''); setNewRiderPhone(''); setRiderFormOpen(false)
-    addToast(`Rider ${name} added`, 'success')
-  }
-
-  const removeRider = (riderId: string) => {
-    setRiders(current => current.filter(rider => rider.id !== riderId))
-    setRiderAssignments(current => Object.fromEntries(Object.entries(current).filter(([, assignedId]) => assignedId !== riderId)))
   }
 
   /**
@@ -2891,7 +2839,7 @@ function AdminPage({
 
         {dailySummaryCard}
         <button type="button" className="admin-back-btn" onClick={() => setAdminView('home')}>← {isRtl ? 'واپس' : 'Back'}</button>
-        <div className="admin-main-tabs"><button type="button" className={adminTab === 'pending' ? 'admin-main-tab is-active' : 'admin-main-tab'} onClick={() => { setAdminTab('pending'); setAdminView('orders'); setFilter('pending') }}>📋 {isRtl ? 'زیر التوا' : 'Pending'} ({orders.filter(order => order.status === 'pending').length})</button><button type="button" className={adminTab === 'completed' ? 'admin-main-tab is-active' : 'admin-main-tab'} onClick={() => { setAdminTab('completed'); setAdminView('orders'); setFilter('completed') }}>✅ {isRtl ? 'مکمل' : 'Completed'} ({orders.filter(order => order.status === 'completed').length})</button><button type="button" className={adminTab === 'invoice' ? 'admin-main-tab is-active' : 'admin-main-tab'} onClick={() => setAdminTab('invoice')}>🖨 {isRtl ? 'رسید' : 'Invoice'}</button></div>
+
         {/* Topbar */}
         <div className="admin-topbar">
           <div>
@@ -2901,14 +2849,6 @@ function AdminPage({
           <div className="admin-top-actions">
             {([['orders', 'Orders', ReceiptText], ['newOrder', 'Create Order', Plus], ['products', 'Products', ShoppingBag], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['purchase-report', 'Purchase Report', ReceiptText], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
             {adminView === 'orders' && <button type="button" className="btn-secondary" onClick={() => void refresh()}><RefreshCw size={16} /> {t.refresh}</button>}
-            <div className="admin-settings-wrap">
-              <button type="button" className="admin-settings-btn" onClick={() => setSettingsOpen(value => !value)} aria-expanded={settingsOpen} aria-label="Settings">⚙️</button>
-              {settingsOpen && <div className="admin-settings-menu">
-                <button type="button" onClick={() => { setAdminView('reports'); setSettingsOpen(false) }}>📊 {isRtl ? 'روزانہ رپورٹس' : 'Daily Reports'}</button>
-                <button type="button" onClick={() => { void refresh(); setSettingsOpen(false) }}>🔄 {isRtl ? 'آرڈرز تازہ کریں' : 'Refresh Orders'}</button>
-                <div className="rider-manager"><strong>🚴 {isRtl ? 'رائڈرز' : 'Manage Riders'}</strong>{riders.map(rider => <div className="rider-manager-row" key={rider.id}><span>{rider.name}</span><button type="button" onClick={() => removeRider(rider.id)} aria-label={`Delete ${rider.name}`}>×</button></div>)}{riderFormOpen && <div className="rider-mini-form"><input value={newRiderName} onChange={event => setNewRiderName(event.target.value)} placeholder="Name" /><input value={newRiderPhone} onChange={event => setNewRiderPhone(event.target.value)} placeholder="Phone (optional)" /><button type="button" onClick={addRider}>Save</button></div>}<button type="button" className="rider-add-btn" onClick={() => setRiderFormOpen(value => !value)}>+ Add Rider</button></div>
-              </div>}
-            </div>
           </div>
         </div>
 
@@ -2992,14 +2932,6 @@ function AdminPage({
                         <span className="order-total">{formatMoney(order.grand_total)}</span>
                       )}
                     </button>
-                    <div className="rider-row" onClick={event => event.stopPropagation()}>
-                      <span className="rider-label">🚴 {isRtl ? 'رائڈر:' : 'Rider:'}</span>
-                      <select className="rider-select" value={riderAssignments[order.id] || ''} onChange={event => assignRider(order.id, event.target.value)} aria-label={`Rider for ${order.order_ref}`}>
-                        <option value="">— {isRtl ? 'غیر مقرر' : 'Unassigned'} —</option>
-                        {riders.map(rider => <option key={rider.id} value={rider.id}>{rider.name}</option>)}
-                      </select>
-                      {riderAssignments[order.id] && <button className="btn-rider-whatsapp" onClick={() => sendToRider(order, riderAssignments[order.id])} type="button" title="Send delivery details to rider">💬 {isRtl ? 'بھیجیں' : 'Send'}</button>}
-                    </div>
                     <button
                       type="button"
                       className="order-card-edit-customer"
@@ -3140,13 +3072,6 @@ function AdminPage({
                       <div className="editor-location">
                         <a href={selected.location_link} target="_blank" rel="noreferrer">
                           <MapPin size={14} /> {t.openLocation}
-                        </a>
-                        <a
-                          href={`https://wa.me/?text=${encodeURIComponent(`${selected.customer_name}: ${selected.location_link}`)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <MessageCircle size={14} /> {t.riderWhatsApp}
                         </a>
                       </div>
                     )}

@@ -142,7 +142,18 @@ a { color: var(--c-green-500); }
   overflow:hidden; padding:2px;
   box-shadow:0 2px 8px rgba(0,0,0,.2);
 }
-.header-logo img { width:100%; height:100%; object-fit:contain; border-radius:8px; display:block; }
+.header-logo img { width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
+.header-logo { border-radius:50%; padding:0; background:transparent; border:0; box-shadow:none; }
+.admin-shell > .app-header { margin-bottom:24px; }
+.sticky-cart-button { display:flex; align-items:center; gap:8px; min-height:48px; padding:8px 20px; border-radius:12px; background:var(--c-gold-300); color:var(--c-green-900); font-weight:800; }
+@media (max-width:767px) {
+  .app-header { padding:14px 16px; gap:14px; }
+  .app-header .header-brand { flex-basis:100%; gap:12px; }
+  .app-header .header-actions { width:100%; justify-content:flex-end; flex-wrap:nowrap; padding-top:10px; border-top:1px solid rgba(255,255,255,.15); }
+  .app-header .easy-badge { margin-inline-end:auto; }
+  .app-header .header-title { font-size:20px; line-height:1.2; }
+  .app-header .header-sub { font-size:12px; line-height:1.4; }
+}
 
 .header-brand-text { min-width: 0; }
 
@@ -1219,24 +1230,11 @@ button { min-height: 44px; }
   box-shadow: 0 4px 16px rgba(201,148,31,.12);
 }
 
-.rider-row { display: flex; align-items: center; gap: 10px; padding-top: 10px; margin-top: 10px; border-top: 1px solid var(--c-border); flex-wrap: wrap; }
-.rider-label { font-size: 14px; font-weight: 700; color: var(--c-ink-500); white-space: nowrap; }
-.rider-select { flex: 1; min-width: 120px; min-height: 44px; border: 2px solid var(--c-border); border-radius: var(--r-sm); padding: 0 10px; font-size: 15px; font-weight: 600; color: var(--c-ink); background: #fafcfb; }
-.rider-select:focus { border-color: var(--c-green-500); outline: none; }
-.btn-rider-whatsapp { min-height: 44px; padding: 0 14px; background: #25D366; color: white; border-radius: var(--r-sm); font-size: 14px; font-weight: 800; white-space: nowrap; transition: background 150ms ease; border: 0; }
-.btn-rider-whatsapp:hover { background: #128C7E; }
 .admin-settings-wrap { position: relative; }
 .admin-settings-btn { width: 48px; height: 48px; border: 2px solid var(--c-border); border-radius: 50%; background: #fff; cursor: pointer; font-size: 20px; }
 .admin-settings-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: 280px; padding: 8px; background: #fff; border: 1px solid var(--c-border); border-radius: var(--r-lg); box-shadow: 0 12px 30px rgba(15,33,25,.16); }
 .admin-settings-menu > button { display: block; width: 100%; min-height: 44px; padding: 8px 12px; text-align: left; border: 0; border-radius: var(--r-sm); background: transparent; font-weight: 700; cursor: pointer; }
-.admin-settings-menu > button:hover, .rider-add-btn:hover { background: var(--c-green-50); }
-.rider-manager { margin-top: 8px; padding: 10px; border-top: 1px solid var(--c-border); }
-.rider-manager-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; font-size: 14px; }
-.rider-manager-row button { border: 0; background: #fee2e2; color: #b91c1c; border-radius: 50%; width: 26px; height: 26px; cursor: pointer; font-weight: 900; }
-.rider-mini-form { display: grid; gap: 6px; margin-top: 8px; }
-.rider-mini-form input { min-height: 40px; padding: 0 8px; border: 1px solid var(--c-border); border-radius: 8px; }
-.rider-mini-form button, .rider-add-btn { min-height: 40px; border: 0; border-radius: 8px; background: var(--c-gold-300); font-weight: 800; cursor: pointer; }
-.rider-add-btn { width: 100%; margin-top: 8px; }
+.admin-settings-menu > button:hover { background: var(--c-green-50); }
 .repeat-order-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
 .repeat-icon { font-size: 32px; flex: 0 0 auto; line-height: 1; }
 .repeat-welcome { font-size: 18px; font-weight: 800; color: var(--c-ink); line-height: 1.2; }
