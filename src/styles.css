@@ -155,6 +155,13 @@ a { color: var(--c-green-500); }
   .app-header .header-sub { font-size:12px; line-height:1.4; }
 }
 
+.mobile-orders-back { display:none; }
+@media (max-width:767px) {
+  .admin-grid.has-open-order > .orders-panel { display:none; }
+  .admin-grid:not(.has-open-order) > .editor-panel { display:none; }
+  .admin-grid .mobile-orders-back { display:flex; margin-bottom:20px; min-height:56px; }
+  .admin-grid > .editor-panel { min-width:0; width:100%; }
+}
 .header-brand-text { min-width: 0; }
 
 .header-eyebrow {
@@ -2922,7 +2929,9 @@ body { font-size:18px; }
   .pricing-table td:nth-child(5) .pricing-input { width:100%; max-width:none; height:44px; min-height:42px; }
   .pricing-table td:nth-child(6) { grid-area:total !important; display:block !important; min-width:0; padding:0 !important; }
   .pricing-table td:nth-child(6) .pricing-input { width:100%; max-width:none; height:44px; min-height:42px; }
-  .pricing-table td:last-child { position:absolute; top:8px; right:8px; z-index:4; display:grid !important; width:44px; height:44px; padding:0 !important; }
+  .pricing-table td:last-child { position:static !important; grid-column:1 / -1; grid-row:4; z-index:4; display:flex !important; justify-content:flex-end; width:100% !important; height:auto; padding:0 !important; }
+  .pricing-table td:last-child button { position:static; min-width:56px; width:56px; min-height:56px; margin:0; }
+  .pricing-table td.td-name { padding:0 !important; }
   .pricing-table .pricing-input::placeholder, .admin-create-table .cell-input::placeholder { color:#4b7a5f; opacity:1; }
   /* Catalog grid — two columns minimum on mobile */
   .catalog-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }

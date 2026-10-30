@@ -2868,7 +2868,7 @@ function AdminPage({
           ? <AdminProducts onChanged={() => setCatalogVersion(value => value + 1)} />
           : adminView === 'newOrder'
           ? <AdminCreateOrder language={language} onSuccess={() => { setAdminView('orders'); void refresh() }} onBack={() => setAdminView('orders')} />
-          : <div className="admin-grid">
+          : <div className={`admin-grid ${selected ? 'has-open-order' : ''}`}>
           {/* Orders list */}
           <section className="panel orders-panel">
             <div className="panel-head">
@@ -2912,7 +2912,6 @@ function AdminPage({
                   <div
                     key={order.id}
                     className={`order-card-wrap ${selected?.id === order.id ? 'order-card-wrap--selected' : ''}`}
-                    onClick={() => { setSelected(order); setAdminTab('invoice') }}
                   >
                     <button
                       type="button"
@@ -3053,6 +3052,7 @@ function AdminPage({
 
           {/* Editor panel */}
           <section className="panel editor-panel">
+            <button type="button" className="mobile-orders-back btn-secondary" onClick={() => setSelected(null)}>← {isRtl ? 'آرڈرز پر واپس' : 'Back to orders'}</button>
             {!selected ? (
               <div className="empty-state editor-empty">
                 <PackageCheck size={48} />
