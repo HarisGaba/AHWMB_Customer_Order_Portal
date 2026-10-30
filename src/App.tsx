@@ -2833,10 +2833,11 @@ function AdminPage({
   if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><div className="admin-wrap">{dailySummaryCard}<section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>➕ {isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => { setAdminView('orders'); setAdminTab('pending') }}>📋 {isRtl ? 'آرڈرز دیکھیں' : 'View Orders'}</button><button type="button" className="admin-home-btn admin-home-btn--summary" onClick={() => setAdminView('summary')}>📊 {isRtl ? 'آج کا خلاصہ' : "Today's Summary"}</button></section></div></main>
 
   return (
-    <main className={`app-shell admin-shell admin-wrap ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
+    <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
       <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
+      <div className="admin-wrap">
         {dailySummaryCard}
         <button type="button" className="admin-back-btn" onClick={() => setAdminView('home')}>← {isRtl ? 'واپس' : 'Back'}</button>
 
@@ -3249,6 +3250,7 @@ function AdminPage({
             )}
           </section>
         </div>}
+      </div>
     </main>
   )
 }
