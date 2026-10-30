@@ -9,6 +9,8 @@ import {
 import { supabase } from './lib/supabase'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
 import { useDraftOrder } from './hooks/useDraftOrder'
+import { requestTurnstileToken } from './lib/turnstile'
+import { InstallBanner } from './components/InstallBanner'
 
 let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
 
@@ -111,7 +113,25 @@ const normalizePhone = (value: string) => {
   const digits = value.replace(/\D/g, '')
   return digits.startsWith('0') ? `92${digits.slice(1)}` : digits
 }
-const validPhone = (value: string) => /^923\d{9}$/.test(normalizePhone(value))
+const isLikelyFakePhone = (value: string) => {
+  const digits = normalizePhone(value).replace(/^92/, '')
+  return new Set(digits).size <= 2 || /0123456789|1234567890|9876543210/.test(digits)
+}
+const validPhone = (value: string) => /^923\d{9}$/.test(normalizePhone(value)) && !isLikelyFakePhone(value)
+const RATE_LIMIT_KEY = 'ahwmb_submit_times'
+const RATE_LIMIT_MAX = 5
+const RATE_LIMIT_WINDOW = 3600000
+function checkRateLimit(phone: string): boolean {
+  try {
+    const key = `${RATE_LIMIT_KEY}_${normalizePhone(phone)}`
+    const parsed: unknown = JSON.parse(localStorage.getItem(key) || '[]')
+    const now = Date.now()
+    const recent = (Array.isArray(parsed) ? parsed : []).filter(t => typeof t === 'number' && Number.isFinite(t) && t <= now && now - t < RATE_LIMIT_WINDOW)
+    if (recent.length >= RATE_LIMIT_MAX) return false
+    localStorage.setItem(key, JSON.stringify([...recent, now]))
+  } catch { /* Database rate limiting remains enforced when storage is unavailable. */ }
+  return true
+}
 
 const formatMoney = (value: number) => `Rs. ${Math.round(value || 0).toLocaleString('en-PK')}`
 const isCurrentAdmin = async () => {
@@ -1043,6 +1063,7 @@ function PortalHeader({
   }, [avatarMenuOpen])
 
   return (
+    <>
     <header className="app-header">
       <div className="header-brand">
         <div className="header-logo">
@@ -1091,6 +1112,8 @@ function PortalHeader({
         </button>
       </div>
     </header>
+    <InstallBanner language={language} />
+    </>
   )
 }
 
@@ -1299,6 +1322,12 @@ function CustomerPage({
     if (Object.keys(next).length) return
     if (!supabase) { addToast(t.errors.setup, 'error'); return }
 
+    if (saving) return
+    if (!checkRateLimit(phone)) {
+      addToast(language === 'ur' ? 'آپ نے بہت زیادہ آرڈر بھیجے ہیں۔ ایک گھنٹے بعد دوبارہ کوشش کریں۔' : 'Too many orders submitted. Please try again in 1 hour.', 'error')
+      return
+    }
+
     setSaving(true)
     const orderRef = createOrderRef()
     const items: OrderItem[] = filledRows.map((row, index) => {
@@ -1316,6 +1345,12 @@ function CustomerPage({
     })
 
     try {
+      const turnstileToken = await requestTurnstileToken()
+      // TODO: Validate turnstileToken in a Supabase Edge Function using
+      // POST https://challenges.cloudflare.com/turnstile/v0/siteverify
+      // and a server-only Cloudflare secret. Do not add cf_token to this RPC:
+      // its existing signature does not accept that parameter.
+      void turnstileToken
       const { error } = await supabase.rpc('submit_order', {
         p_order_ref: orderRef,
         p_customer_name: name.trim(),
@@ -1336,6 +1371,10 @@ function CustomerPage({
       }
     } catch (err) {
       const message = readableError(err)
+      if (message.includes('rate_limit_exceeded')) {
+        addToast(language === 'ur' ? 'اس نمبر سے بہت زیادہ آرڈر آئے ہیں۔ بعد میں کوشش کریں۔' : 'Too many orders from this number. Try again later.', 'error')
+        return
+      }
       addToast(message && message !== '[object Object]' ? `Order could not be saved: ${message}` : t.errors.submit, 'error')
     } finally {
       setSaving(false)

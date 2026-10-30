@@ -8,7 +8,8 @@
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
-    "test": "node --experimental-strip-types --test"
+    "test": "node --experimental-strip-types --test",
+    "generate-icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
@@ -23,6 +24,7 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
+    "canvas": "^3.2.3",
     "typescript": "latest",
     "vite": "latest"
   }

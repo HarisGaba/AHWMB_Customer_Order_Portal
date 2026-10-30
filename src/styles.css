@@ -162,6 +162,13 @@ a { color: var(--c-green-500); }
   .admin-grid .mobile-orders-back { display:flex; margin-bottom:20px; min-height:56px; }
   .admin-grid > .editor-panel { min-width:0; width:100%; }
 }
+#turnstile-widget { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:10000; max-width:calc(100vw - 24px); }
+.install-banner { display:flex; align-items:center; gap:12px; padding:14px 16px; background:var(--c-green-800); color:white; border-bottom:2px solid var(--c-gold-400); flex-wrap:wrap; }
+.install-banner-text { flex:1; min-width:140px; display:flex; flex-direction:column; gap:3px; }
+.install-banner-text strong { font-size:16px; }
+.install-banner-text span { font-size:14px; color:var(--c-green-200); }
+.btn-install { min-height:48px; padding:0 18px; background:var(--c-gold-400); color:var(--c-green-900); border-radius:12px; font-weight:800; }
+.install-banner-dismiss { min-height:48px; min-width:48px; background:transparent; color:white; }
 .header-brand-text { min-width: 0; }
 
 .header-eyebrow {
