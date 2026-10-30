@@ -2781,39 +2781,6 @@ function AdminPage({
     [orders, filter]
   )
 
-  const todaySummary = useMemo(() => {
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const todayOrders = orders.filter(order => new Date(order.created_at) >= todayStart)
-    const pendingOrders = todayOrders.filter(order => order.status === 'pending')
-    const completedOrders = todayOrders.filter(order => order.status === 'completed')
-    return {
-      totalOrders: todayOrders.length,
-      pendingCount: pendingOrders.length,
-      completedCount: completedOrders.length,
-      totalRevenue: completedOrders.reduce((sum, order) => sum + (order.grand_total || 0), 0),
-      pendingRevenue: pendingOrders.reduce((sum, order) => sum + (order.grand_total || 0), 0),
-    }
-  }, [orders])
-
-  const todayDateLabel = new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  }).format(new Date())
-  const dailySummaryCard = <section className="daily-summary-card" aria-label="Today's sales summary">
-    <div className="daily-summary-header">
-      <span className="daily-summary-date">📅 {todayDateLabel}</span>
-      <span className="daily-summary-label">{isRtl ? 'آج کا خلاصہ' : "Today's Overview"}</span>
-    </div>
-    <div className="daily-summary-grid">
-      {loading ? Array.from({ length: 4 }, (_, index) => <div className="summary-stat" key={index}><div className="skeleton" style={{ height: 36, marginBottom: 8 }} /><div className="skeleton" style={{ height: 16 }} /></div>) : <>
-        <div className="summary-stat"><span className="stat-number">{todaySummary.totalOrders}</span><span className="stat-label">{isRtl ? 'کل آرڈرز' : 'Total Orders'}</span></div>
-        <div className="summary-stat summary-stat--pending"><span className="stat-number">{todaySummary.pendingCount}</span><span className="stat-label">{isRtl ? 'زیر التوا' : 'Pending'}</span></div>
-        <div className="summary-stat summary-stat--done"><span className="stat-number">{todaySummary.completedCount}</span><span className="stat-label">{isRtl ? 'مکمل' : 'Completed'}</span></div>
-        <div className="summary-stat summary-stat--revenue"><span className="stat-number stat-number--revenue">Rs.{todaySummary.totalRevenue.toLocaleString('en-PK')}</span><span className="stat-label">{isRtl ? 'آمدنی' : 'Revenue'}</span></div>
-      </>}
-    </div>
-  </section>
-
   if (authorized === null || loading) {
     return (
       <main className="app-shell">
@@ -2830,7 +2797,7 @@ function AdminPage({
 
   if (!authorized) return null
 
-  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><div className="admin-wrap">{dailySummaryCard}<section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>➕ {isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => { setAdminView('orders'); setAdminTab('pending') }}>📋 {isRtl ? 'آرڈرز دیکھیں' : 'View Orders'}</button><button type="button" className="admin-home-btn admin-home-btn--summary" onClick={() => setAdminView('summary')}>📊 {isRtl ? 'آج کا خلاصہ' : "Today's Summary"}</button></section></div></main>
+  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>➕ {isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => { setAdminView('orders'); setAdminTab('pending') }}>📋 {isRtl ? 'آرڈرز دیکھیں' : 'View Orders'}</button><button type="button" className="admin-home-btn admin-home-btn--summary" onClick={() => setAdminView('summary')}>📊 {isRtl ? 'آج کا خلاصہ' : "Today's Summary"}</button></section></div></main>
 
   return (
     <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
@@ -2838,7 +2805,6 @@ function AdminPage({
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
       <div className="admin-wrap">
-        {dailySummaryCard}
         <button type="button" className="admin-back-btn" onClick={() => setAdminView('home')}>← {isRtl ? 'واپس' : 'Back'}</button>
 
         {/* Topbar */}
