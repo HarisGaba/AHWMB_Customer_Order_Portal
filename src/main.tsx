@@ -8,3 +8,13 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const splash = document.getElementById('ahwmb-splash')
+    if (splash) {
+      splash.classList.add('hidden')
+      setTimeout(() => splash.remove(), 450)
+    }
+  }, 800)
+})

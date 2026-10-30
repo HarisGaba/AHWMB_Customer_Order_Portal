@@ -8,11 +8,18 @@ import {
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
+import { useDraftOrder } from './hooks/useDraftOrder'
 
 let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SHOPKEEPER_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.env.VITE_SHOPKEEPER_WHATSAPP || '923001234567'
+const DEFAULT_RIDERS = [
+  { id: 'r1', name: 'Imran', phone: '' },
+  { id: 'r2', name: 'Farhan', phone: '' },
+  { id: 'r3', name: 'Salman', phone: '' },
+  { id: 'r4', name: 'Ali', phone: '' },
+]
 const SAVED_CUSTOMERS = [
   ['AHMED STORE', 'MANZOOR COLONY'], ['NAZAR KHAN', 'MANZOOR COLONY'], ['HAJI HAIDER GUL', 'CANT'],
   ['QAPAS ALTAF COMPANY', 'PORT QASIM'], ['DARAKSHAN/PEHALVI HOTEL', 'SADAR'], ['SAIFUULAH DEFENSE', 'DEFENCE'],
@@ -59,9 +66,37 @@ type OrderRecord = {
   remaining_balance?: number | null
   created_at: string
 }
+type OrderBadge = {
+  label: string
+  labelUr: string
+  color: 'green' | 'gold' | 'yellow' | 'red'
+  emoji: string
+}
 type FormErrors = Partial<Record<'name' | 'phone' | 'address' | 'items', string>>
 type ToastType = 'success' | 'error' | 'info'
 type Toast = { id: string; message: string; type: ToastType }
+
+const getOrderBadge = (order: OrderRecord): OrderBadge => {
+  if (order.status === 'completed') return { label: 'Completed', labelUr: 'مکمل', color: 'green', emoji: '✅' }
+  const ageHours = (Date.now() - new Date(order.created_at).getTime()) / 3600000
+  if (ageHours < 2) return { label: 'New', labelUr: 'نیا', color: 'gold', emoji: '🟡' }
+  if (ageHours <= 24) return { label: 'Pending', labelUr: 'زیر التوا', color: 'yellow', emoji: '⏳' }
+  return { label: 'Urgent', labelUr: 'فوری', color: 'red', emoji: '🔴' }
+}
+
+const getInitials = (email: string) => {
+  const localPart = email.split('@')[0] || ''
+  const words = localPart.split(/[._\-\d]+/).filter(Boolean)
+  if (words.length >= 2) return `${words[0][0]}${words[1][0]}`.toUpperCase()
+  return (words[0] || localPart || '?').slice(0, 2).toUpperCase()
+}
+
+const buildCustomerConfirmation = (order: { order_ref: string; customer_name: string; rows: OrderRow[]; language: Language }) => {
+  const date = new Intl.DateTimeFormat(order.language === 'ur' ? 'ur-PK' : 'en-PK', { dateStyle: 'medium' }).format(new Date())
+  const items = order.rows.filter(row => row.itemName.trim()).map((row, index) => `${index + 1}. ${row.itemName.trim()} — ${row.quantityValue} ${row.unitType}`).join('\n')
+  if (order.language === 'ur') return `السلام علیکم! 🌿\n\nآپ کا آرڈر AHWMB کو موصول ہو گیا ✅\n\n📋 *آرڈر نمبر: ${order.order_ref}*\n📅 تاریخ: ${date}\n\n*آپ کا آرڈر:*\n${items}\n\nدکاندار جلد آپ سے قیمت کنفرم کرے گا۔\n\n*آدم حاجی ولی محمد اینڈ برادرز*\nجوڑیا بازار، کراچی 🕌\n\n_آرڈر دینے کا شکریہ!_`
+  return `Assalamoalaikum! 🌿\n\nYour order with AHWMB has been received ✅\n\n📋 *Order Reference: ${order.order_ref}*\n📅 Date: ${date}\n\n*Your Order:*\n${items}\n\nThe shopkeeper will review your order and contact you shortly to confirm pricing.\n\n*Adam Haji Wali Muhammad & Brothers*\nJodia Bazaar, Karachi 🕌\n\n_Thank you for your order!_`
+}
 
 // ─── Unit Options ─────────────────────────────────────────────────────────────
 const UNIT_OPTIONS: { value: UnitType; en: string; ur: string }[] = [
@@ -115,6 +150,11 @@ const formatDateShort = (value: string | Date) =>
   new Intl.DateTimeFormat('en-GB', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   }).format(new Date(value))
+
+const buildAdminWhatsAppLink = (order: OrderRecord) => {
+  const message = `*AHWMB Order — ${order.order_ref}*\nCustomer: ${order.customer_name}\nAddress: ${order.customer_address}\nDate: ${formatDateShort(order.created_at)}\n\nItems:\n${order.items.map((item, index) => `${index + 1}. ${item.name} — ${item.quantity_value} ${item.unit_type} × Rs.${item.unit_price} = Rs.${item.total}`).join('\n')}\n\n*Grand Total: Rs.${order.grand_total.toLocaleString('en-PK')}*\n\n_Sent from AHWMB Customer Portal_`
+  return `https://wa.me/?text=${encodeURIComponent(message)}`
+}
 
 const createOrderRef = () => `#AHWMB-${Date.now().toString(36).toUpperCase().slice(-4)}${Math.floor(10 + Math.random() * 90)}`
 const parseQuantity = (value: string) => {
@@ -983,17 +1023,36 @@ async function notifyNewOrder(order: {
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 function PortalHeader({
-  language, setLanguage, onAdmin, isAuthenticated,
+  language, setLanguage, onAdmin, isAuthenticated, adminEmail,
 }: {
   language: Language; setLanguage: (v: Language) => void
-  onAdmin: () => void; isAuthenticated: boolean
+  onAdmin: () => void; isAuthenticated: boolean; adminEmail?: string
 }) {
   const t = copy[language]
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
+  const avatarRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!avatarMenuOpen) return
+    const handleOutside = (event: MouseEvent) => {
+      if (!avatarRef.current?.contains(event.target as Node)) setAvatarMenuOpen(false)
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAvatarMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [avatarMenuOpen])
+
   return (
     <header className="app-header">
       <div className="header-brand">
-        <div className="header-logo" aria-hidden="true">
-          <ShoppingBag size={26} />
+        <div className="header-logo">
+          <img src="/logo.png" alt="AHWMB Logo" />
         </div>
         <div className="header-brand-text">
           <p className="header-eyebrow">AHWMB</p>
@@ -1003,10 +1062,30 @@ function PortalHeader({
       </div>
       <div className="header-actions">
         <div className="easy-badge">{t.easy}</div>
-        <button type="button" className="btn-header-icon" onClick={onAdmin}>
-          {isAuthenticated ? <LogOut size={16} /> : <LogIn size={16} />}
-          <span>{isAuthenticated ? t.logout : t.login}</span>
-        </button>
+        {isAuthenticated ? <div className="admin-avatar-wrap" ref={avatarRef}>
+          <button
+            type="button"
+            className="admin-avatar"
+            onClick={() => setAvatarMenuOpen(value => !value)}
+            aria-label="Account menu"
+            aria-expanded={avatarMenuOpen}
+          >
+            {getInitials(adminEmail || '')}
+          </button>
+          {avatarMenuOpen && <div className="avatar-menu">
+            <div className="avatar-menu-email">
+              <span>{language === 'ur' ? 'لاگ ان بطور:' : 'Signed in as:'}</span>
+              <strong>{adminEmail || (language === 'ur' ? 'منتظم' : 'Admin')}</strong>
+            </div>
+            <hr className="avatar-menu-divider" />
+            <button type="button" className="avatar-menu-logout" onClick={() => { setAvatarMenuOpen(false); onAdmin() }}>
+              🔓 {t.logout}
+            </button>
+          </div>}
+        </div> : <button type="button" className="btn-header-icon" onClick={onAdmin}>
+          <LogIn size={16} />
+          <span>{t.login}</span>
+        </button>}
         <button
           type="button"
           className="btn-lang"
@@ -1040,9 +1119,10 @@ function SuccessModal({ reference, language, onClose }: {
         <p className="modal-label">{t.ref}</p>
         <strong className="modal-ref">{reference}</strong>
         <p className="modal-hint">{t.successHint}</p>
+        <p className="modal-whatsapp-hint">{language === 'ur' ? '📱 واٹس ایپ کھل رہا ہے تاکہ آپ کو تصدیق بھیجی جائے...' : '📱 WhatsApp is opening to send you a confirmation...'}</p>
         <div className="modal-actions">
           <button className="btn-whatsapp" type="button" onClick={send}>
-            <MessageCircle size={20} /> {t.send}
+            <MessageCircle size={20} /> {language === 'ur' ? 'واٹس ایپ تصدیق بھیجیں' : 'Send WhatsApp Confirmation'}
           </button>
           <button className="btn-modal-close" type="button" onClick={onClose}>OK</button>
         </div>
@@ -1056,12 +1136,18 @@ function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`skeleton ${className}`} aria-hidden="true" />
 }
 
+type ConfirmState = { isOpen: boolean; title: string; message: string; confirmLabel: string; cancelLabel: string; isDangerous: boolean; onConfirm: () => void }
+function ConfirmDialog({ state, onCancel }: { state: ConfirmState; onCancel: () => void }) {
+  if (!state.isOpen) return null
+  return <div className="confirm-overlay" role="dialog" aria-modal="true"><div className="confirm-dialog"><div className="confirm-warning">⚠️</div><h2>{state.title}</h2><p>{state.message}</p><div className="confirm-actions"><button type="button" className="confirm-cancel" onClick={onCancel}>{state.cancelLabel}</button><button type="button" className={state.isDangerous ? 'confirm-danger' : 'confirm-accept'} onClick={state.onConfirm}>{state.confirmLabel}</button></div></div></div>
+}
+
 // ─── Customer Page ────────────────────────────────────────────────────────────
 function CustomerPage({
-  language, setLanguage, onAuth, isAuthenticated,
+  language, setLanguage, onAuth, isAuthenticated, adminEmail,
 }: {
   language: Language; setLanguage: (v: Language) => void
-  onAuth: () => void; isAuthenticated: boolean
+  onAuth: () => void; isAuthenticated: boolean; adminEmail: string
 }) {
   const t = copy[language]
   const isRtl = language === 'ur'
@@ -1077,6 +1163,7 @@ function CustomerPage({
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
   const [successRef, setSuccessRef] = useState('')
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmState>({ isOpen: false, title: '', message: '', confirmLabel: '', cancelLabel: 'Cancel', isDangerous: false, onConfirm: () => undefined })
   const [cartOpen, setCartOpen] = useState(false)
   const [cartPrompt, setCartPrompt] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
@@ -1085,6 +1172,10 @@ function CustomerPage({
   const [orderSearch, setOrderSearch] = useState('')
   const [orderSearchOpen, setOrderSearchOpen] = useState(false)
   const [suggestionRowId, setSuggestionRowId] = useState<string | null>(null)
+  const [showStickyTotal, setShowStickyTotal] = useState(false)
+  const [lastOrder, setLastOrder] = useState<OrderRecord | null>(null)
+  const [showRepeatBanner, setShowRepeatBanner] = useState(false)
+  const draft = useDraftOrder({ name, phone, address, locationLink, notes, rows, language })
 
   const catalogMatches = useMemo(() => {
     const query = catalogSearch.trim().toLowerCase()
@@ -1129,6 +1220,38 @@ function CustomerPage({
     [rows]
   )
   const hasContent = filledRows.length > 0 || notes.trim().length > 0
+  const grandTotal = useMemo(() => sumLineTotals(filledRows.map(row => ({ quantity_value: Number(row.quantityValue) || 0, unit_type: row.unitType, unit_price: 0, rate: 0, total: 0 }))), [filledRows])
+  useEffect(() => { setShowStickyTotal(filledRows.length > 0) }, [filledRows])
+
+  const lookupPreviousOrder = async () => {
+    if (!supabase || !validPhone(phone)) return
+    const { data } = await supabase
+      .from('orders')
+      .select('id, order_ref, created_at, items, customer_name, customer_phone, customer_address, grand_total, status')
+      .eq('customer_phone', normalizePhone(phone))
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const previous = data?.[0]
+    if (previous) {
+      setLastOrder({ ...previous, items: safeItems(previous.items), status: 'completed' } as OrderRecord)
+      setShowRepeatBanner(true)
+    }
+  }
+
+  const handleRepeatOrder = () => {
+    if (!lastOrder) return
+    if (!address.trim()) setAddress(lastOrder.customer_address || '')
+    setRows(lastOrder.items.map(item => ({
+      id: crypto.randomUUID(),
+      itemName: item.name,
+      quantityValue: String(item.quantity_value),
+      unitType: item.unit_type,
+    })))
+    setShowRepeatBanner(false)
+    addToast(isRtl ? 'پچھلا آرڈر لوڈ ہو گیا! جائزہ لے کر جمع کریں۔' : 'Previous order loaded! Review and submit when ready.', 'success')
+    window.setTimeout(() => document.getElementById('order-items')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
+  }
 
   const addToCart = () => {
     const next: FormErrors = {}
@@ -1165,7 +1288,7 @@ function CustomerPage({
 
   const clear = () => {
     const dirty = hasContent || name || phone || address || locationLink
-    if (dirty && !window.confirm(t.confirm)) return
+    if (dirty) { setConfirmDialog({ isOpen: true, title: isRtl ? 'آرڈر صاف کریں؟' : 'Clear Order?', message: isRtl ? 'تمام سامان اور گاہک کی معلومات حذف ہو جائیں گی۔' : 'This will remove all items and customer details. This cannot be undone.', confirmLabel: isRtl ? 'ہاں، سب صاف کریں' : 'Yes, Clear All', cancelLabel: isRtl ? 'منسوخ' : 'Cancel', isDangerous: true, onConfirm: () => { setRows(createDefaultRows()); setName(''); setPhone(''); setAddress(''); setLocationLink(''); setNotes(''); setErrors({}); setLocationState('idle'); setConfirmDialog(current => ({ ...current, isOpen: false })) } }); return }
     setRows(createDefaultRows())
     setName(''); setPhone(''); setAddress(''); setLocationLink('')
     setNotes(''); setErrors({}); setLocationState('idle')
@@ -1212,6 +1335,11 @@ function CustomerPage({
 
       void notifyNewOrder({ order_ref: orderRef, customer_name: name.trim(), customer_phone: phone.trim(), customer_address: address.trim() })
       setSuccessRef(orderRef)
+      if (validPhone(phone)) {
+        const confirmMessage = buildCustomerConfirmation({ order_ref: orderRef, customer_name: name.trim(), rows: filledRows, language })
+        const waUrl = `https://wa.me/${normalizePhone(phone)}?text=${encodeURIComponent(confirmMessage)}`
+        window.setTimeout(() => { window.open(waUrl, '_blank', 'noopener,noreferrer') }, 1200)
+      }
     } catch (err) {
       const message = readableError(err)
       addToast(message && message !== '[object Object]' ? `Order could not be saved: ${message}` : t.errors.submit, 'error')
@@ -1222,10 +1350,12 @@ function CustomerPage({
 
   return (
     <main className={`app-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
-      <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} />
+      <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
-      <div className="page-wrap">
+      {draft.hasDraft && <div className="draft-restore-banner"><strong>{isRtl ? '📝 آپ کا ایک نامکمل آرڈر محفوظ ہے۔' : '📝 You have an unsaved order from earlier.'}</strong><div className="draft-actions"><button type="button" className="draft-continue" onClick={() => { const saved = draft.restoreDraft(); if (saved) { setName(saved.name); setPhone(saved.phone); setAddress(saved.address); setLocationLink(saved.locationLink); setNotes(saved.notes); setRows(saved.rows as OrderRow[]); setLanguage(saved.language) } draft.setHasDraft(false) }}>{isRtl ? 'آرڈر جاری رکھیں' : 'Continue Order'}</button><button type="button" className="draft-fresh" onClick={() => draft.clearDraft()}>{isRtl ? 'نیا آرڈر شروع کریں' : 'Start Fresh'}</button></div></div>}
+
+      <div className={`page-wrap ${showStickyTotal ? 'page-wrap--sticky-total' : ''}`}>
         <section className="image-hero" aria-label="AHWMB premium products">
           <picture>
             <source media="(min-width: 768px)" srcSet="/images/ahwmb-hero-desktop.png" />
@@ -1274,6 +1404,7 @@ function CustomerPage({
                   dir="ltr"
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
+                  onBlur={() => void lookupPreviousOrder()}
                   placeholder={t.phonePh}
                   type="tel"
                   inputMode="tel"
@@ -1335,8 +1466,14 @@ function CustomerPage({
           </div>
         </section>
 
+        {showRepeatBanner && lastOrder && <section className="repeat-order-banner" aria-live="polite">
+          <div className="repeat-order-header"><span className="repeat-icon">👋</span><div><p className="repeat-welcome">{isRtl ? `واپسی پر خوش آمدید، ${lastOrder.customer_name}!` : `Welcome back, ${lastOrder.customer_name}!`}</p><p className="repeat-date">{isRtl ? 'آخری آرڈر' : 'Last order'}: {formatDateShort(lastOrder.created_at)} · {lastOrder.items.length} {isRtl ? 'اشیاء' : 'items'} · Rs.{lastOrder.grand_total.toLocaleString('en-PK')}</p></div></div>
+          <div className="repeat-items-preview">{lastOrder.items.slice(0, 3).map(item => <span className="repeat-item-chip" key={`${item.sr}-${item.name}`}>{item.name} — {item.quantity_value} {item.unit_type}</span>)}{lastOrder.items.length > 3 && <span className="repeat-item-more">+{lastOrder.items.length - 3} {isRtl ? 'مزید' : 'more'}</span>}</div>
+          <div className="repeat-actions"><button className="btn-repeat-order" onClick={handleRepeatOrder} type="button">🔄 {isRtl ? 'یہ آرڈر دہرائیں' : 'Repeat This Order'}</button><button className="btn-repeat-dismiss" onClick={() => setShowRepeatBanner(false)} type="button">{isRtl ? 'نیا آرڈر' : 'Start New'}</button></div>
+        </section>}
+
         {/* Items */}
-        <section className="card items-card">
+        <section className="card items-card" id="order-items">
           <div className="card-header">
             <span className="card-icon card-icon--gold"><ReceiptText size={20} /></span>
             <div>
@@ -1454,7 +1591,7 @@ function CustomerPage({
                       <button
                         type="button"
                         className="btn-del"
-                        onClick={() => setRows(curr => curr.length > 1 ? curr.filter(r => r.id !== row.id) : [createRow()])}
+                        onClick={() => setConfirmDialog({ isOpen: true, title: isRtl ? 'سامان حذف کریں؟' : 'Remove Item?', message: isRtl ? `${row.itemName || 'یہ سامان'} کو آرڈر سے ہٹائیں؟` : `Remove ${row.itemName || 'this item'} from this order?`, confirmLabel: isRtl ? 'ہٹائیں' : 'Remove', cancelLabel: isRtl ? 'منسوخ' : 'Cancel', isDangerous: true, onConfirm: () => { setRows(curr => curr.length > 1 ? curr.filter(r => r.id !== row.id) : [createRow()]); setConfirmDialog(current => ({ ...current, isOpen: false })) } })}
                         aria-label={`${t.delete} ${index + 1}`}
                       >
                         <Trash2 size={17} />
@@ -1464,6 +1601,10 @@ function CustomerPage({
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="order-card-list">
+            {rows.map((row, index) => <article className="order-card" key={`mobile-${row.id}`}><div className="order-card-row order-card-row--name"><span className="order-card-badge">{index + 1}</span><div className="item-typeahead"><input className="cell-input" value={row.itemName} onFocus={() => setSuggestionRowId(row.id)} onBlur={() => window.setTimeout(() => setSuggestionRowId(null), 150)} onChange={e => updateRow(row.id, 'itemName', e.target.value)} placeholder={t.itemPh} aria-label={`${t.item} ${index + 1}`} autoComplete="off" />{suggestionRowId === row.id && <ProductSuggestionMenu query={row.itemName} onSelect={value => { updateRow(row.id, 'itemName', value); setSuggestionRowId(null) }} />}</div></div><div className="order-card-row"><input className="cell-input" type="number" min="0" step="0.001" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} placeholder={t.quantityPh} aria-label={`${t.quantity} ${index + 1}`} /><select className="cell-select" value={row.unitType === 'NONE' ? '' : row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value || 'NONE')} aria-label={`${t.unit} ${index + 1}`}><option value="">Select Unit</option>{UNIT_OPTIONS.filter(option => option.value !== 'NONE' && option.value !== 'BAGS').map(option => <option key={option.value} value={option.value}>{option[language === 'ur' ? 'ur' : 'en']}</option>)}</select></div><div className="order-card-row"><input className="cell-input" placeholder="Rate (Rs.)" readOnly value="" /><output className="order-card-total">—</output></div><button type="button" className="order-card-remove" onClick={() => setRows(current => current.length > 1 ? current.filter(item => item.id !== row.id) : [createRow()])}>🗑 Remove</button></article>)}
           </div>
 
           <div className="table-help">
@@ -1610,6 +1751,7 @@ function CustomerPage({
             <FileDown size={19} />
           </button>
         </section>
+        {draft.savedNotice && <p className="draft-saved-notice">✓ {isRtl ? 'مسودہ محفوظ ہے' : 'Draft auto-saved'}</p>}
 
         <footer className="page-footer">
           <div><strong>AHWMB Customer Order Portal</strong><span>{t.cash}</span></div>
@@ -1627,22 +1769,25 @@ function CustomerPage({
           language={language}
           onClose={() => {
             setSuccessRef('')
+            draft.clearDraft()
             setRows(createDefaultRows())
             setName(''); setPhone(''); setAddress('')
             setLocationLink(''); setNotes('')
           }}
         />
       )}
+      <ConfirmDialog state={confirmDialog} onCancel={() => setConfirmDialog(current => ({ ...current, isOpen: false }))} />
+      <div className={`sticky-total-bar ${showStickyTotal ? 'is-visible' : ''}`} aria-live="polite"><div className="sticky-total-inner"><div className="sticky-total-left"><span className="sticky-item-count">{filledRows.length} {isRtl ? 'اشیاء' : `item${filledRows.length === 1 ? '' : 's'}`}</span></div><div className="sticky-total-right"><span className="sticky-total-label">{isRtl ? 'کل:' : 'Total:'}</span><span className="sticky-total-amount">Rs. {grandTotal.toLocaleString('en-PK')}</span></div></div></div>
     </main>
   )
 }
 
 // ─── Login Page ───────────────────────────────────────────────────────────────
 function LoginPage({
-  language, setLanguage, onAuth, isAuthenticated,
+  language, setLanguage, onAuth, isAuthenticated, adminEmail,
 }: {
   language: Language; setLanguage: (v: Language) => void
-  onAuth: () => void; isAuthenticated: boolean
+  onAuth: () => void; isAuthenticated: boolean; adminEmail: string
 }) {
   const t = copy[language]
   const isRtl = language === 'ur'
@@ -1674,7 +1819,7 @@ function LoginPage({
 
   return (
     <main className={`app-shell auth-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
-      <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} />
+      <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />
       <div className="auth-wrap">
         <div className="auth-card">
           <div className="auth-icon">
@@ -2346,10 +2491,10 @@ function AdminProducts({ onChanged }: { onChanged: () => void }) {
 
 // ─── Admin Page ───────────────────────────────────────────────────────────────
 function AdminPage({
-  language, setLanguage, onAuth, isAuthenticated,
+  language, setLanguage, onAuth, isAuthenticated, adminEmail,
 }: {
   language: Language; setLanguage: (v: Language) => void
-  onAuth: () => void; isAuthenticated: boolean
+  onAuth: () => void; isAuthenticated: boolean; adminEmail: string
 }) {
   const t = copy[language]
   const isRtl = language === 'ur'
@@ -2360,6 +2505,7 @@ function AdminPage({
   const [selected, setSelected] = useState<OrderRecord | null>(null)
   const [pricedItems, setPricedItems] = useState<OrderItem[]>([])
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending')
+  const [adminTab, setAdminTab] = useState<'pending' | 'completed' | 'invoice'>('pending')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [balance, setBalance] = useState(0)
@@ -2368,13 +2514,26 @@ function AdminPage({
   const [printPayload, setPrintPayload] = useState<InvoicePayload | null>(null)
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [adminView, setAdminView] = useState<'orders' | 'reports' | 'create-order' | 'customer-report' | 'purchase-report' | 'stock-report' | 'products'>('orders')
+  const [adminView, setAdminView] = useState<'home' | 'orders' | 'newOrder' | 'summary' | 'reports' | 'customer-report' | 'purchase-report' | 'stock-report' | 'products'>('home')
   const [, setCatalogVersion] = useState(0)
   const [editCustomerOrder, setEditCustomerOrder] = useState<OrderRecord | null>(null)
   const [editCustomerName, setEditCustomerName] = useState('')
   const [editCustomerPhone, setEditCustomerPhone] = useState('')
   const [editCustomerAddress, setEditCustomerAddress] = useState('')
   const [savingCustomer, setSavingCustomer] = useState(false)
+  const [riders, setRiders] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ahwmb_riders') || 'null') || DEFAULT_RIDERS } catch { return DEFAULT_RIDERS }
+  })
+  const [riderAssignments, setRiderAssignments] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('ahwmb_rider_assignments') || '{}') } catch { return {} }
+  })
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [riderFormOpen, setRiderFormOpen] = useState(false)
+  const [newRiderName, setNewRiderName] = useState('')
+  const [newRiderPhone, setNewRiderPhone] = useState('')
+
+  useEffect(() => { localStorage.setItem('ahwmb_riders', JSON.stringify(riders)) }, [riders])
+  useEffect(() => { localStorage.setItem('ahwmb_rider_assignments', JSON.stringify(riderAssignments)) }, [riderAssignments])
 
   // Centralized, rounded calculation for all five financial fields.
   const financials = useMemo(() => calculateFinancials(sumLineTotals(pricedItems), balance, deposit), [pricedItems, balance, deposit])
@@ -2424,6 +2583,38 @@ function AdminPage({
     setBalance(Number(order.balance) || 0)
     setDeposit(Number(order.deposit) || 0)
     setLastPdf(null)
+  }
+
+  const assignRider = (orderId: string, riderId: string) => {
+    setRiderAssignments(current => {
+      const updated = { ...current }
+      if (riderId) updated[orderId] = riderId
+      else delete updated[orderId]
+      return updated
+    })
+    const riderName = riders.find(rider => rider.id === riderId)?.name
+    if (riderName) addToast(`Order assigned to ${riderName}`, 'success')
+  }
+
+  const sendToRider = (order: OrderRecord, riderId: string) => {
+    const rider = riders.find(item => item.id === riderId)
+    if (!rider) return
+    const message = `*AHWMB Delivery Assignment*\n\nOrder: ${order.order_ref}\nCustomer: ${order.customer_name}\nPhone: ${order.customer_phone}\nAddress: ${order.customer_address}\n${order.location_link ? `Map: ${order.location_link}\n` : ''}\nItems: ${order.items.length} items\nTotal: Rs.${(order.grand_total || 0).toLocaleString()}\n\n_Please confirm delivery._`
+    const phone = normalizePhone(rider.phone || '')
+    window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : `https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  const addRider = () => {
+    const name = newRiderName.trim()
+    if (!name) return
+    setRiders(current => [...current, { id: `r-${crypto.randomUUID()}`, name, phone: newRiderPhone.trim() }])
+    setNewRiderName(''); setNewRiderPhone(''); setRiderFormOpen(false)
+    addToast(`Rider ${name} added`, 'success')
+  }
+
+  const removeRider = (riderId: string) => {
+    setRiders(current => current.filter(rider => rider.id !== riderId))
+    setRiderAssignments(current => Object.fromEntries(Object.entries(current).filter(([, assignedId]) => assignedId !== riderId)))
   }
 
   /**
@@ -2620,10 +2811,60 @@ function AdminPage({
     }
   }
 
+  const orderBadgePriority: Record<OrderBadge['color'], number> = { red: 0, gold: 1, yellow: 2, green: 3 }
+  const orderSummary = useMemo(() => {
+    const counts = { urgent: 0, pending: 0, completed: 0 }
+    orders.forEach(order => {
+      const badge = getOrderBadge(order)
+      if (badge.color === 'red') counts.urgent += 1
+      else if (badge.color === 'yellow' || badge.color === 'gold') counts.pending += 1
+      else counts.completed += 1
+    })
+    return counts
+  }, [orders])
+
   const shownOrders = useMemo(
-    () => orders.filter(o => filter === 'all' || o.status === filter),
+    () => orders
+      .filter(o => filter === 'all' || o.status === filter)
+      .sort((a, b) => {
+        const priorityDifference = orderBadgePriority[getOrderBadge(a).color] - orderBadgePriority[getOrderBadge(b).color]
+        return priorityDifference || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }),
     [orders, filter]
   )
+
+  const todaySummary = useMemo(() => {
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const todayOrders = orders.filter(order => new Date(order.created_at) >= todayStart)
+    const pendingOrders = todayOrders.filter(order => order.status === 'pending')
+    const completedOrders = todayOrders.filter(order => order.status === 'completed')
+    return {
+      totalOrders: todayOrders.length,
+      pendingCount: pendingOrders.length,
+      completedCount: completedOrders.length,
+      totalRevenue: completedOrders.reduce((sum, order) => sum + (order.grand_total || 0), 0),
+      pendingRevenue: pendingOrders.reduce((sum, order) => sum + (order.grand_total || 0), 0),
+    }
+  }, [orders])
+
+  const todayDateLabel = new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).format(new Date())
+  const dailySummaryCard = <section className="daily-summary-card" aria-label="Today's sales summary">
+    <div className="daily-summary-header">
+      <span className="daily-summary-date">📅 {todayDateLabel}</span>
+      <span className="daily-summary-label">{isRtl ? 'آج کا خلاصہ' : "Today's Overview"}</span>
+    </div>
+    <div className="daily-summary-grid">
+      {loading ? Array.from({ length: 4 }, (_, index) => <div className="summary-stat" key={index}><div className="skeleton" style={{ height: 36, marginBottom: 8 }} /><div className="skeleton" style={{ height: 16 }} /></div>) : <>
+        <div className="summary-stat"><span className="stat-number">{todaySummary.totalOrders}</span><span className="stat-label">{isRtl ? 'کل آرڈرز' : 'Total Orders'}</span></div>
+        <div className="summary-stat summary-stat--pending"><span className="stat-number">{todaySummary.pendingCount}</span><span className="stat-label">{isRtl ? 'زیر التوا' : 'Pending'}</span></div>
+        <div className="summary-stat summary-stat--done"><span className="stat-number">{todaySummary.completedCount}</span><span className="stat-label">{isRtl ? 'مکمل' : 'Completed'}</span></div>
+        <div className="summary-stat summary-stat--revenue"><span className="stat-number stat-number--revenue">Rs.{todaySummary.totalRevenue.toLocaleString('en-PK')}</span><span className="stat-label">{isRtl ? 'آمدنی' : 'Revenue'}</span></div>
+      </>}
+    </div>
+  </section>
 
   if (authorized === null || loading) {
     return (
@@ -2641,12 +2882,17 @@ function AdminPage({
 
   if (!authorized) return null
 
+  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><div className="admin-wrap">{dailySummaryCard}<section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>➕ {isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => { setAdminView('orders'); setAdminTab('pending') }}>📋 {isRtl ? 'آرڈرز دیکھیں' : 'View Orders'}</button><button type="button" className="admin-home-btn admin-home-btn--summary" onClick={() => setAdminView('summary')}>📊 {isRtl ? 'آج کا خلاصہ' : "Today's Summary"}</button></section></div></main>
+
   return (
     <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
-      <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} />
+      <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
       <div className="admin-wrap">
+        {dailySummaryCard}
+        <button type="button" className="admin-back-btn" onClick={() => setAdminView('home')}>← {isRtl ? 'واپس' : 'Back'}</button>
+        <div className="admin-main-tabs"><button type="button" className={adminTab === 'pending' ? 'admin-main-tab is-active' : 'admin-main-tab'} onClick={() => { setAdminTab('pending'); setAdminView('orders'); setFilter('pending') }}>📋 {isRtl ? 'زیر التوا' : 'Pending'} ({orders.filter(order => order.status === 'pending').length})</button><button type="button" className={adminTab === 'completed' ? 'admin-main-tab is-active' : 'admin-main-tab'} onClick={() => { setAdminTab('completed'); setAdminView('orders'); setFilter('completed') }}>✅ {isRtl ? 'مکمل' : 'Completed'} ({orders.filter(order => order.status === 'completed').length})</button><button type="button" className={adminTab === 'invoice' ? 'admin-main-tab is-active' : 'admin-main-tab'} onClick={() => setAdminTab('invoice')}>🖨 {isRtl ? 'رسید' : 'Invoice'}</button></div>
         {/* Topbar */}
         <div className="admin-topbar">
           <div>
@@ -2654,16 +2900,23 @@ function AdminPage({
             <h2 className="admin-heading">{t.adminTitle}</h2>
           </div>
           <div className="admin-top-actions">
-            {([['orders', 'Orders', ReceiptText], ['create-order', 'Create Order', Plus], ['products', 'Products', ShoppingBag], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['purchase-report', 'Purchase Report', ReceiptText], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
+            {([['orders', 'Orders', ReceiptText], ['newOrder', 'Create Order', Plus], ['products', 'Products', ShoppingBag], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['purchase-report', 'Purchase Report', ReceiptText], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
             {adminView === 'orders' && <button type="button" className="btn-secondary" onClick={() => void refresh()}><RefreshCw size={16} /> {t.refresh}</button>}
-            <button type="button" className="btn-secondary btn-danger" onClick={onAuth}>
-              <LogOut size={16} /> {t.logout}
-            </button>
+            <div className="admin-settings-wrap">
+              <button type="button" className="admin-settings-btn" onClick={() => setSettingsOpen(value => !value)} aria-expanded={settingsOpen} aria-label="Settings">⚙️</button>
+              {settingsOpen && <div className="admin-settings-menu">
+                <button type="button" onClick={() => { setAdminView('reports'); setSettingsOpen(false) }}>📊 {isRtl ? 'روزانہ رپورٹس' : 'Daily Reports'}</button>
+                <button type="button" onClick={() => { void refresh(); setSettingsOpen(false) }}>🔄 {isRtl ? 'آرڈرز تازہ کریں' : 'Refresh Orders'}</button>
+                <div className="rider-manager"><strong>🚴 {isRtl ? 'رائڈرز' : 'Manage Riders'}</strong>{riders.map(rider => <div className="rider-manager-row" key={rider.id}><span>{rider.name}</span><button type="button" onClick={() => removeRider(rider.id)} aria-label={`Delete ${rider.name}`}>×</button></div>)}{riderFormOpen && <div className="rider-mini-form"><input value={newRiderName} onChange={event => setNewRiderName(event.target.value)} placeholder="Name" /><input value={newRiderPhone} onChange={event => setNewRiderPhone(event.target.value)} placeholder="Phone (optional)" /><button type="button" onClick={addRider}>Save</button></div>}<button type="button" className="rider-add-btn" onClick={() => setRiderFormOpen(value => !value)}>+ Add Rider</button></div>
+              </div>}
+            </div>
           </div>
         </div>
 
         {/* Orders, Daily Reports, and Create Order views */}
-        {adminView === 'reports'
+        {adminView === 'summary'
+          ? <section className="panel report-panel admin-summary-home"><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">{isRtl ? 'آج کا خلاصہ' : "Today's Summary"}</h2><p className="panel-sub">{orders.length} {t.itemCount}</p><div className="summary-stat-grid"><div><strong>{orders.filter(order => order.status === 'pending').length}</strong><span>{t.pending}</span></div><div><strong>{orders.filter(order => order.status === 'completed').length}</strong><span>{t.completed}</span></div></div></section>
+          : adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('orders')} />
           : adminView === 'customer-report'
           ? <CustomerReportWithAdd />
@@ -2673,7 +2926,7 @@ function AdminPage({
           ? <StockReport />
           : adminView === 'products'
           ? <AdminProducts onChanged={() => setCatalogVersion(value => value + 1)} />
-          : adminView === 'create-order'
+          : adminView === 'newOrder'
           ? <AdminCreateOrder language={language} onSuccess={() => { setAdminView('orders'); void refresh() }} onBack={() => setAdminView('orders')} />
           : <div className="admin-grid">
           {/* Orders list */}
@@ -2700,6 +2953,12 @@ function AdminPage({
               </div>
             </div>
 
+            <div className="order-status-summary" aria-label="Order status summary">
+              <span className="order-summary-pill order-summary-pill--red">{orderSummary.urgent} {isRtl ? 'فوری' : 'Urgent'} 🔴</span>
+              <span className="order-summary-pill order-summary-pill--yellow">{orderSummary.pending} {isRtl ? 'زیر التوا' : 'Pending'} ⏳</span>
+              <span className="order-summary-pill order-summary-pill--green">{orderSummary.completed} {isRtl ? 'مکمل' : 'Completed'} ✅</span>
+            </div>
+
             {loading ? (
               <div>{Array.from({ length: 5 }).map((_, index) => <div key={index} className="skeleton" style={{ height: 72, marginBottom: 8, borderRadius: 10 }} />)}</div>
             ) : shownOrders.length === 0 ? (
@@ -2713,6 +2972,7 @@ function AdminPage({
                   <div
                     key={order.id}
                     className={`order-card-wrap ${selected?.id === order.id ? 'order-card-wrap--selected' : ''}`}
+                    onClick={() => { setSelected(order); setAdminTab('invoice') }}
                   >
                     <button
                       type="button"
@@ -2721,9 +2981,7 @@ function AdminPage({
                     >
                       <div className="order-card-top">
                         <span className="order-ref">{order.order_ref}</span>
-                        <span className={`status-badge status-badge--${order.status}`}>
-                          {order.status === 'pending' ? t.pending : t.completed}
-                        </span>
+                        {(() => { const badge = getOrderBadge(order); return <span className={`order-badge order-badge--${badge.color}`}>{badge.emoji} {language === 'ur' ? badge.labelUr : badge.label}</span> })()}
                       </div>
                       <strong className="order-name">{order.customer_name}</strong>
                       <div className="order-meta">
@@ -2735,6 +2993,14 @@ function AdminPage({
                         <span className="order-total">{formatMoney(order.grand_total)}</span>
                       )}
                     </button>
+                    <div className="rider-row" onClick={event => event.stopPropagation()}>
+                      <span className="rider-label">🚴 {isRtl ? 'رائڈر:' : 'Rider:'}</span>
+                      <select className="rider-select" value={riderAssignments[order.id] || ''} onChange={event => assignRider(order.id, event.target.value)} aria-label={`Rider for ${order.order_ref}`}>
+                        <option value="">— {isRtl ? 'غیر مقرر' : 'Unassigned'} —</option>
+                        {riders.map(rider => <option key={rider.id} value={rider.id}>{rider.name}</option>)}
+                      </select>
+                      {riderAssignments[order.id] && <button className="btn-rider-whatsapp" onClick={() => sendToRider(order, riderAssignments[order.id])} type="button" title="Send delivery details to rider">💬 {isRtl ? 'بھیجیں' : 'Send'}</button>}
+                    </div>
                     <button
                       type="button"
                       className="order-card-edit-customer"
@@ -3060,6 +3326,7 @@ function AdminPage({
           </section>
         </div>}
       </div>
+      {selected && <a className="fab-whatsapp" href={buildAdminWhatsAppLink(selected)} target="_blank" rel="noopener noreferrer" aria-label="Share order on WhatsApp"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.125.558 4.12 1.529 5.845L.057 23.885l6.19-1.624A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.877 9.877 0 01-5.031-1.378l-.36-.214-3.733.979 1.002-3.648-.235-.374A9.86 9.86 0 012.106 12C2.106 6.57 6.57 2.107 12 2.107c5.43 0 9.894 4.463 9.894 9.893S17.43 21.894 12 21.894z"/></svg></a>
     </main>
   )
 }
@@ -3341,6 +3608,7 @@ export default function App() {
     catch { return 'en' }
   })
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [adminEmail, setAdminEmail] = useState('')
 
   useEffect(() => {
     try { localStorage.setItem('ahwmb-language-v2', language) }
@@ -3365,8 +3633,22 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) return
-    supabase.auth.getSession().then(async ({ data }) => { setIsAuthenticated(Boolean(data.session && await isCurrentAdmin())) })
-    const { data: listener } = supabase.auth.onAuthStateChange(() => { void isCurrentAdmin().then(setIsAuthenticated) })
+    supabase.auth.getSession().then(async ({ data }) => {
+      const validAdmin = Boolean(data.session && await isCurrentAdmin())
+      setIsAuthenticated(validAdmin)
+      if (validAdmin) setAdminEmail(data.session?.user?.email || '')
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setIsAuthenticated(false)
+        setAdminEmail('')
+        return
+      }
+      void isCurrentAdmin().then(validAdmin => {
+        setIsAuthenticated(validAdmin)
+        setAdminEmail(validAdmin ? session.user?.email || '' : '')
+      })
+    })
     return () => listener.subscription.unsubscribe()
   }, [])
 
@@ -3374,13 +3656,14 @@ export default function App() {
     if (isAuthenticated) {
       await supabase?.auth.signOut()
       setIsAuthenticated(false)
+      setAdminEmail('')
       navigate('/')
     } else {
       navigate('/login')
     }
   }, [isAuthenticated])
 
-  const props = { language, setLanguage, onAuth, isAuthenticated }
+  const props = { language, setLanguage, onAuth, isAuthenticated, adminEmail }
 
   if (path === '/login') return <LoginPage {...props} />
   if (path === '/admin') return <AdminPage {...props} />
