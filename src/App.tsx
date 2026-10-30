@@ -1778,7 +1778,7 @@ function CustomerPage({
       )}
       <ConfirmDialog state={confirmDialog} onCancel={() => setConfirmDialog(current => ({ ...current, isOpen: false }))} />
       <div className={`sticky-total-bar ${showStickyTotal ? 'is-visible' : ''}`} aria-live="polite"><div className="sticky-total-inner"><div className="sticky-total-left"><span className="sticky-item-count">{filledRows.length} {isRtl ? 'اشیاء' : `item${filledRows.length === 1 ? '' : 's'}`}</span></div><div className="sticky-total-right"><span className="sticky-total-label">{isRtl ? 'کل:' : 'Total:'}</span><span className="sticky-total-amount">Rs. {grandTotal.toLocaleString('en-PK')}</span></div></div></div>
-    </main>
+     </main>
   )
 }
 
@@ -2885,11 +2885,10 @@ function AdminPage({
   if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><div className="admin-wrap">{dailySummaryCard}<section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>➕ {isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => { setAdminView('orders'); setAdminTab('pending') }}>📋 {isRtl ? 'آرڈرز دیکھیں' : 'View Orders'}</button><button type="button" className="admin-home-btn admin-home-btn--summary" onClick={() => setAdminView('summary')}>📊 {isRtl ? 'آج کا خلاصہ' : "Today's Summary"}</button></section></div></main>
 
   return (
-    <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
+    <main className={`app-shell admin-shell admin-wrap ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
       <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
-      <div className="admin-wrap">
         {dailySummaryCard}
         <button type="button" className="admin-back-btn" onClick={() => setAdminView('home')}>← {isRtl ? 'واپس' : 'Back'}</button>
         <div className="admin-main-tabs"><button type="button" className={adminTab === 'pending' ? 'admin-main-tab is-active' : 'admin-main-tab'} onClick={() => { setAdminTab('pending'); setAdminView('orders'); setFilter('pending') }}>📋 {isRtl ? 'زیر التوا' : 'Pending'} ({orders.filter(order => order.status === 'pending').length})</button><button type="button" className={adminTab === 'completed' ? 'admin-main-tab is-active' : 'admin-main-tab'} onClick={() => { setAdminTab('completed'); setAdminView('orders'); setFilter('completed') }}>✅ {isRtl ? 'مکمل' : 'Completed'} ({orders.filter(order => order.status === 'completed').length})</button><button type="button" className={adminTab === 'invoice' ? 'admin-main-tab is-active' : 'admin-main-tab'} onClick={() => setAdminTab('invoice')}>🖨 {isRtl ? 'رسید' : 'Invoice'}</button></div>
@@ -3325,8 +3324,6 @@ function AdminPage({
             )}
           </section>
         </div>}
-      </div>
-      {selected && <a className="fab-whatsapp" href={buildAdminWhatsAppLink(selected)} target="_blank" rel="noopener noreferrer" aria-label="Share order on WhatsApp"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.125.558 4.12 1.529 5.845L.057 23.885l6.19-1.624A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.877 9.877 0 01-5.031-1.378l-.36-.214-3.733.979 1.002-3.648-.235-.374A9.86 9.86 0 012.106 12C2.106 6.57 6.57 2.107 12 2.107c5.43 0 9.894 4.463 9.894 9.893S17.43 21.894 12 21.894z"/></svg></a>
     </main>
   )
 }
