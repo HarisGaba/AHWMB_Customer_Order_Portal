@@ -1043,24 +1043,6 @@ function PortalHeader({
   onAdmin: () => void; isAuthenticated: boolean; adminEmail?: string
 }) {
   const t = copy[language]
-  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
-  const avatarRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!avatarMenuOpen) return
-    const handleOutside = (event: MouseEvent) => {
-      if (!avatarRef.current?.contains(event.target as Node)) setAvatarMenuOpen(false)
-    }
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setAvatarMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handleOutside)
-    document.addEventListener('keydown', handleEscape)
-    return () => {
-      document.removeEventListener('mousedown', handleOutside)
-      document.removeEventListener('keydown', handleEscape)
-    }
-  }, [avatarMenuOpen])
 
   return (
     <>
@@ -1077,27 +1059,7 @@ function PortalHeader({
       </div>
       <div className="header-actions">
         <div className="easy-badge">{t.easy}</div>
-        {isAuthenticated ? <div className="admin-avatar-wrap" ref={avatarRef}>
-          <button
-            type="button"
-            className="admin-avatar"
-            onClick={() => setAvatarMenuOpen(value => !value)}
-            aria-label="Account menu"
-            aria-expanded={avatarMenuOpen}
-          >
-            {getInitials(adminEmail || '')}
-          </button>
-          {avatarMenuOpen && <div className="avatar-menu">
-            <div className="avatar-menu-email">
-              <span>{language === 'ur' ? 'لاگ ان بطور:' : 'Signed in as:'}</span>
-              <strong>{adminEmail || (language === 'ur' ? 'منتظم' : 'Admin')}</strong>
-            </div>
-            <hr className="avatar-menu-divider" />
-            <button type="button" className="avatar-menu-logout" onClick={() => { setAvatarMenuOpen(false); onAdmin() }}>
-              🔓 {t.logout}
-            </button>
-          </div>}
-        </div> : <button type="button" className="btn-header-icon" onClick={onAdmin}>
+        {isAuthenticated ? <button type="button" className="btn-header-icon" onClick={onAdmin}><LogOut size={18} /><span>{t.logout}</span></button> : <button type="button" className="btn-header-icon" onClick={onAdmin}>
           <LogIn size={16} />
           <span>{t.login}</span>
         </button>}
@@ -1122,10 +1084,6 @@ function SuccessModal({ reference, language, onClose }: {
   reference: string; language: Language; onClose: () => void
 }) {
   const t = copy[language]
-  const send = () => window.open(
-    `https://wa.me/${SHOPKEEPER_NUMBER}?text=${encodeURIComponent(`${t.whatsapp}\n${t.ref}: ${reference}`)}`,
-    '_blank', 'noopener,noreferrer'
-  )
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal-box">
@@ -1136,12 +1094,9 @@ function SuccessModal({ reference, language, onClose }: {
         <p className="modal-label">{t.ref}</p>
         <strong className="modal-ref">{reference}</strong>
         <p className="modal-hint">{t.successHint}</p>
-        <p className="modal-whatsapp-hint">{language === 'ur' ? '📱 واٹس ایپ کھل رہا ہے تاکہ آپ کو تصدیق بھیجی جائے...' : '📱 WhatsApp is opening to send you a confirmation...'}</p>
+        <p className="modal-hint">{language === 'ur' ? 'آپ کا آرڈر 1 سے 2 دن میں پہنچا دیا جائے گا۔' : 'Your order will be delivered in 1–2 days.'}</p>
         <div className="modal-actions">
-          <button className="btn-whatsapp" type="button" onClick={send}>
-            <MessageCircle size={20} /> {language === 'ur' ? 'واٹس ایپ تصدیق بھیجیں' : 'Send WhatsApp Confirmation'}
-          </button>
-          <button className="btn-modal-close" type="button" onClick={onClose}>OK</button>
+          <button className="btn-modal-close" style={{ width: '100%', minHeight: 56 }} type="button" onClick={onClose}>OK</button>
         </div>
       </div>
     </div>
@@ -1364,11 +1319,7 @@ function CustomerPage({
 
       void notifyNewOrder({ order_ref: orderRef, customer_name: name.trim(), customer_phone: phone.trim(), customer_address: address.trim() })
       setSuccessRef(orderRef)
-      if (validPhone(phone)) {
-        const confirmMessage = buildCustomerConfirmation({ order_ref: orderRef, customer_name: name.trim(), rows: filledRows, language })
-        const waUrl = `https://wa.me/${normalizePhone(phone)}?text=${encodeURIComponent(confirmMessage)}`
-        window.setTimeout(() => { window.open(waUrl, '_blank', 'noopener,noreferrer') }, 1200)
-      }
+      setCartOpen(false)
     } catch (err) {
       const message = readableError(err)
       if (message.includes('rate_limit_exceeded')) {
@@ -2447,27 +2398,33 @@ function CustomerReportV2() {
   return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Customer Report</h2><p className="panel-sub">Search saved customers and open their account ledger.</p></div><button type="button" className="btn-submit report-add" onClick={() => { setDraft({ name: '', phone: '', address: '' }); setMessage(''); setFormOpen(true) }}><Plus size={17} /> Add Customer</button></div>{message && <p className="form-message">{message}</p>}<div className="account-search-wrap"><input className="report-search account-search" value={query} onChange={event => { setQuery(event.target.value); setSelectedName('') }} placeholder="Search customer name, e.g. Ahmed Store" />{query && !selectedName && matches.length > 0 && <div className="customer-suggestions report-suggestions">{matches.map(item => <button type="button" key={item.name} onClick={() => { setSelectedName(item.name); setQuery(item.name) }}><strong>{item.name}</strong><small>{item.address}</small></button>)}</div>}</div>{selected ? <div className="ledger-card ledger-card--top"><div className="report-heading"><div><p className="admin-eyebrow">CUSTOMER ACCOUNT</p><h3 className="panel-title">{selected.name}</h3><p className="panel-sub">{selected.phone || 'No contact saved'} · {selected.address}</p></div><button type="button" className="btn-secondary" onClick={() => { setSelectedName(''); setQuery('') }}>Close</button></div><div className="account-empty"><UserRound size={36} /><p>Customer account selected. Existing ledger entries remain available in the Customer Report workflow.</p></div></div> : <div className="account-empty"><UserRound size={42} /><p>Search and select a customer to open the account.</p></div>}{formOpen && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-box admin-entry-modal"><h2 className="modal-title">Add Customer</h2><label className="field"><span className="field-label">Customer name *</span><input className="field-input" value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} autoFocus /></label><label className="field"><span className="field-label">Phone number</span><input className="field-input" value={draft.phone} onChange={event => setDraft({ ...draft, phone: event.target.value })} /></label><label className="field"><span className="field-label">Address</span><textarea className="field-textarea" value={draft.address} onChange={event => setDraft({ ...draft, address: event.target.value })} rows={3} /></label><div className="modal-actions"><button type="button" className="btn-secondary" onClick={() => setFormOpen(false)}>Cancel</button><button type="button" className="btn-submit" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save Customer'}</button></div></div></div>}</section>
 }
 
-function CustomerReportWithAdd() {
-  const [open, setOpen] = useState(false)
+function AdminAddCustomer({ language }: { language: Language }) {
+  const ur = language === 'ur'
+  const [draft, setDraft] = useState({ name: '', phone: '', address: '' })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
-  const [draft, setDraft] = useState<SavedCustomer>({ name: '', phone: '', address: '' })
-  const save = async () => {
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (saving) return
     const customer = { name: draft.name.trim(), phone: draft.phone.trim(), address: draft.address.trim() }
-    if (!customer.name) { setMessage('Customer name is required.'); return }
+    if (!customer.name) { setMessage(ur ? 'گاہک کا نام درج کریں۔' : 'Enter the customer name.'); return }
+    if (!supabase) { setMessage(ur ? 'ڈیٹابیس دستیاب نہیں۔' : 'Database is unavailable.'); return }
     setSaving(true); setMessage('')
-    if (supabase) {
-      const { error } = await supabase.from('customers').upsert(customer, { onConflict: 'name' })
-      if (error) { setMessage(error.message); setSaving(false); return }
-    }
     try {
-      const existing = JSON.parse(localStorage.getItem('ahwmb-saved-customers') || '[]') as SavedCustomer[]
-      const merged = [...existing.filter(item => item.name.toLowerCase() !== customer.name.toLowerCase()), customer]
-      localStorage.setItem('ahwmb-saved-customers', JSON.stringify(merged))
-    } catch { /* storage unavailable */ }
-    setOpen(false); setDraft({ name: '', phone: '', address: '' }); setMessage('Customer added successfully.'); setSaving(false)
+      const { error } = await supabase.from('customers').insert(customer)
+      if (error) throw error
+      setDraft({ name: '', phone: '', address: '' })
+      setMessage(ur ? 'گاہک محفوظ ہو گیا۔' : 'Customer saved successfully.')
+    } catch (error) { setMessage(readableError(error)) }
+    finally { setSaving(false) }
   }
-  return <div className="customer-report-shell"><button type="button" className="btn-submit customer-add-top" onClick={() => { setMessage(''); setOpen(true) }}><Plus size={17} /> Add Customer</button><CustomerReport />{message && <p className="form-message customer-add-message">{message}</p>}{open && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-box admin-entry-modal"><h2 className="modal-title">Add Customer</h2><label className="field"><span className="field-label">Customer name *</span><input className="field-input" value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} autoFocus /></label><label className="field"><span className="field-label">Phone number</span><input className="field-input" value={draft.phone} onChange={event => setDraft({ ...draft, phone: event.target.value })} /></label><label className="field"><span className="field-label">Address</span><textarea className="field-textarea" value={draft.address} onChange={event => setDraft({ ...draft, address: event.target.value })} rows={3} /></label><div className="modal-actions"><button type="button" className="btn-secondary" onClick={() => setOpen(false)}>Cancel</button><button type="button" className="btn-submit" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save Customer'}</button></div></div></div>}</div>
+  return <section className="panel report-panel"><h2 className="admin-heading">{ur ? 'گاہک شامل کریں' : 'Add Customer'}</h2>
+    <form onSubmit={event => void save(event)}>
+      <label className="field"><span className="field-label">{ur ? 'گاہک کا نام' : 'Customer name'}</span><input className="field-input" required value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label>
+      <label className="field"><span className="field-label">{ur ? 'فون نمبر' : 'Phone number'}</span><input className="field-input" type="tel" value={draft.phone} onChange={e => setDraft({ ...draft, phone: e.target.value })} /></label>
+      <label className="field"><span className="field-label">{ur ? 'پتہ' : 'Address'}</span><textarea className="field-textarea" value={draft.address} onChange={e => setDraft({ ...draft, address: e.target.value })} /></label>
+      <p role="status">{message}</p><button className="btn-submit" type="submit" disabled={saving}>{saving ? (ur ? 'محفوظ ہو رہا ہے…' : 'Saving…') : (ur ? 'گاہک محفوظ کریں' : 'Save Customer')}</button>
+    </form></section>
 }
 
 function PurchaseReport() {
@@ -2547,7 +2504,7 @@ function AdminPage({
   const [printPayload, setPrintPayload] = useState<InvoicePayload | null>(null)
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [adminView, setAdminView] = useState<'home' | 'orders' | 'newOrder' | 'summary' | 'reports' | 'customer-report' | 'purchase-report' | 'stock-report' | 'products'>('home')
+  const [adminView, setAdminView] = useState<'home' | 'orders' | 'newOrder' | 'add-customer' | 'reports' | 'customer-report' | 'purchase-report' | 'stock-report' | 'products'>('home')
   const [, setCatalogVersion] = useState(0)
   const [editCustomerOrder, setEditCustomerOrder] = useState<OrderRecord | null>(null)
   const [editCustomerName, setEditCustomerName] = useState('')
@@ -2836,7 +2793,7 @@ function AdminPage({
 
   if (!authorized) return null
 
-  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>➕ {isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => { setAdminView('orders'); setAdminTab('pending') }}>📋 {isRtl ? 'آرڈرز دیکھیں' : 'View Orders'}</button><button type="button" className="admin-home-btn admin-home-btn--summary" onClick={() => setAdminView('summary')}>📊 {isRtl ? 'آج کا خلاصہ' : "Today's Summary"}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('products')}>{isRtl ? 'مصنوعات' : 'Products'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('reports')}>{isRtl ? 'روزانہ رپورٹس' : 'Daily Reports'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('customer-report')}>{isRtl ? 'گاہک کی رپورٹ' : 'Customer Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('purchase-report')}>{isRtl ? 'خریداری رپورٹ' : 'Purchase Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('stock-report')}>{isRtl ? 'اسٹاک رپورٹ' : 'Stock Report'}</button></section></div></main>
+  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>{isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('orders')}>{isRtl ? 'آرڈرز دیکھیں' : 'View Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('reports')}>{isRtl ? 'روزانہ رپورٹ' : 'Daily Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('customer-report')}>{isRtl ? 'گاہک کی رپورٹ' : 'Customer Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('stock-report')}>{isRtl ? 'اسٹاک رپورٹ' : 'Stock Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('purchase-report')}>{isRtl ? 'خریداری رپورٹ' : 'Purchase Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('products')}>{isRtl ? 'مصنوعات شامل کریں' : 'Add Products'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('add-customer')}>{isRtl ? 'گاہک شامل کریں' : 'Add Customer'}</button></section></div></main>
 
   return (
     <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
@@ -2853,18 +2810,17 @@ function AdminPage({
             <h2 className="admin-heading">{t.adminTitle}</h2>
           </div>
           <div className="admin-top-actions">
-            {([['orders', 'Orders', ReceiptText], ['newOrder', 'Create Order', Plus], ['products', 'Products', ShoppingBag], ['reports', 'Daily Reports', ReceiptText], ['customer-report', 'Customer Report', UserRound], ['purchase-report', 'Purchase Report', ReceiptText], ['stock-report', 'Stock Report', ShoppingBag]] as const).map(([view, label, Icon]) => <button key={view} type="button" className={`btn-secondary ${adminView === view ? 'btn-secondary--active' : ''}`} onClick={() => setAdminView(view)}><Icon size={16} /> {label}</button>)}
             {adminView === 'orders' && <button type="button" className="btn-secondary" onClick={() => void refresh()}><RefreshCw size={16} /> {t.refresh}</button>}
           </div>
         </div>
 
         {/* Orders, Daily Reports, and Create Order views */}
-        {adminView === 'summary'
-          ? <section className="panel report-panel admin-summary-home"><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">{isRtl ? 'آج کا خلاصہ' : "Today's Summary"}</h2><p className="panel-sub">{orders.length} {t.itemCount}</p><div className="summary-stat-grid"><div><strong>{orders.filter(order => order.status === 'pending').length}</strong><span>{t.pending}</span></div><div><strong>{orders.filter(order => order.status === 'completed').length}</strong><span>{t.completed}</span></div></div></section>
+        {adminView === 'add-customer'
+          ? <AdminAddCustomer language={language} />
           : adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('orders')} />
           : adminView === 'customer-report'
-          ? <CustomerReportWithAdd />
+          ? <CustomerReport />
           : adminView === 'purchase-report'
           ? <PurchaseReport />
           : adminView === 'stock-report'
