@@ -1714,32 +1714,11 @@ function CustomerPage({
           </div>
         </section>
 
-        {/* Cart / Submit */}
-        <section className="submit-card">
-          <div className="submit-copy">
-            <PackageCheck size={24} />
-            <div>
-              <strong>{cartOpen ? 'Your Cart' : 'Review Your Order'}</strong>
-              <span>{filledRows.length} item{filledRows.length === 1 ? '' : 's'} ready to review</span>
-            </div>
-          </div>
-          <button
-            className={`btn-submit ${saving ? 'is-submitting' : ''}`}
-            type="button"
-            onClick={addToCart}
-            disabled={saving}
-          >
-            {saving ? <RefreshCw size={21} className="spin" /> : <Send size={21} />}
-            {saving && <span className="submit-rickshaw" aria-hidden="true"><i /><b /><em /></span>}
-            <span>{saving ? t.submitting : 'Add to Cart'}</span>
-            <FileDown size={19} />
-          </button>
-        </section>
         {draft.savedNotice && <p className="draft-saved-notice">✓ {isRtl ? 'مسودہ محفوظ ہے' : 'Draft auto-saved'}</p>}
 
         <footer className="page-footer">
-          <div><strong>AHWMB Customer Order Portal</strong><span>{t.cash}</span></div>
-          <div><span>For any queries or questions, please contact us</span><a href="tel:03223928421">0322-3928421</a></div>
+          <div><strong>AHWMB Customer Order Portal</strong><span>{isRtl ? 'آپ کے دروازے تک ڈیلیوری' : 'Deliver to your door step'}</span></div>
+          <div><span>For any queries or questions, please contact us</span><a href="tel:+923219229419">+92 321 9229419</a></div>
         </footer>
       </div>
 
