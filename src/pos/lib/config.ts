@@ -4,7 +4,7 @@ export const SHOP = {
   fullName: "Adam Haji Wali Muhammad & Brothers",
   tagline: "Point of Sale",
   address: "Jodia Bazaar, Karachi",
-  phone: "",
+  phone: "+92 321 9229419",
   logo: "/logo.png",
   receiptFooter: "Thank you for shopping with us!",
 }

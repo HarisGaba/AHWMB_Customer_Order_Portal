@@ -1726,7 +1726,7 @@ function CustomerPage({
 
         <footer className="page-footer">
           <div><strong>AHWMB Customer Order Portal</strong><span>{isRtl ? 'آپ کے دروازے تک ڈیلیوری' : 'Deliver to your door step'}</span></div>
-          <div><span>For any queries or questions, please contact us</span><a href="tel:+923219229419">+92 321 9229419</a></div>
+          <div><span>For any queries or questions, please contact us</span><strong className="footer-phone">+92 321 9229419</strong></div>
         </footer>
       </div>
 

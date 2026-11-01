@@ -2817,7 +2817,8 @@ body { font-size:18px; }
 .submit-card { margin-bottom: 18px; }
 .page-footer { margin-top: 0 !important; padding: 22px 18px !important; border-top: 1px solid #cfe4d8; display:flex; justify-content:space-between; gap:18px; flex-wrap:wrap; }
 .page-footer > div { display:flex; flex-direction:column; gap:5px; }
-.page-footer a { color:var(--c-green); font-weight:800; text-decoration:none; }
+.page-footer a, .page-footer .footer-phone { color:var(--c-green); font-weight:800; text-decoration:none; }
+.footer-phone { user-select:text; cursor:text; }
 .customer-autocomplete { position:relative; }
 .customer-suggestions { position:absolute; z-index:20; left:0; right:0; top:100%; background:#fff; border:1px solid #cfe4d8; border-radius:10px; box-shadow:0 8px 22px rgba(0,40,20,.14); overflow:hidden; }
 .customer-suggestions button { width:100%; padding:10px 12px; border:0; border-bottom:1px solid #e7f1eb; background:#fff; text-align:left; display:flex; flex-direction:column; gap:3px; cursor:pointer; }
