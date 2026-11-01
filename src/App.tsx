@@ -2062,7 +2062,7 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
   useEffect(() => {
     try {
       const localProducts = JSON.parse(localStorage.getItem('ahwmb-extra-products') || '[]') as CatalogProduct[]
-      if (localProducts.length) { runtimeCatalog = [...PRODUCT_CATALOG, ...localProducts].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index); setCatalogVersion(value => value + 1) }
+      if (localProducts.length) { runtimeCatalog = [...PRODUCT_CATALOG, ...localProducts].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index) }
     } catch { /* storage unavailable */ }
     if (!supabase) return
     const twoMonthsAgo = (() => {
