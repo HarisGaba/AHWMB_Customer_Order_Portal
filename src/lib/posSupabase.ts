@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 
 // The POS keeps its data in its own Supabase project, separate from the order portal.
-const posUrl = import.meta.env.VITE_POS_SUPABASE_URL?.trim().replace(/\/(rest\/v1\/?)?$/, '')
-const posKey = import.meta.env.VITE_POS_SUPABASE_ANON_KEY?.trim()
+// Publishable (public) values; env vars override them. Data is protected by RLS, not by hiding these.
+const posUrl = (import.meta.env.VITE_POS_SUPABASE_URL || 'https://qmryvtyepdxhzybvhatp.supabase.co').trim().replace(/\/(rest\/v1\/?)?$/, '')
+const posKey = (import.meta.env.VITE_POS_SUPABASE_ANON_KEY || 'sb_publishable_E67FLqEHPVz34S5nsipbzw_vGgg5fyH').trim()
 
 export const isPosConfigured = Boolean(posUrl && posKey)
 
