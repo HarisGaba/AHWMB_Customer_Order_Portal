@@ -10,6 +10,9 @@ interface ImportMetaEnv {
   readonly VITE_WHATSAPP_NUMBER?: string
   readonly VITE_SHOPKEEPER_WHATSAPP?: string
   readonly VITE_VAPID_PUBLIC_KEY?: string
+  readonly VITE_POS_SUPABASE_URL?: string
+  readonly VITE_POS_SUPABASE_ANON_KEY?: string
+  readonly VITE_POS_EMAILS?: string
 }
 
 interface ImportMeta {

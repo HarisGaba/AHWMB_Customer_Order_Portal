@@ -59,7 +59,7 @@ alter table public.order_items enable row level security;
 create or replace function public.is_ahwmb_admin() returns boolean
 language sql stable security definer set search_path = public
 as $$
-  select lower(coalesce(auth.jwt() ->> 'email', '')) in ('ahmedyounus1978@gmail.com', 'ahwmb1965@gmail.com');
+  select lower(coalesce(auth.jwt() ->> 'email', '')) in ('ahwmb1965@gmail.com');
 $$;
 
 drop policy if exists "Admins can view customers" on public.customers;

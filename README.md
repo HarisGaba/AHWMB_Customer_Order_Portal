@@ -43,3 +43,13 @@ The supplied black-and-white invoice reference is now stored as `public/invoice-
 The Admin Panel's Total Balance, Deposit, and Remaining Balance fields use `Remaining Balance = Total Balance - Deposit`. Applying `supabase/schema.sql` adds the three persistence columns to `orders` and the save operation stores them.
 
 Save & Print downloads the PDF and launches print preview through a hidden iframe in the current window; it does not open a new tab or popup. After saving, Share PDF File uses `navigator.share` with only a PDF `File`. No admin URL, route, or internal link is placed in the shared payload.
+
+## POS system (`/pos`)
+
+The shop's Point of Sale lives in [`src/pos/`](src/pos/) (React + Tailwind + shadcn/ui) and is served at `/pos`.
+
+- **One login page** (`/login`). `ahwmb1965@gmail.com` opens the order-portal admin panel. `ahmedyounus1978@gmail.com` (or any email in `VITE_POS_EMAILS`, comma-separated) opens the POS.
+- **Separate databases.** The POS signs in to, and stores its data in, its own Supabase project (`VITE_POS_SUPABASE_URL`, `VITE_POS_SUPABASE_ANON_KEY`). Order-portal data stays in the portal's project.
+- **Separate styles.** `/pos` loads only the POS bundle and its Tailwind stylesheet, and every other route loads only the portal and `styles.css`. Moving between them is a full page load, so the two never mix.
+- POS database setup: [`supabase/pos/schema.sql`](supabase/pos/schema.sql) and [`supabase/pos/002_archive_items.sql`](supabase/pos/002_archive_items.sql), run in the **POS** Supabase project.
+- Portal migration [`supabase/migrations/20261101_pos_split_admin.sql`](supabase/migrations/20261101_pos_split_admin.sql) makes `ahwmb1965@gmail.com` the only portal admin.

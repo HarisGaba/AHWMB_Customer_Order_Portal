@@ -1,0 +1,434 @@
+import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
+import {
+  BanknoteIcon,
+  CheckCircle2Icon,
+  CornerDownLeftIcon,
+  Loader2Icon,
+  PrinterIcon,
+  ReceiptIcon,
+  ShoppingCartIcon,
+  Trash2Icon,
+  WalletIcon,
+  XIcon,
+} from "lucide-react"
+import { ItemCommand } from "@/components/item-command"
+import { PageHeader } from "@/components/page-header"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Kbd } from "@/components/ui/kbd"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { printReceipt } from "@/lib/receipt"
+import { actions, fmt, lineTotal, type Item, type PaymentMethod, type Sale, type SaleLine } from "@/lib/store"
+import { cn } from "@/lib/utils"
+
+type Stage = null | "total" | "pay" | "done"
+
+const EnterKbd = ({ inverted }: { inverted?: boolean }) => (
+  <Kbd className={cn(inverted && "bg-primary-foreground/15 text-primary-foreground")}>
+    <CornerDownLeftIcon />
+  </Kbd>
+)
+
+export function PosPage({ active = true }: { active?: boolean }) {
+  const [cart, setCart] = useState<SaleLine[]>([])
+  const [search, setSearch] = useState("")
+  const [picked, setPicked] = useState<Item | null>(null)
+  const [qty, setQty] = useState("")
+  const [stage, setStage] = useState<Stage>(null)
+  const [payment, setPayment] = useState<PaymentMethod>("Cash")
+  const [lastSale, setLastSale] = useState<Sale | null>(null)
+  const [busy, setBusy] = useState(false)
+  const saving = useRef(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const qtyRef = useRef<HTMLInputElement>(null)
+
+  const total = lineTotal(cart)
+  const units = cart.reduce((s, l) => s + l.qty, 0)
+  const focusSearch = () => setTimeout(() => searchRef.current?.focus(), 0)
+
+  useEffect(() => {
+    if (active) searchRef.current?.focus()
+  }, [active])
+
+  function pick(item: Item) {
+    setPicked(item)
+    setSearch("")
+    setQty("1")
+    setTimeout(() => qtyRef.current?.select(), 0)
+  }
+
+  function addLine() {
+    const q = parseFloat(qty)
+    if (!picked) return focusSearch()
+    if (!(q > 0)) return toast.error("Enter a valid quantity")
+    setCart((c) => {
+      const i = c.findIndex((l) => l.itemId === picked.id)
+      if (i === -1) return [...c, { itemId: picked.id, name: picked.name, rate: picked.rate, qty: q }]
+      return c.map((l, k) => (k === i ? { ...l, qty: l.qty + q } : l))
+    })
+    setPicked(null)
+    setQty("")
+    focusSearch()
+  }
+
+  function setLineQty(itemId: string, q: number) {
+    setCart((c) => (q > 0 ? c.map((l) => (l.itemId === itemId ? { ...l, qty: q } : l)) : c.filter((l) => l.itemId !== itemId)))
+  }
+
+  function onSearchKey(e: React.KeyboardEvent) {
+    if (e.key !== "Enter" || search.trim()) return
+    e.preventDefault()
+    if (!cart.length) return void toast.error("Cart is empty", { description: "Add at least one item first." })
+    setStage("total")
+  }
+
+  async function complete(method: PaymentMethod) {
+    if (saving.current) return
+    saving.current = true
+    setBusy(true)
+    try {
+      const sale = await actions.recordSale(cart, method)
+      setLastSale(sale)
+      setCart([])
+      setStage("done")
+    } catch (e) {
+      toast.error("Sale not saved", { description: e instanceof Error ? e.message : "Check your internet connection and try again." })
+    } finally {
+      saving.current = false
+      setBusy(false)
+    }
+  }
+
+  function closeDialogs() {
+    if (saving.current) return
+    setStage(null)
+    focusSearch()
+  }
+
+  function onPayKey(e: React.KeyboardEvent) {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Tab"].includes(e.key)) {
+      e.preventDefault()
+      setPayment((p) => (p === "Cash" ? "Balance" : "Cash"))
+    } else if (e.key === "1" || e.key.toLowerCase() === "c") setPayment("Cash")
+    else if (e.key === "2" || e.key.toLowerCase() === "b") setPayment("Balance")
+    else if (e.key === "Enter") {
+      e.preventDefault()
+      void complete(payment)
+    }
+  }
+
+  function onDoneKey(e: React.KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      closeDialogs()
+    } else if (e.key.toLowerCase() === "p" && lastSale) {
+      e.preventDefault()
+      printReceipt(lastSale)
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-6">
+      <PageHeader title="Point of Sale" description="Search an item, enter quantity, press Enter. Enter on an empty search to check out.">
+        <div className="hidden items-center gap-1.5 text-xs text-muted-foreground xl:flex">
+          <Kbd>↑</Kbd>
+          <Kbd>↓</Kbd> select <span className="mx-1">·</span>
+          <EnterKbd /> confirm <span className="mx-1">·</span>
+          <Kbd>Esc</Kbd> back <span className="mx-1">·</span>
+          <Kbd>F1</Kbd> all shortcuts
+        </div>
+      </PageHeader>
+
+      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(300px,400px)_1fr]">
+        <ItemCommand
+          inputRef={searchRef}
+          search={search}
+          onSearchChange={setSearch}
+          onPick={pick}
+          onKeyDown={onSearchKey}
+          selectedId={picked?.id}
+          className="min-h-80 shadow-xs"
+          placeholder="Search items…  (Enter on empty = checkout)"
+        />
+
+        <Card className="flex min-h-0 flex-col gap-0 py-0 shadow-xs">
+          {/* Quantity entry bar */}
+          <div className={cn("flex flex-wrap items-center gap-3 border-b p-4 transition-colors", picked && "bg-primary/[0.03]")}>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Selected item</div>
+              {picked ? (
+                <div className="truncate text-base font-semibold">
+                  {picked.name} <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">@ {fmt(picked.rate)}</span>
+                </div>
+              ) : (
+                <div className="text-base text-muted-foreground">Pick an item from the list</div>
+              )}
+            </div>
+            <Input
+              ref={qtyRef}
+              type="number"
+              min={0}
+              step="any"
+              inputMode="decimal"
+              placeholder="Qty"
+              value={qty}
+              disabled={!picked}
+              onChange={(e) => setQty(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addLine()
+                if (e.key === "Escape") {
+                  setPicked(null)
+                  focusSearch()
+                }
+              }}
+              className="h-10 w-28 text-right font-mono text-base"
+            />
+            <Button size="lg" className="h-10" disabled={!picked} onClick={addLine}>
+              Add <EnterKbd inverted />
+            </Button>
+          </div>
+
+          {/* Cart */}
+          <div className="min-h-0 flex-1 overflow-auto">
+            {cart.length ? (
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-card">
+                  <TableRow>
+                    <TableHead className="w-10 pl-4">#</TableHead>
+                    <TableHead>Item Name</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="w-12" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cart.map((l, i) => (
+                    <TableRow key={l.itemId} className="group/row">
+                      <TableCell className="pl-4 text-muted-foreground">{i + 1}</TableCell>
+                      <TableCell className="font-medium">{l.name}</TableCell>
+                      <TableCell className="text-right">
+                        <QtyCell value={l.qty} onCommit={(q) => setLineQty(l.itemId, q)} onDone={focusSearch} />
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground tabular-nums">{fmt(l.rate)}</TableCell>
+                      <TableCell className="text-right font-mono font-medium tabular-nums">{fmt(l.qty * l.rate)}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Remove ${l.name}`}
+                          className="opacity-50 group-hover/row:opacity-100"
+                          onClick={() => {
+                            setCart((c) => c.filter((x) => x.itemId !== l.itemId))
+                            focusSearch()
+                          }}
+                        >
+                          <XIcon />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="flex h-full min-h-60 flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+                <div className="flex size-14 items-center justify-center rounded-full bg-muted">
+                  <ShoppingCartIcon className="size-6" />
+                </div>
+                <div>
+                  <div className="font-medium text-foreground">Cart is empty</div>
+                  <div className="text-sm">Items you add will appear here.</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Totals */}
+          <div className="flex flex-wrap items-center gap-4 border-t bg-muted/40 p-4">
+            <div className="text-sm text-muted-foreground">
+              {cart.length} line{cart.length === 1 ? "" : "s"} · {units} units
+              {cart.length > 0 && <span className="hidden sm:inline"> · click a quantity to edit</span>}
+            </div>
+            {cart.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setCart([])
+                  focusSearch()
+                }}
+              >
+                <Trash2Icon /> Clear
+              </Button>
+            )}
+            <div className="ml-auto text-right">
+              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Total</div>
+              <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">{fmt(total)}</div>
+            </div>
+            <Button size="lg" className="h-12 px-6 text-base" disabled={!cart.length} onClick={() => setStage("total")}>
+              <ReceiptIcon /> Checkout
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* Step 1: total amount */}
+      <Dialog open={stage === "total"} onOpenChange={(o) => !o && closeDialogs()}>
+        <DialogContent
+          className="sm:max-w-md"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              setPayment("Cash")
+              setStage("pay")
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Total Amount</DialogTitle>
+            <DialogDescription>
+              {cart.length} items · {units} units
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6 text-center font-mono text-5xl font-semibold tracking-tight tabular-nums">{fmt(total)}</div>
+          <Button
+            size="lg"
+            className="h-11"
+            onClick={() => {
+              setPayment("Cash")
+              setStage("pay")
+            }}
+          >
+            Continue to payment <EnterKbd inverted />
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Step 2: payment method */}
+      <Dialog open={stage === "pay"} onOpenChange={(o) => !o && closeDialogs()}>
+        <DialogContent className="sm:max-w-md" onKeyDown={onPayKey}>
+          <DialogHeader>
+            <DialogTitle>Payment Method</DialogTitle>
+            <DialogDescription>
+              Amount due <span className="font-mono font-medium text-foreground">{fmt(total)}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-2">
+            {(
+              [
+                ["Cash", BanknoteIcon, "1"],
+                ["Balance", WalletIcon, "2"],
+              ] as const
+            ).map(([method, Icon, key]) => (
+              <button
+                key={method}
+                type="button"
+                disabled={busy}
+                onClick={() => void complete(method)}
+                onMouseEnter={() => setPayment(method)}
+                className={cn(
+                  "flex flex-col items-center gap-2 rounded-xl border-2 p-5 outline-none transition-all disabled:opacity-60",
+                  payment === method ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:bg-muted/50",
+                )}
+              >
+                {busy && payment === method ? <Loader2Icon className="size-7 animate-spin" /> : <Icon className="size-7" />}
+                <span className="text-base font-semibold">{method}</span>
+                <Kbd>{key}</Kbd>
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              <Kbd>←</Kbd> <Kbd>→</Kbd> switch
+            </span>
+            {payment === "Balance" && <Badge variant="secondary">Recorded as credit</Badge>}
+            <span>{busy ? "Saving…" : <><EnterKbd /> complete sale</>}</span>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Step 3: sale complete */}
+      <Dialog open={stage === "done"} onOpenChange={(o) => !o && closeDialogs()}>
+        <DialogContent className="sm:max-w-sm" onKeyDown={onDoneKey}>
+          {lastSale && (
+            <>
+              <div className="flex flex-col items-center gap-3 pt-4 text-center">
+                <div className="flex size-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2Icon className="size-8" />
+                </div>
+                <DialogTitle className="text-lg">Sale complete</DialogTitle>
+                <DialogDescription>
+                  Customer #{lastSale.customerNo} · paid by {lastSale.payment}
+                </DialogDescription>
+                <div className="font-mono text-4xl font-semibold tracking-tight tabular-nums">{fmt(lastSale.total)}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <Button variant="outline" size="lg" className="h-11" onClick={() => printReceipt(lastSale)}>
+                  <PrinterIcon /> Print <Kbd>P</Kbd>
+                </Button>
+                <Button size="lg" className="h-11" autoFocus onClick={closeDialogs}>
+                  New sale <EnterKbd inverted />
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+/** Quantity that turns into an input on click; commits on Enter/blur, Esc cancels, 0 removes. */
+function QtyCell({ value, onCommit, onDone }: { value: number; onCommit: (q: number) => void; onDone: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState("")
+
+  if (!editing)
+    return (
+      <button
+        type="button"
+        title="Click to edit quantity"
+        onClick={() => {
+          setDraft(String(value))
+          setEditing(true)
+        }}
+        className="rounded-md border border-transparent px-2 py-1 font-mono tabular-nums transition-colors hover:border-border hover:bg-muted"
+      >
+        {value}
+      </button>
+    )
+
+  const commit = () => {
+    const q = parseFloat(draft)
+    if (draft.trim() !== "" && q >= 0) onCommit(q)
+    setEditing(false)
+  }
+
+  return (
+    <Input
+      autoFocus
+      type="number"
+      min={0}
+      step="any"
+      inputMode="decimal"
+      value={draft}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          commit()
+          onDone()
+        } else if (e.key === "Escape") {
+          setEditing(false)
+          onDone()
+        }
+      }}
+      className="ml-auto h-8 w-24 text-right font-mono"
+    />
+  )
+}
