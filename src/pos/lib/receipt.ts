@@ -7,54 +7,80 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 function receiptHtml(sale: Sale) {
   const date = new Date(sale.createdAt)
   const units = sale.lines.reduce((s, l) => s + l.qty, 0)
+  const logo = new URL(SHOP.logo, window.location.origin).href
   const rows = sale.lines
     .map(
-      (l) => `<tr><td class="name" colspan="3">${esc(l.name)}</td></tr>
-      <tr class="sub"><td>${l.qty} × ${fmt(l.rate)}</td><td></td><td class="r">${fmt(l.qty * l.rate)}</td></tr>`,
+      (l, i) => `<tr class="item"><td class="n">${i + 1}</td><td colspan="3" class="name">${esc(l.name)}</td></tr>
+      <tr class="calc"><td></td><td>${l.qty}</td><td class="r">${fmt(l.rate)}</td><td class="r b">${fmt(l.qty * l.rate)}</td></tr>`,
     )
     .join("")
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Receipt #${sale.customerNo}</title>
 <style>
-  @page { size: 80mm auto; margin: 4mm; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 12px/1.45 ui-monospace, "Cascadia Mono", Consolas, monospace; color: #000; }
-  .wrap { width: 72mm; margin: 0 auto; }
-  .c { text-align: center; } .r { text-align: right; }
-  h1 { font-size: 18px; margin: 0; letter-spacing: 1px; }
-  .muted { color: #444; font-size: 11px; }
-  hr { border: 0; border-top: 1px dashed #000; margin: 8px 0; }
+  /* 80 mm thermal roll; thermal printers are black-only, so everything is pure black on white. */
+  @page { size: 80mm auto; margin: 0; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; color: #000; background: #fff; font: 11.5px/1.4 Arial, "Helvetica Neue", sans-serif; }
+  .wrap { width: 80mm; padding: 4mm 4mm 6mm; margin: 0 auto; }
+  .c { text-align: center; } .r { text-align: right; } .b { font-weight: 700; }
+  .mono { font-family: ui-monospace, Consolas, "Courier New", monospace; }
+  .logo { width: 22mm; height: 22mm; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto 2mm;
+          filter: grayscale(1) contrast(1.6) brightness(1.05); }
+  .brand { font-size: 22px; font-weight: 900; letter-spacing: 4px; margin: 0; }
+  .full { font-size: 11px; font-weight: 700; margin-top: 1px; }
+  .addr { font-size: 10.5px; margin-top: 1px; }
+  .title { margin: 3mm 0 2.5mm; padding: 1.4mm 0; background: #000; color: #fff; font-size: 12px; font-weight: 800;
+           letter-spacing: 3px; text-align: center; }
   table { width: 100%; border-collapse: collapse; }
-  td { padding: 1px 0; vertical-align: top; }
-  td.name { font-weight: 600; padding-top: 4px; }
-  tr.sub td { color: #222; }
+  td, th { padding: 0.6mm 0; vertical-align: top; }
+  .meta td:first-child { font-weight: 700; }
   .meta td:last-child { text-align: right; }
-  .total td { font-size: 16px; font-weight: 700; padding-top: 4px; }
-  .badge { display: inline-block; border: 1px solid #000; padding: 1px 8px; border-radius: 3px; font-weight: 700; }
+  hr { border: 0; border-top: 1px dashed #000; margin: 2.5mm 0; }
+  hr.solid { border-top: 1.5px solid #000; }
+  .items th { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; text-align: left;
+              border-top: 1.5px solid #000; border-bottom: 1.5px solid #000; padding: 1mm 0; }
+  .items th.r { text-align: right; }
+  .items .n { width: 6mm; font-weight: 700; }
+  .items .name { font-weight: 700; padding-top: 1.6mm; }
+  .items .calc td { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 11px; padding-bottom: 1.2mm;
+                    border-bottom: 1px dotted #000; }
+  .sum td { padding: 0.8mm 0; }
+  .grand { margin-top: 2mm; border: 2px solid #000; padding: 2mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
+  .grand span:first-child { font-size: 12px; font-weight: 800; letter-spacing: 2px; }
+  .grand span:last-child { font: 900 19px ui-monospace, Consolas, "Courier New", monospace; }
+  .pay { display: inline-block; background: #000; color: #fff; padding: 0.6mm 3mm; border-radius: 2mm; font-weight: 800; letter-spacing: 1px; font-size: 10.5px; }
+  .thanks { font-size: 13px; font-weight: 800; margin-top: 1mm; }
+  .small { font-size: 9.5px; margin-top: 1.2mm; }
 </style></head><body><div class="wrap">
   <div class="c">
-    <h1>${esc(SHOP.name)}</h1>
-    ${SHOP.tagline ? `<div class="muted">${esc(SHOP.tagline)}</div>` : ""}
-    ${SHOP.address ? `<div class="muted">${esc(SHOP.address)}</div>` : ""}
-    ${SHOP.phone ? `<div class="muted">Tel: ${esc(SHOP.phone)}</div>` : ""}
+    <img class="logo" src="${logo}" alt="">
+    <h1 class="brand">${esc(SHOP.name)}</h1>
+    ${SHOP.fullName ? `<div class="full">${esc(SHOP.fullName)}</div>` : ""}
+    ${SHOP.address ? `<div class="addr">${esc(SHOP.address)}</div>` : ""}
+    ${SHOP.phone ? `<div class="addr">Tel: ${esc(SHOP.phone)}</div>` : ""}
   </div>
-  <hr>
+  <div class="title">SALES RECEIPT</div>
   <table class="meta">
+    <tr><td>Receipt No</td><td class="mono">${sale.id.slice(0, 8).toUpperCase()}</td></tr>
     <tr><td>Customer</td><td>#${sale.customerNo}</td></tr>
     <tr><td>Date</td><td>${format(date, "dd MMM yyyy")}</td></tr>
     <tr><td>Time</td><td>${format(date, "hh:mm a")}</td></tr>
   </table>
-  <hr>
-  <table>${rows}</table>
-  <hr>
-  <table>
-    <tr><td>Items</td><td class="r">${sale.lines.length} (${units} units)</td></tr>
-    <tr class="total"><td>TOTAL</td><td class="r">${fmt(sale.total)}</td></tr>
-    <tr><td>Payment</td><td class="r"><span class="badge">${sale.payment.toUpperCase()}</span></td></tr>
+  <table class="items" style="margin-top:2.5mm">
+    <thead><tr><th class="n">#</th><th>Item / Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+    <tbody>${rows}</tbody>
   </table>
+  <table class="sum" style="margin-top:1.5mm">
+    <tr><td>Items</td><td class="r">${sale.lines.length}</td></tr>
+    <tr><td>Total quantity</td><td class="r">${units}</td></tr>
+    <tr><td>Payment</td><td class="r"><span class="pay">${sale.payment.toUpperCase()}</span></td></tr>
+  </table>
+  <div class="grand"><span>TOTAL</span><span>${fmt(sale.total)}</span></div>
   <hr>
-  <div class="c muted">${esc(SHOP.receiptFooter)}</div>
-  <div class="c muted" style="margin-top:4px">Ref ${sale.id.slice(0, 8).toUpperCase()}</div>
+  <div class="c">
+    <div class="thanks">${esc(SHOP.receiptFooter)}</div>
+    <div class="small">${esc(SHOP.fullName || SHOP.name)}</div>
+  </div>
 </div></body></html>`
 }
 
@@ -71,10 +97,20 @@ export function printReceipt(sale: Sale) {
   const win = frame.contentWindow!
   const cleanup = () => setTimeout(() => frame.remove(), 500)
   win.addEventListener("afterprint", cleanup)
-  setTimeout(() => {
+  const print = () => {
     win.focus()
     win.print()
     // Some browsers don't fire afterprint for iframes.
     setTimeout(cleanup, 60_000)
-  }, 100)
+  }
+  // Wait for the logo so it is never missing from the printout (give up after 2 s).
+  const img = doc.querySelector("img")
+  if (!img || img.complete) setTimeout(print, 100)
+  else {
+    let done = false
+    const go = () => { if (!done) { done = true; setTimeout(print, 50) } }
+    img.addEventListener("load", go)
+    img.addEventListener("error", () => { img.remove(); go() })
+    setTimeout(go, 2000)
+  }
 }
