@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { actions, useStore } from "@/lib/store"
+import { isPosEmail } from "../../lib/posSupabase"
 import { signOutToLogin, supabase, supabaseConfigured } from "@/lib/supabase"
 
 /** Sends signed-out visitors to the portal login, then loads the shop data and renders the app. */
@@ -20,7 +21,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => data.subscription.unsubscribe()
   }, [])
 
-  const userId = session?.user.id
+  const userId = session && isPosEmail(session.user.email ?? "") ? session.user.id : undefined
   useEffect(() => {
     if (userId) void actions.load()
     else actions.reset()
@@ -29,6 +30,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (!supabaseConfigured) return <NotConfigured />
   if (session === undefined) return <FullScreenLoader label="Starting…" />
   if (!session) return <RedirectToLogin />
+  // Portal admins share this sign-in; only POS users belong here.
+  if (!isPosEmail(session.user.email ?? "")) return <RedirectToLogin />
   if (status === "error")
     return (
       <Centered>

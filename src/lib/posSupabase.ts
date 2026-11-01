@@ -1,17 +1,9 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from './supabase'
 
-// The POS keeps its data in its own Supabase project, separate from the order portal.
-// Publishable (public) values; env vars override them. Data is protected by RLS, not by hiding these.
-const posUrl = (import.meta.env.VITE_POS_SUPABASE_URL || 'https://qmryvtyepdxhzybvhatp.supabase.co').trim().replace(/\/(rest\/v1\/?)?$/, '')
-const posKey = (import.meta.env.VITE_POS_SUPABASE_ANON_KEY || 'sb_publishable_E67FLqEHPVz34S5nsipbzw_vGgg5fyH').trim()
-
-export const isPosConfigured = Boolean(posUrl && posKey)
-
-export const posSupabase = isPosConfigured
-  ? createClient(posUrl!, posKey!, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
-    })
-  : null
+// The POS shares the order portal's Supabase project. POS tables are locked to the
+// POS user by RLS (public.is_ahwmb_pos_user), so portal admins cannot see them.
+export const isPosConfigured = Boolean(supabase)
+export const posSupabase = supabase
 
 /** Emails that sign in to the POS instead of the portal admin panel. */
 const POS_EMAILS = (import.meta.env.VITE_POS_EMAILS || 'ahmedyounus1978@gmail.com')

@@ -1,5 +1,13 @@
--- AHWMB POS database schema.
--- Run once in Supabase: Dashboard → SQL Editor → New query → paste → Run.
+-- POS tables moved into the order-portal project (the separate POS project was deleted).
+-- Only the POS user can read/write POS data; portal admins and customers cannot.
+
+create or replace function public.is_ahwmb_pos_user() returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select lower(coalesce(auth.jwt() ->> 'email', '')) in ('ahmedyounus1978@gmail.com');
+$$;
+revoke execute on function public.is_ahwmb_pos_user() from public, anon;
+grant execute on function public.is_ahwmb_pos_user() to authenticated;
 
 -- ---------- Tables ----------
 create table if not exists public.items (
@@ -23,17 +31,17 @@ create table if not exists public.sales (
 );
 create index if not exists sales_day_idx on public.sales (day);
 
--- ---------- Security: only signed-in users can read/write ----------
+-- ---------- Security: only the POS user can read/write ----------
 alter table public.items enable row level security;
 alter table public.sales enable row level security;
 
-drop policy if exists "auth all items" on public.items;
-create policy "auth all items" on public.items
-  for all to authenticated using (true) with check (true);
+drop policy if exists "pos user items" on public.items;
+create policy "pos user items" on public.items
+  for all to authenticated using (public.is_ahwmb_pos_user()) with check (public.is_ahwmb_pos_user());
 
-drop policy if exists "auth all sales" on public.sales;
-create policy "auth all sales" on public.sales
-  for all to authenticated using (true) with check (true);
+drop policy if exists "pos user sales" on public.sales;
+create policy "pos user sales" on public.sales
+  for all to authenticated using (public.is_ahwmb_pos_user()) with check (public.is_ahwmb_pos_user());
 
 -- ---------- Record a sale with an atomic per-day customer number ----------
 create or replace function public.record_sale(p_day date, p_lines jsonb, p_payment text)
@@ -87,3 +95,7 @@ begin
   begin alter publication supabase_realtime add table public.items; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.sales; exception when duplicate_object then null; end;
 end $$;
+
+-- Clean up the generic policy names if an earlier copy of the schema was applied.
+drop policy if exists "auth all items" on public.items;
+drop policy if exists "auth all sales" on public.sales;

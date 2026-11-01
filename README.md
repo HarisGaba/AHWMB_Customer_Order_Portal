@@ -49,7 +49,7 @@ Save & Print downloads the PDF and launches print preview through a hidden ifram
 The shop's Point of Sale lives in [`src/pos/`](src/pos/) (React + Tailwind + shadcn/ui) and is served at `/pos`.
 
 - **One login page** (`/login`). `ahwmb1965@gmail.com` opens the order-portal admin panel. `ahmedyounus1978@gmail.com` (or any email in `VITE_POS_EMAILS`, comma-separated) opens the POS.
-- **Separate databases.** The POS signs in to, and stores its data in, its own Supabase project (`VITE_POS_SUPABASE_URL`, `VITE_POS_SUPABASE_ANON_KEY`). Order-portal data stays in the portal's project.
+- **One database, separated by RLS.** The POS uses the portal's Supabase project. Its `items` and `sales` tables are readable/writable only by the POS user (`public.is_ahwmb_pos_user()`); portal tables only by the portal admin (`public.is_ahwmb_admin()`).
 - **Separate styles.** `/pos` loads only the POS bundle and its Tailwind stylesheet, and every other route loads only the portal and `styles.css`. Moving between them is a full page load, so the two never mix.
-- POS database setup: [`supabase/pos/schema.sql`](supabase/pos/schema.sql) and [`supabase/pos/002_archive_items.sql`](supabase/pos/002_archive_items.sql), run in the **POS** Supabase project.
+- POS database setup: [`supabase/migrations/20261102_pos_tables.sql`](supabase/migrations/20261102_pos_tables.sql). The POS user must exist in Authentication → Users of the portal project.
 - Portal migration [`supabase/migrations/20261101_pos_split_admin.sql`](supabase/migrations/20261101_pos_split_admin.sql) makes `ahwmb1965@gmail.com` the only portal admin.

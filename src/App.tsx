@@ -7,7 +7,7 @@ import {
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
-import { isPosEmail, posSupabase } from './lib/posSupabase'
+import { isPosEmail } from './lib/posSupabase'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
 import { useDraftOrder } from './hooks/useDraftOrder'
 import { requestTurnstileToken } from './lib/turnstile'
@@ -1773,12 +1773,10 @@ function LoginPage({
     if (!supabase) { setError(t.errors.setup); return }
     setBusy(true)
     try {
-      // POS staff sign in to the separate POS database and land on the POS.
+      // POS staff land on the POS (same database; POS tables are locked to them by RLS).
       if (isPosEmail(email)) {
-        if (!posSupabase) { setError(t.errors.setup); return }
-        const { data, error: posError } = await posSupabase.auth.signInWithPassword({ email: email.trim(), password })
+        const { data, error: posError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
         if (posError || !data.user) { setError(t.errors.login); return }
-        await supabase.auth.signOut().catch(() => undefined)
         window.location.assign('/pos')
         return
       }
