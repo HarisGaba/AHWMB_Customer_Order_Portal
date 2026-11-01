@@ -11,6 +11,7 @@ import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals
 import { useDraftOrder } from './hooks/useDraftOrder'
 import { requestTurnstileToken } from './lib/turnstile'
 import { InstallBanner } from './components/InstallBanner'
+import { PushBanner } from './components/PushBanner'
 
 let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
 
@@ -1026,10 +1027,16 @@ async function drawInvoice(
 async function notifyNewOrder(order: {
   order_ref: string; customer_name: string
   customer_phone: string; customer_address: string
+  location_link: string | null; items: OrderItem[]; grand_total: number; created_at: string
 }) {
   if (!supabase) return
   try {
-    await supabase.functions.invoke('notify-new-order', { body: order })
+    // Push alert runs alongside the email; neither blocks the other.
+    void supabase.functions.invoke('send-push-notification', { body: { order_ref: order.order_ref } })
+      .then(({ data, error }) => { if (error || !data?.sent) console.warn('Push not delivered:', error?.message || data?.reason || data?.error || 'No devices') })
+      .catch(err => console.warn('Push not delivered:', err))
+    const { data, error } = await supabase.functions.invoke('notify-new-order', { body: { order } })
+    if (error || data?.success === false) console.warn('Notification not delivered:', error?.message || data?.reason || 'Email provider failure')
   } catch (err) {
     console.warn('Notification not delivered:', err)
   }
@@ -1317,7 +1324,7 @@ function CustomerPage({
 
       if (error) throw error
 
-      void notifyNewOrder({ order_ref: orderRef, customer_name: name.trim(), customer_phone: phone.trim(), customer_address: address.trim() })
+      void notifyNewOrder({ order_ref: orderRef, customer_name: name.trim(), customer_phone: normalizePhone(phone), customer_address: address.trim(), location_link: locationLink.trim() || null, items, grand_total: 0, created_at: new Date().toISOString() })
       setSuccessRef(orderRef)
       setCartOpen(false)
     } catch (err) {
@@ -2824,11 +2831,12 @@ function AdminPage({
 
   if (!authorized) return null
 
-  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>{isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('orders')}>{isRtl ? 'آرڈرز دیکھیں' : 'View Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('reports')}>{isRtl ? 'روزانہ رپورٹ' : 'Daily Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('customer-report')}>{isRtl ? 'گاہک کی رپورٹ' : 'Customer Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('stock-report')}>{isRtl ? 'اسٹاک رپورٹ' : 'Stock Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('purchase-report')}>{isRtl ? 'خریداری رپورٹ' : 'Purchase Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('products')}>{isRtl ? 'مصنوعات شامل کریں' : 'Add Products'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('add-customer')}>{isRtl ? 'گاہک شامل کریں' : 'Add Customer'}</button></section></div></main>
+  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><PushBanner language={language} adminEmail={adminEmail} onToast={addToast} /><ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>{isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('orders')}>{isRtl ? 'آرڈرز دیکھیں' : 'View Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('reports')}>{isRtl ? 'روزانہ رپورٹ' : 'Daily Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('customer-report')}>{isRtl ? 'گاہک کی رپورٹ' : 'Customer Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('stock-report')}>{isRtl ? 'اسٹاک رپورٹ' : 'Stock Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('purchase-report')}>{isRtl ? 'خریداری رپورٹ' : 'Purchase Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('products')}>{isRtl ? 'مصنوعات شامل کریں' : 'Add Products'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('add-customer')}>{isRtl ? 'گاہک شامل کریں' : 'Add Customer'}</button></section></div></main>
 
   return (
     <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
       <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />
+      <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
       <div className="admin-wrap">
