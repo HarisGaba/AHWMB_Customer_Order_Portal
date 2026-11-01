@@ -166,7 +166,7 @@ export function SummaryPage() {
       {/* KPI tiles */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map(({ label, value, icon: Icon, hint, change }) => (
-          <Card key={label} className="gap-2 shadow-xs">
+          <Card key={label} className="gap-2 rounded-2xl shadow-panel">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardDescription className="font-medium">{label}</CardDescription>
               <Icon className="size-4 text-muted-foreground" />
@@ -196,7 +196,7 @@ export function SummaryPage() {
 
       {/* Analytics */}
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <Card className="shadow-xs">
+        <Card className="rounded-2xl shadow-panel">
           <CardHeader>
             <CardTitle>Daily revenue</CardTitle>
             <CardDescription>
@@ -254,7 +254,7 @@ export function SummaryPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
+        <Card className="rounded-2xl shadow-panel">
           <CardHeader>
             <CardTitle>Top items by revenue</CardTitle>
             <CardDescription>{topRange === "day" ? format(parseISO(day), "d MMM yyyy") : `Last ${CHART_DAYS} days`}</CardDescription>
@@ -294,7 +294,7 @@ export function SummaryPage() {
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
         {/* Customers (left) */}
-        <Card className="gap-0 py-0 shadow-xs">
+        <Card className="gap-0 py-0 rounded-2xl shadow-panel">
           <CardHeader className="border-b py-4">
             <CardTitle>Customers</CardTitle>
             <CardDescription>{sales.length} transactions on this day</CardDescription>
@@ -329,7 +329,7 @@ export function SummaryPage() {
         </Card>
 
         {/* Receipt detail */}
-        <Card className="gap-0 py-0 shadow-xs">
+        <Card className="gap-0 py-0 rounded-2xl shadow-panel">
           <CardHeader className="border-b py-4">
             <CardTitle>{selected ? `Customer ${selected.customerNo}` : "Transaction details"}</CardTitle>
             <CardDescription>
@@ -379,7 +379,7 @@ export function SummaryPage() {
       </div>
 
       {/* History */}
-      <Card className="gap-0 py-0 shadow-xs">
+      <Card className="gap-0 py-0 rounded-2xl shadow-panel">
         <CardHeader className="border-b py-4">
           <CardTitle>Daily history</CardTitle>
           <CardDescription>

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react"
 import { format } from "date-fns"
 import { useTheme } from "next-themes"
-import { BarChart3Icon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, StoreIcon, SunIcon, TagIcon } from "lucide-react"
+import { BarChart3Icon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, SunIcon, TagIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -70,12 +70,12 @@ export default function App() {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" className="pointer-events-none">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <StoreIcon className="size-4" />
+                <div className="flex aspect-square size-9 items-center justify-center overflow-hidden rounded-xl bg-sidebar-primary/15 ring-1 ring-sidebar-primary/40">
+                  <img src="/logo.png" alt="" className="size-full object-cover" />
                 </div>
                 <div className="grid flex-1 text-left leading-tight">
-                  <span className="truncate font-semibold">{SHOP.name} POS</span>
-                  <span className="truncate text-xs text-muted-foreground">Point of Sale System</span>
+                  <span className="truncate font-semibold tracking-wide">{SHOP.name} <span className="text-sidebar-primary">POS</span></span>
+                  <span className="truncate text-xs text-sidebar-foreground/60">Jodia Bazaar · Karachi</span>
                 </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -83,15 +83,15 @@ export default function App() {
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Menu</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-sidebar-foreground/50 tracking-wider uppercase">Menu</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {NAV.map((n, i) => (
                   <SidebarMenuItem key={n.id}>
-                    <SidebarMenuButton isActive={page === n.id} tooltip={n.label} onClick={() => setPage(n.id)} className="h-10">
+                    <SidebarMenuButton isActive={page === n.id} tooltip={n.label} onClick={() => setPage(n.id)} className="h-11 rounded-xl font-medium text-sidebar-foreground/80 transition-colors hover:text-sidebar-accent-foreground data-active:bg-sidebar-primary data-active:font-semibold data-active:text-sidebar-primary-foreground data-active:shadow-md data-active:hover:bg-sidebar-primary data-active:hover:text-sidebar-primary-foreground">
                       <n.icon />
                       <span>{n.label}</span>
-                      <span className="ml-auto font-mono text-[10px] text-muted-foreground">Alt+{i + 1}</span>
+                      <span className="ml-auto rounded-md bg-black/15 px-1.5 py-0.5 font-mono text-[10px] opacity-70">Alt+{i + 1}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -106,10 +106,10 @@ export default function App() {
       </Sidebar>
 
       <SidebarInset className="min-h-svh md:h-[calc(100svh-1rem)] md:min-h-0">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card/80 px-4 backdrop-blur md:rounded-t-xl">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mx-1 h-4!" />
-          <span className="text-sm font-medium">{current.label}</span>
+          <span className="flex items-center gap-2 text-sm font-semibold"><current.icon className="size-4 text-primary" />{current.label}</span>
           <div className="ml-auto flex items-center gap-2">
             <Clock />
             <Button variant="ghost" size="icon-sm" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (F1)" onClick={() => setHelpOpen(true)}>
@@ -143,10 +143,10 @@ function TodayCard() {
   const sales = useStore((s) => s.sales[today])
   const total = (sales ?? []).reduce((a, s) => a + s.total, 0)
   return (
-    <div className="rounded-lg border bg-sidebar-accent/50 p-3 group-data-[collapsible=icon]:hidden">
-      <div className="text-xs text-muted-foreground">Today’s sales</div>
-      <div className="font-mono text-lg font-semibold tabular-nums">{fmt(total)}</div>
-      <div className="text-xs text-muted-foreground">{sales?.length ?? 0} customers</div>
+    <div className="rounded-xl border border-sidebar-primary/25 bg-gradient-to-br from-sidebar-accent to-sidebar p-4 group-data-[collapsible=icon]:hidden">
+      <div className="text-[11px] font-semibold tracking-wider text-sidebar-foreground/60 uppercase">Today’s sales</div>
+      <div className="mt-1 font-mono text-xl font-bold text-sidebar-primary tabular-nums">{fmt(total)}</div>
+      <div className="text-xs text-sidebar-foreground/60">{sales?.length ?? 0} customers</div>
     </div>
   )
 }

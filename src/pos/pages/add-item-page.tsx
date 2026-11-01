@@ -106,7 +106,7 @@ export function AddItemPage() {
     <div className="flex flex-col gap-6">
       <PageHeader title="Item Addition" description="Add new items with their rate. They become available in the POS immediately." />
 
-      <Card className="shadow-xs">
+      <Card className="rounded-2xl shadow-panel">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <PackagePlusIcon className="size-4" /> New item
@@ -157,7 +157,7 @@ export function AddItemPage() {
         </CardContent>
       </Card>
 
-      <Card className="gap-0 py-0 shadow-xs">
+      <Card className="gap-0 py-0 rounded-2xl shadow-panel">
         <div className="flex flex-wrap items-center gap-3 border-b p-4">
           <Tabs value={view} onValueChange={(v) => setView(v as "active" | "archived")}>
             <TabsList>

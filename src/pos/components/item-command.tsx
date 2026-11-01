@@ -43,7 +43,7 @@ export function ItemCommand({
       className={cn("rounded-xl! border bg-card", className)}
       filter={(_value, q, keywords) => ((keywords?.[0] ?? "").toLowerCase().includes(q.trim().toLowerCase()) ? 1 : 0)}
     >
-      <CommandInput ref={inputRef} value={search} onValueChange={onSearchChange} placeholder={placeholder} className="h-10" />
+      <CommandInput ref={inputRef} value={search} onValueChange={onSearchChange} placeholder={placeholder} className="h-11" />
       <CommandList className={cn("max-h-none flex-1", listClassName)}>
         <CommandEmpty>
           {items.length ? "No matching items." : "No items yet — add some in Item Addition."}
@@ -58,11 +58,11 @@ export function ItemCommand({
               data-checked={item.id === selectedId}
               className="py-2.5"
             >
-              <div className="flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-accent text-primary">
                 <PackageIcon className="size-3.5" />
               </div>
-              <span className="truncate font-medium">{item.name}</span>
-              <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground">{fmt(item.rate)}</span>
+              <span className="flex-1 truncate font-medium">{item.name}</span>
+              <span className="ml-auto rounded-md bg-gold/15 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-foreground/80">{fmt(item.rate)}</span>
             </CommandItem>
           ))}
         </CommandGroup>

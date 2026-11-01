@@ -151,15 +151,15 @@ export function PosPage({ active = true }: { active?: boolean }) {
           onPick={pick}
           onKeyDown={onSearchKey}
           selectedId={picked?.id}
-          className="min-h-80 shadow-xs"
+          className="min-h-80 rounded-2xl! shadow-panel"
           placeholder="Search items…  (Enter on empty = checkout)"
         />
 
-        <Card className="flex min-h-0 flex-col gap-0 py-0 shadow-xs">
+        <Card className="flex min-h-0 flex-col gap-0 overflow-hidden rounded-2xl py-0 shadow-panel">
           {/* Quantity entry bar */}
-          <div className={cn("flex flex-wrap items-center gap-3 border-b p-4 transition-colors", picked && "bg-primary/[0.03]")}>
+          <div className={cn("flex flex-wrap items-center gap-3 border-b bg-gradient-to-r from-accent/70 to-card p-4 transition-colors", picked && "from-gold/20")}>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Selected item</div>
+              <div className="text-[11px] font-semibold tracking-wider text-primary uppercase">Selected item</div>
               {picked ? (
                 <div className="truncate text-base font-semibold">
                   {picked.name} <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">@ {fmt(picked.rate)}</span>
@@ -185,9 +185,9 @@ export function PosPage({ active = true }: { active?: boolean }) {
                   focusSearch()
                 }
               }}
-              className="h-10 w-28 text-right font-mono text-base"
+              className="h-11 w-28 rounded-xl bg-card text-right font-mono text-base"
             />
-            <Button size="lg" className="h-10" disabled={!picked} onClick={addLine}>
+            <Button size="lg" className="h-11 rounded-xl px-5 shadow-sm" disabled={!picked} onClick={addLine}>
               Add <EnterKbd inverted />
             </Button>
           </div>
@@ -236,11 +236,11 @@ export function PosPage({ active = true }: { active?: boolean }) {
               </Table>
             ) : (
               <div className="flex h-full min-h-60 flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-                <div className="flex size-14 items-center justify-center rounded-full bg-muted">
-                  <ShoppingCartIcon className="size-6" />
+                <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-gold/25 text-primary ring-1 ring-primary/10">
+                  <ShoppingCartIcon className="size-7" />
                 </div>
                 <div>
-                  <div className="font-medium text-foreground">Cart is empty</div>
+                  <div className="text-base font-semibold text-foreground">Cart is empty</div>
                   <div className="text-sm">Items you add will appear here.</div>
                 </div>
               </div>
@@ -248,8 +248,8 @@ export function PosPage({ active = true }: { active?: boolean }) {
           </div>
 
           {/* Totals */}
-          <div className="flex flex-wrap items-center gap-4 border-t bg-muted/40 p-4">
-            <div className="text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-4 border-t bg-sidebar p-4 text-sidebar-foreground md:px-5">
+            <div className="text-sm text-sidebar-foreground/70">
               {cart.length} line{cart.length === 1 ? "" : "s"} · {units} units
               {cart.length > 0 && <span className="hidden sm:inline"> · click a quantity to edit</span>}
             </div>
@@ -257,6 +257,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
               <Button
                 variant="ghost"
                 size="sm"
+                className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 onClick={() => {
                   setCart([])
                   focusSearch()
@@ -266,10 +267,10 @@ export function PosPage({ active = true }: { active?: boolean }) {
               </Button>
             )}
             <div className="ml-auto text-right">
-              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Total</div>
-              <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">{fmt(total)}</div>
+              <div className="text-[11px] font-semibold tracking-wider text-sidebar-foreground/60 uppercase">Total</div>
+              <div className="font-mono text-3xl font-bold tracking-tight text-gold tabular-nums md:text-4xl">{fmt(total)}</div>
             </div>
-            <Button size="lg" className="h-12 px-6 text-base" disabled={!cart.length} onClick={() => setStage("total")}>
+            <Button size="lg" className="h-13 rounded-xl bg-gold px-7 text-base font-bold text-gold-foreground shadow-lg hover:bg-gold/90 disabled:bg-sidebar-accent disabled:text-sidebar-foreground/50 disabled:opacity-100" disabled={!cart.length} onClick={() => setStage("total")}>
               <ReceiptIcon /> Checkout
             </Button>
           </div>
@@ -332,7 +333,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
                 onMouseEnter={() => setPayment(method)}
                 className={cn(
                   "flex flex-col items-center gap-2 rounded-xl border-2 p-5 outline-none transition-all disabled:opacity-60",
-                  payment === method ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:bg-muted/50",
+                  payment === method ? "border-primary bg-primary/10 text-primary shadow-md" : "border-border hover:border-primary/40 hover:bg-accent",
                 )}
               >
                 {busy && payment === method ? <Loader2Icon className="size-7 animate-spin" /> : <Icon className="size-7" />}

@@ -63,7 +63,7 @@ export function RatesPage() {
     <div className="flex flex-col gap-6">
       <PageHeader title="Rate Changing" description="Select an item, change its rate and press Enter. The new rate applies everywhere instantly." />
 
-      <Card className="shadow-xs">
+      <Card className="rounded-2xl shadow-panel">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><TagIcon className="size-4" /> Update rate</CardTitle>
           <CardDescription>Click an item in the table below or open the item picker.</CardDescription>
@@ -104,7 +104,7 @@ export function RatesPage() {
         </CardContent>
       </Card>
 
-      <Card className="gap-0 py-0 shadow-xs">
+      <Card className="gap-0 py-0 rounded-2xl shadow-panel">
         <div className="flex items-center gap-3 border-b p-4">
           <div className="relative max-w-sm flex-1">
             <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
