@@ -2951,3 +2951,34 @@ body { font-size:18px; }
 @media (max-width: 340px) {
   .catalog-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── Mobile: customer ledger + report tables as cards ─────────────────────── */
+.ledger-row > span:nth-child(2) { white-space:nowrap; }
+@media (max-width: 700px) {
+  .ledger-card { padding:14px; }
+  .ledger-summary { flex-direction:column; gap:8px; }
+  .ledger-header { display:none; }
+  .ledger-table { border:0; border-radius:0; overflow:visible; display:grid; gap:8px; }
+  .ledger-table .ledger-row {
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:'date type' 'amount actions';
+    gap:6px 10px; padding:12px 14px; border-radius:12px;
+  }
+  .ledger-table .ledger-row > span:nth-child(1) { grid-area:date; color:#5b7266; font-size:13px; font-weight:700; }
+  .ledger-table .ledger-row > span:nth-child(2) { grid-area:amount; font-size:18px; font-weight:900; color:#173d2b; }
+  .ledger-table .ledger-row > span:nth-child(3) { grid-area:type; justify-self:end; font-weight:900; }
+  .ledger-table .ledger-row-actions { grid-area:actions; align-self:center; }
+  .ledger-edit-btn,.ledger-delete-btn { min-height:40px; padding:0 14px; font-size:13px; }
+  .ledger-card .report-heading .btn-secondary,.account-actions .btn-secondary { width:100%; justify-content:center; }
+  .stock-location-select { width:100%; min-width:0; }
+
+  .report-table-wrap { border:0; border-radius:0; overflow:visible; }
+  .report-table { min-width:0; }
+  .report-table thead { display:none; }
+  .report-table, .report-table tbody { display:block; }
+  .report-table tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:12px; margin-bottom:10px; background:#fff; border:1px solid #d8e9de; border-radius:12px; }
+  .report-table td { display:grid; gap:4px; padding:0; border:0; min-width:0; }
+  .report-table td:first-child { grid-column:1 / -1; }
+  .report-table td::before { content:attr(data-label); font-size:11px; font-weight:800; color:#5b7266; text-transform:uppercase; letter-spacing:.4px; }
+  .report-table .report-cell-input { width:100%; min-width:0; }
+}
