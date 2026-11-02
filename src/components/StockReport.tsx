@@ -127,8 +127,8 @@ export function StockReport() {
       <button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button>
       <select className="stock-transfer-select" value="" onChange={e => e.target.value && startTransfer(e.target.value as Location)} aria-label="Transfer stock">
         <option value="">⇄ Transfer stock…</option>
-        <option value="Jodia Bazaar Godown">Shifted to Jodia Bazaar Godown (from Site Area Godown)</option>
-        <option value="Shop">Shifted to Shop (from Jodia Bazaar Godown)</option>
+        <option value="Jodia Bazaar Godown">Site Area Godown → Jodia Bazaar Godown</option>
+        <option value="Shop">Jodia Bazaar Godown → Shop</option>
       </select>
       <button type="button" className="btn-secondary stock-history-btn" onClick={() => setView('history')}><History size={16} /> Transfer History</button>
     </div>
@@ -189,7 +189,7 @@ function TransferForm({ target, rows, onCancel, onDone }: { target: Location; ro
 
   return <section className="panel report-panel">
     <div className="report-heading">
-      <div><p className="admin-eyebrow">STOCK TRANSFER</p><h2 className="admin-heading">Shifted to {LOCATION_LABEL[target]}</h2>
+      <div><p className="admin-eyebrow">STOCK TRANSFER</p><h2 className="admin-heading">{LOCATION_LABEL[from]} → {LOCATION_LABEL[target]}</h2>
         <p className="panel-sub">{target === 'Shop' ? 'Shop is the final sale point — items moved here cannot be shifted again.' : 'List every item moving from the Site Area Godown, then confirm.'}</p></div>
       <button type="button" className="btn-secondary" onClick={onCancel}><X size={16} /> Cancel</button>
     </div>
