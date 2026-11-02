@@ -1,19 +1,20 @@
 import { format } from "date-fns"
 import { SHOP } from "@/lib/config"
-import { fmt, fmtKg, lineWeight, totalWeight, type Sale } from "@/lib/store"
+import { fmt, fmtKg, totalWeight, type Sale } from "@/lib/store"
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
 
 function receiptHtml(sale: Sale) {
   const date = new Date(sale.createdAt)
-  const units = sale.lines.reduce((s, l) => s + l.qty, 0)
   const logo = new URL(SHOP.logo, window.location.origin).href
+  // Two lines per item: English name + Qty/Rate/Amount on line 1, Urdu name on line 2.
+  // "Rs" lives in the column headings so the figures fit on line 1 of an 80 mm roll.
+  const num = (n: number) => fmt(n).replace(/^\S+\s/, "")
   const rows = sale.lines
     .map(
-      (l, i) => `<tr class="item"><td class="n">${i + 1}</td><td colspan="3" class="name">${esc(l.name)}${
+      (l, i) => `<tr><td class="n">${i + 1}</td><td class="name">${esc(l.name)}${
         l.nameUr ? `<div class="ur" dir="rtl" lang="ur">${esc(l.nameUr)}</div>` : ""
-      }</td></tr>
-      <tr class="calc"><td></td><td>${l.qty} <span class="kg">(${fmtKg(lineWeight(l))})</span></td><td class="r">${fmt(l.rate)}</td><td class="r b">${fmt(l.qty * l.rate)}</td></tr>`,
+      }</td><td class="q">${l.qty}</td><td class="r">${num(l.rate)}</td><td class="r b">${num(l.qty * l.rate)}</td></tr>`,
     )
     .join("")
 
@@ -27,10 +28,8 @@ function receiptHtml(sale: Sale) {
   .wrap { width: 80mm; padding: 4mm 4mm 6mm; margin: 0 auto; }
   .c { text-align: center; } .r { text-align: right; } .b { font-weight: 700; }
   .mono { font-family: ui-monospace, Consolas, "Courier New", monospace; }
-  .logo { width: 22mm; height: 22mm; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto 2mm;
+  .logo { width: 26mm; height: 26mm; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto 2mm;
           filter: grayscale(1) contrast(1.6) brightness(1.05); }
-  .brand { font-size: 22px; font-weight: 900; letter-spacing: 4px; margin: 0; }
-  .full { font-size: 11px; font-weight: 700; margin-top: 1px; }
   .addr { font-size: 10.5px; margin-top: 1px; }
   .title { margin: 3mm 0 2.5mm; padding: 1.4mm 0; background: #000; color: #fff; font-size: 12px; font-weight: 800;
            letter-spacing: 3px; text-align: center; }
@@ -43,14 +42,16 @@ function receiptHtml(sale: Sale) {
   .items th { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; text-align: left;
               border-top: 1.5px solid #000; border-bottom: 1.5px solid #000; padding: 1mm 0; }
   .items th.r { text-align: right; }
-  .items .n { width: 6mm; font-weight: 700; }
-  .items .name { font-weight: 700; padding-top: 1.6mm; }
-  .items .ur { font: 700 13px/2 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif;
-               text-align: left; margin-top: -0.5mm; }
-  .items .kg { font-size: 9.5px; }
-  .items .calc td { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 11px; padding-bottom: 1.2mm;
-                    border-bottom: 1px dotted #000; }
-  .sum td { padding: 0.8mm 0; }
+  .items { table-layout: fixed; }
+  .items col.n { width: 5mm; } .items col.q { width: 9mm; } .items col.rt { width: 15mm; } .items col.am { width: 18mm; }
+  .items tbody td { padding: 1.2mm 0 0.6mm; border-bottom: 1px dotted #000; }
+  .items .n { font-weight: 700; }
+  .items .name { font-weight: 700; padding-right: 1.5mm; word-break: break-word; }
+  .items .ur { font: 700 12px/1.75 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif;
+               text-align: left; margin-top: 0.3mm; }
+  .items .q, .items td.r { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 10.5px; }
+  .items .q { text-align: center; }
+  .items th.q { text-align: center; }
   .grand { margin-top: 2mm; border: 2px solid #000; padding: 2mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
   .grand span:first-child { font-size: 12px; font-weight: 800; letter-spacing: 2px; }
   .grand span:last-child { font: 900 19px ui-monospace, Consolas, "Courier New", monospace; }
@@ -59,12 +60,9 @@ function receiptHtml(sale: Sale) {
   .weight span:last-child { font: 900 15px ui-monospace, Consolas, "Courier New", monospace; }
   .pay { display: inline-block; background: #000; color: #fff; padding: 0.6mm 3mm; border-radius: 2mm; font-weight: 800; letter-spacing: 1px; font-size: 10.5px; }
   .thanks { font-size: 13px; font-weight: 800; margin-top: 1mm; }
-  .small { font-size: 9.5px; margin-top: 1.2mm; }
 </style></head><body><div class="wrap">
   <div class="c">
     <img class="logo" src="${logo}" alt="">
-    <h1 class="brand">${esc(SHOP.name)}</h1>
-    ${SHOP.fullName ? `<div class="full">${esc(SHOP.fullName)}</div>` : ""}
     ${SHOP.address ? `<div class="addr">${esc(SHOP.address)}</div>` : ""}
     ${SHOP.phone ? `<div class="addr">Tel: ${esc(SHOP.phone)}</div>` : ""}
   </div>
@@ -75,22 +73,18 @@ function receiptHtml(sale: Sale) {
     <tr><td>Customer No</td><td>#${sale.customerNo}</td></tr>
     <tr><td>Date</td><td>${format(date, "dd MMM yyyy")}</td></tr>
     <tr><td>Time</td><td>${format(date, "hh:mm a")}</td></tr>
+    <tr><td>Payment</td><td><span class="pay">${sale.payment.toUpperCase()}</span></td></tr>
   </table>
   <table class="items" style="margin-top:2.5mm">
-    <thead><tr><th class="n">#</th><th>Item / Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+    <colgroup><col class="n"><col><col class="q"><col class="rt"><col class="am"></colgroup>
+    <thead><tr><th class="n">#</th><th>Item</th><th class="q">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
     <tbody>${rows}</tbody>
-  </table>
-  <table class="sum" style="margin-top:1.5mm">
-    <tr><td>Items</td><td class="r">${sale.lines.length}</td></tr>
-    <tr><td>Total quantity</td><td class="r">${units}</td></tr>
-    <tr><td>Payment</td><td class="r"><span class="pay">${sale.payment.toUpperCase()}</span></td></tr>
   </table>
   <div class="grand"><span>TOTAL</span><span>${fmt(sale.total)}</span></div>
   <div class="weight"><span>TOTAL WEIGHT</span><span>${fmtKg(totalWeight(sale.lines))}</span></div>
   <hr>
   <div class="c">
     <div class="thanks">${esc(SHOP.receiptFooter)}</div>
-    <div class="small">${esc(SHOP.fullName || SHOP.name)}</div>
   </div>
 </div></body></html>`
 }
