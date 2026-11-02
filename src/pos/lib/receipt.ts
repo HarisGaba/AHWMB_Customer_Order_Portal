@@ -58,6 +58,7 @@ function receiptHtml(sale: Sale) {
   .weight { margin-top: 1.5mm; border: 1.5px dashed #000; padding: 1.6mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
   .weight span:first-child { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; }
   .weight span:last-child { font: 900 15px ui-monospace, Consolas, "Courier New", monospace; }
+  .payrow { display: flex; align-items: center; justify-content: space-between; margin-top: 2mm; font-weight: 700; }
   .pay { display: inline-block; background: #000; color: #fff; padding: 0.6mm 3mm; border-radius: 2mm; font-weight: 800; letter-spacing: 1px; font-size: 10.5px; }
   .thanks { font-size: 13px; font-weight: 800; margin-top: 1mm; }
 </style></head><body><div class="wrap">
@@ -73,13 +74,13 @@ function receiptHtml(sale: Sale) {
     <tr><td>Customer No</td><td>#${sale.customerNo}</td></tr>
     <tr><td>Date</td><td>${format(date, "dd MMM yyyy")}</td></tr>
     <tr><td>Time</td><td>${format(date, "hh:mm a")}</td></tr>
-    <tr><td>Payment</td><td><span class="pay">${sale.payment.toUpperCase()}</span></td></tr>
   </table>
   <table class="items" style="margin-top:2.5mm">
     <colgroup><col class="n"><col><col class="q"><col class="rt"><col class="am"></colgroup>
     <thead><tr><th class="n">#</th><th>Item</th><th class="q">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
+  <div class="payrow"><span>Payment</span><span class="pay">${sale.payment.toUpperCase()}</span></div>
   <div class="grand"><span>TOTAL</span><span>${fmt(sale.total)}</span></div>
   <div class="weight"><span>TOTAL WEIGHT</span><span>${fmtKg(totalWeight(sale.lines))}</span></div>
   <hr>
