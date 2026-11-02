@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   BanknoteIcon,
@@ -7,8 +7,10 @@ import {
   Loader2Icon,
   PrinterIcon,
   ReceiptIcon,
+  ScaleIcon,
   ShoppingCartIcon,
   Trash2Icon,
+  UserRoundIcon,
   WalletIcon,
   XIcon,
 } from "lucide-react"
@@ -22,7 +24,7 @@ import { Input } from "@/components/ui/input"
 import { Kbd } from "@/components/ui/kbd"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { printReceipt } from "@/lib/receipt"
-import { actions, fmt, lineTotal, type Item, type PaymentMethod, type Sale, type SaleLine } from "@/lib/store"
+import { actions, fmt, fmtKg, lineTotal, lineWeight, totalWeight, useStore, type Item, type PaymentMethod, type Sale, type SaleLine } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 type Stage = null | "total" | "pay" | "done"
@@ -35,6 +37,13 @@ const EnterKbd = ({ inverted }: { inverted?: boolean }) => (
 
 export function PosPage({ active = true }: { active?: boolean }) {
   const [cart, setCart] = useState<SaleLine[]>([])
+  const [customer, setCustomer] = useState("")
+  // Suggest customers from earlier bills.
+  const allSales = useStore((s) => s.sales)
+  const knownCustomers = useMemo(
+    () => [...new Set(Object.values(allSales).flat().map((s) => s.customerName?.trim()).filter(Boolean) as string[])].sort(),
+    [allSales],
+  )
   const [search, setSearch] = useState("")
   const [picked, setPicked] = useState<Item | null>(null)
   const [qty, setQty] = useState("")
@@ -48,6 +57,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
 
   const total = lineTotal(cart)
   const units = cart.reduce((s, l) => s + l.qty, 0)
+  const weight = totalWeight(cart)
   const focusSearch = () => setTimeout(() => searchRef.current?.focus(), 0)
 
   useEffect(() => {
@@ -67,7 +77,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
     if (!(q > 0)) return toast.error("Enter a valid quantity")
     setCart((c) => {
       const i = c.findIndex((l) => l.itemId === picked.id)
-      if (i === -1) return [...c, { itemId: picked.id, name: picked.name, rate: picked.rate, qty: q }]
+      if (i === -1) return [...c, { itemId: picked.id, name: picked.name, nameUr: picked.nameUr, rate: picked.rate, qty: q, weight: picked.unitWeight }]
       return c.map((l, k) => (k === i ? { ...l, qty: l.qty + q } : l))
     })
     setPicked(null)
@@ -91,9 +101,10 @@ export function PosPage({ active = true }: { active?: boolean }) {
     saving.current = true
     setBusy(true)
     try {
-      const sale = await actions.recordSale(cart, method)
+      const sale = await actions.recordSale(cart, method, customer)
       setLastSale(sale)
       setCart([])
+      setCustomer("")
       setStage("done")
     } catch (e) {
       toast.error("Sale not saved", { description: e instanceof Error ? e.message : "Check your internet connection and try again." })
@@ -156,6 +167,41 @@ export function PosPage({ active = true }: { active?: boolean }) {
         />
 
         <Card className="flex min-h-0 flex-col gap-0 overflow-hidden rounded-2xl py-0 shadow-panel">
+          {/* Customer */}
+          <div className="flex flex-wrap items-center gap-3 border-b bg-card px-4 py-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
+              <UserRoundIcon className="size-4" />
+            </div>
+            <label htmlFor="pos-customer" className="shrink-0 text-[11px] font-semibold tracking-wider text-primary uppercase">
+              Customer Name
+            </label>
+            <Input
+              id="pos-customer"
+              list="pos-customers"
+              autoComplete="off"
+              placeholder="Type or select customer (optional)"
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  focusSearch()
+                }
+              }}
+              className="h-10 min-w-48 flex-1 rounded-xl text-base"
+            />
+            <datalist id="pos-customers">
+              {knownCustomers.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+            {customer && (
+              <Button variant="ghost" size="icon-sm" aria-label="Clear customer" onClick={() => setCustomer("")}>
+                <XIcon />
+              </Button>
+            )}
+          </div>
+
           {/* Quantity entry bar */}
           <div className={cn("flex flex-wrap items-center gap-3 border-b bg-gradient-to-r from-accent/70 to-card p-4 transition-colors", picked && "from-gold/20")}>
             <div className="min-w-0 flex-1">
@@ -202,6 +248,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
                     <TableHead>Item Name</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
                     <TableHead className="text-right">Rate</TableHead>
+                    <TableHead className="text-right">Weight</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="w-12" />
                   </TableRow>
@@ -210,11 +257,15 @@ export function PosPage({ active = true }: { active?: boolean }) {
                   {cart.map((l, i) => (
                     <TableRow key={l.itemId} className="group/row">
                       <TableCell className="pl-4 text-muted-foreground">{i + 1}</TableCell>
-                      <TableCell className="font-medium">{l.name}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">{l.name}</div>
+                        {l.nameUr && <div dir="rtl" lang="ur" className="font-urdu text-left text-sm text-muted-foreground">{l.nameUr}</div>}
+                      </TableCell>
                       <TableCell className="text-right">
                         <QtyCell value={l.qty} onCommit={(q) => setLineQty(l.itemId, q)} onDone={focusSearch} />
                       </TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground tabular-nums">{fmt(l.rate)}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground tabular-nums">{fmtKg(lineWeight(l))}</TableCell>
                       <TableCell className="text-right font-mono font-medium tabular-nums">{fmt(l.qty * l.rate)}</TableCell>
                       <TableCell>
                         <Button
@@ -270,6 +321,12 @@ export function PosPage({ active = true }: { active?: boolean }) {
               <div className="text-[11px] font-semibold tracking-wider text-sidebar-foreground/60 uppercase">Total</div>
               <div className="font-mono text-3xl font-bold tracking-tight text-gold tabular-nums md:text-4xl">{fmt(total)}</div>
             </div>
+            <div className="text-right">
+              <div className="flex items-center justify-end gap-1 text-[11px] font-semibold tracking-wider text-sidebar-foreground/60 uppercase">
+                <ScaleIcon className="size-3" /> Total Weight
+              </div>
+              <div className="font-mono text-2xl font-bold tracking-tight text-sidebar-foreground tabular-nums">{fmtKg(weight)}</div>
+            </div>
             <Button size="lg" className="h-13 rounded-xl bg-gold px-7 text-base font-bold text-gold-foreground shadow-lg hover:bg-gold/90 disabled:bg-sidebar-accent disabled:text-sidebar-foreground/50 disabled:opacity-100" disabled={!cart.length} onClick={() => setStage("total")}>
               <ReceiptIcon /> Checkout
             </Button>
@@ -292,10 +349,14 @@ export function PosPage({ active = true }: { active?: boolean }) {
           <DialogHeader>
             <DialogTitle>Total Amount</DialogTitle>
             <DialogDescription>
+              {customer.trim() ? `${customer.trim()} · ` : ""}
               {cart.length} items · {units} units
             </DialogDescription>
           </DialogHeader>
-          <div className="py-6 text-center font-mono text-5xl font-semibold tracking-tight tabular-nums">{fmt(total)}</div>
+          <div className="pt-6 text-center font-mono text-5xl font-semibold tracking-tight tabular-nums">{fmt(total)}</div>
+          <div className="flex items-center justify-center gap-2 pb-4 text-muted-foreground">
+            <ScaleIcon className="size-4" /> Total Weight <span className="font-mono font-semibold text-foreground">{fmtKg(weight)}</span>
+          </div>
           <Button
             size="lg"
             className="h-11"
@@ -363,7 +424,9 @@ export function PosPage({ active = true }: { active?: boolean }) {
                 </div>
                 <DialogTitle className="text-lg">Sale complete</DialogTitle>
                 <DialogDescription>
-                  Customer #{lastSale.customerNo} · paid by {lastSale.payment}
+                  {lastSale.customerName ? `${lastSale.customerName} · ` : ""}Customer #{lastSale.customerNo} · paid by {lastSale.payment}
+                  <br />
+                  Total Weight {fmtKg(totalWeight(lastSale.lines))}
                 </DialogDescription>
                 <div className="font-mono text-4xl font-semibold tracking-tight tabular-nums">{fmt(lastSale.total)}</div>
               </div>

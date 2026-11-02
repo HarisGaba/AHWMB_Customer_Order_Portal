@@ -53,7 +53,7 @@ export function ItemCommand({
             <CommandItem
               key={item.id}
               value={`${item.name}__${item.id}`}
-              keywords={[item.name]}
+              keywords={[`${item.name} ${item.nameUr ?? ""}`]}
               onSelect={() => onPick(item)}
               data-checked={item.id === selectedId}
               className="py-2.5"
@@ -61,7 +61,10 @@ export function ItemCommand({
               <div className="flex size-8 items-center justify-center rounded-lg bg-accent text-primary">
                 <PackageIcon className="size-3.5" />
               </div>
-              <span className="flex-1 truncate font-medium">{item.name}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate font-medium">{item.name}</span>
+                {item.nameUr && <span dir="rtl" lang="ur" className="font-urdu block py-0.5 text-left text-[13px] leading-[2.1] text-muted-foreground">{item.nameUr}</span>}
+              </span>
               <span className="ml-auto rounded-md bg-gold/15 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-foreground/80">{fmt(item.rate)}</span>
             </CommandItem>
           ))}

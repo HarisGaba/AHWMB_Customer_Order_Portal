@@ -310,7 +310,7 @@ export function SummaryPage() {
                 >
                   <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold">#{s.customerNo}</div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium">Customer {s.customerNo}</div>
+                    <div className="truncate text-sm font-medium">{s.customerName || `Customer ${s.customerNo}`}</div>
                     <div className="text-xs text-muted-foreground">
                       {format(new Date(s.createdAt), "h:mm a")} · {s.lines.length} item{s.lines.length === 1 ? "" : "s"}
                     </div>

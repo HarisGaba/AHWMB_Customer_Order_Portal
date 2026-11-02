@@ -1,6 +1,6 @@
 import { format } from "date-fns"
 import { SHOP } from "@/lib/config"
-import { fmt, type Sale } from "@/lib/store"
+import { fmt, fmtKg, lineWeight, totalWeight, type Sale } from "@/lib/store"
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
 
@@ -10,12 +10,15 @@ function receiptHtml(sale: Sale) {
   const logo = new URL(SHOP.logo, window.location.origin).href
   const rows = sale.lines
     .map(
-      (l, i) => `<tr class="item"><td class="n">${i + 1}</td><td colspan="3" class="name">${esc(l.name)}</td></tr>
-      <tr class="calc"><td></td><td>${l.qty}</td><td class="r">${fmt(l.rate)}</td><td class="r b">${fmt(l.qty * l.rate)}</td></tr>`,
+      (l, i) => `<tr class="item"><td class="n">${i + 1}</td><td colspan="3" class="name">${esc(l.name)}${
+        l.nameUr ? `<div class="ur" dir="rtl" lang="ur">${esc(l.nameUr)}</div>` : ""
+      }</td></tr>
+      <tr class="calc"><td></td><td>${l.qty} <span class="kg">(${fmtKg(lineWeight(l))})</span></td><td class="r">${fmt(l.rate)}</td><td class="r b">${fmt(l.qty * l.rate)}</td></tr>`,
     )
     .join("")
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Receipt #${sale.customerNo}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=block">
 <style>
   /* 80 mm thermal roll; thermal printers are black-only, so everything is pure black on white. */
   @page { size: 80mm auto; margin: 0; }
@@ -42,12 +45,18 @@ function receiptHtml(sale: Sale) {
   .items th.r { text-align: right; }
   .items .n { width: 6mm; font-weight: 700; }
   .items .name { font-weight: 700; padding-top: 1.6mm; }
+  .items .ur { font: 700 13px/2 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif;
+               text-align: left; margin-top: -0.5mm; }
+  .items .kg { font-size: 9.5px; }
   .items .calc td { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 11px; padding-bottom: 1.2mm;
                     border-bottom: 1px dotted #000; }
   .sum td { padding: 0.8mm 0; }
   .grand { margin-top: 2mm; border: 2px solid #000; padding: 2mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
   .grand span:first-child { font-size: 12px; font-weight: 800; letter-spacing: 2px; }
   .grand span:last-child { font: 900 19px ui-monospace, Consolas, "Courier New", monospace; }
+  .weight { margin-top: 1.5mm; border: 1.5px dashed #000; padding: 1.6mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
+  .weight span:first-child { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; }
+  .weight span:last-child { font: 900 15px ui-monospace, Consolas, "Courier New", monospace; }
   .pay { display: inline-block; background: #000; color: #fff; padding: 0.6mm 3mm; border-radius: 2mm; font-weight: 800; letter-spacing: 1px; font-size: 10.5px; }
   .thanks { font-size: 13px; font-weight: 800; margin-top: 1mm; }
   .small { font-size: 9.5px; margin-top: 1.2mm; }
@@ -62,7 +71,8 @@ function receiptHtml(sale: Sale) {
   <div class="title">SALES RECEIPT</div>
   <table class="meta">
     <tr><td>Receipt No</td><td class="mono">${sale.id.slice(0, 8).toUpperCase()}</td></tr>
-    <tr><td>Customer</td><td>#${sale.customerNo}</td></tr>
+    ${sale.customerName ? `<tr><td>Customer Name</td><td class="b">${esc(sale.customerName)}</td></tr>` : ""}
+    <tr><td>Customer No</td><td>#${sale.customerNo}</td></tr>
     <tr><td>Date</td><td>${format(date, "dd MMM yyyy")}</td></tr>
     <tr><td>Time</td><td>${format(date, "hh:mm a")}</td></tr>
   </table>
@@ -76,6 +86,7 @@ function receiptHtml(sale: Sale) {
     <tr><td>Payment</td><td class="r"><span class="pay">${sale.payment.toUpperCase()}</span></td></tr>
   </table>
   <div class="grand"><span>TOTAL</span><span>${fmt(sale.total)}</span></div>
+  <div class="weight"><span>TOTAL WEIGHT</span><span>${fmtKg(totalWeight(sale.lines))}</span></div>
   <hr>
   <div class="c">
     <div class="thanks">${esc(SHOP.receiptFooter)}</div>
@@ -103,14 +114,19 @@ export function printReceipt(sale: Sale) {
     // Some browsers don't fire afterprint for iframes.
     setTimeout(cleanup, 60_000)
   }
-  // Wait for the logo so it is never missing from the printout (give up after 2 s).
+  // Wait for the logo and the Urdu font so neither is missing from the printout (give up after 3 s).
   const img = doc.querySelector("img")
-  if (!img || img.complete) setTimeout(print, 100)
-  else {
-    let done = false
-    const go = () => { if (!done) { done = true; setTimeout(print, 50) } }
-    img.addEventListener("load", go)
-    img.addEventListener("error", () => { img.remove(); go() })
-    setTimeout(go, 2000)
-  }
+  const logoReady = new Promise<void>((resolve) => {
+    if (!img || img.complete) return resolve()
+    img.addEventListener("load", () => resolve())
+    img.addEventListener("error", () => {
+      img.remove()
+      resolve()
+    })
+  })
+  const fontsReady = sale.lines.some((l) => l.nameUr)
+    ? doc.fonts.load('700 13px "Noto Nastaliq Urdu"', "اردو").then(() => doc.fonts.ready).catch(() => undefined)
+    : Promise.resolve()
+  const timeout = new Promise((resolve) => setTimeout(resolve, 3000))
+  void Promise.race([Promise.all([logoReady, fontsReady]), timeout]).then(() => setTimeout(print, 50))
 }

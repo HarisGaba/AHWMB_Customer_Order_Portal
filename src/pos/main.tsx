@@ -10,6 +10,11 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 /** Entry for /pos. Loaded on its own so portal styles and POS styles never mix. */
 export function mountPos(root: HTMLElement) {
   document.title = "AHWMB · POS"
+  // Urdu item names use Noto Nastaliq Urdu (allowed by the site's CSP via Google Fonts).
+  const font = document.createElement("link")
+  font.rel = "stylesheet"
+  font.href = "https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap"
+  document.head.appendChild(font)
   document.body.style.background = "var(--background)"
   createRoot(root).render(
     <StrictMode>

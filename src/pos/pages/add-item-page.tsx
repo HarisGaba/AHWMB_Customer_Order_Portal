@@ -29,6 +29,8 @@ export function AddItemPage() {
   const items = useStore((s) => s.items)
   const [name, setName] = useState("")
   const [rate, setRate] = useState("")
+  const [nameUr, setNameUr] = useState("")
+  const [unitWeight, setUnitWeight] = useState("1")
   const [filter, setFilter] = useState("")
   const [view, setView] = useState<"active" | "archived">("active")
   const [lastAdded, setLastAdded] = useState<string | null>(null)
@@ -36,12 +38,14 @@ export function AddItemPage() {
   const [saving, setSaving] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
   const rateRef = useRef<HTMLInputElement>(null)
+  const urRef = useRef<HTMLInputElement>(null)
+  const weightRef = useRef<HTMLInputElement>(null)
 
   const active = useMemo(() => items.filter((i) => !i.archivedAt), [items])
   const archived = useMemo(() => items.filter((i) => i.archivedAt), [items])
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    return (view === "active" ? active : archived).filter((i) => i.name.toLowerCase().includes(q))
+    return (view === "active" ? active : archived).filter((i) => i.name.toLowerCase().includes(q) || (i.nameUr ?? "").includes(filter.trim()))
   }, [view, active, archived, filter])
 
   async function save() {
@@ -64,10 +68,15 @@ export function AddItemPage() {
       toast.error("Enter a valid rate")
       return rateRef.current?.focus()
     }
+    const w = parseFloat(unitWeight)
+    if (!(w > 0)) {
+      toast.error("Enter the weight of one unit in kg", { description: "Use 1 if the item is sold by the kg." })
+      return weightRef.current?.focus()
+    }
     setSaving(true)
     let item: Item
     try {
-      item = await actions.addItem(n, r)
+      item = await actions.addItem(n, r, nameUr, w)
     } catch (e) {
       return void toast.error("Item not saved", { description: errMsg(e) })
     } finally {
@@ -77,6 +86,8 @@ export function AddItemPage() {
     setLastAdded(item.id)
     setName("")
     setRate("")
+    setNameUr("")
+    setUnitWeight("1")
     nameRef.current?.focus()
   }
 
@@ -111,10 +122,10 @@ export function AddItemPage() {
           <CardTitle className="flex items-center gap-2">
             <PackagePlusIcon className="size-4" /> New item
           </CardTitle>
-          <CardDescription>Type the name, press Enter, type the rate, press Enter to save.</CardDescription>
+          <CardDescription>Type each field and press Enter to move to the next. Weight per unit is used for the Total Weight on bills (1 = sold by the kg).</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid items-end gap-4 md:grid-cols-[1fr_200px_auto]">
+          <div className="grid items-end gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_150px_150px_auto]">
             <div className="grid gap-2">
               <Label htmlFor="item-name">Item Name</Label>
               <Input
@@ -126,9 +137,24 @@ export function AddItemPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && name.trim()) rateRef.current?.focus()
+                  if (e.key === "Enter" && name.trim()) urRef.current?.focus()
                 }}
                 className="h-10 text-base"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="item-name-ur">Urdu Name</Label>
+              <Input
+                id="item-name-ur"
+                ref={urRef}
+                dir="rtl"
+                lang="ur"
+                autoComplete="off"
+                placeholder="مثلاً چنا دال"
+                value={nameUr}
+                onChange={(e) => setNameUr(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && rateRef.current?.focus()}
+                className="font-urdu h-10 text-base"
               />
             </div>
             <div className="grid gap-2">
@@ -143,6 +169,21 @@ export function AddItemPage() {
                 placeholder="0.00"
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && weightRef.current?.select()}
+                className="h-10 text-right font-mono text-base"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="item-weight">Weight / unit (kg)</Label>
+              <Input
+                id="item-weight"
+                ref={weightRef}
+                type="number"
+                min={0}
+                step="any"
+                inputMode="decimal"
+                value={unitWeight}
+                onChange={(e) => setUnitWeight(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void save()}
                 className="h-10 text-right font-mono text-base"
               />
@@ -178,7 +219,9 @@ export function AddItemPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="pl-4">Item Name</TableHead>
+              <TableHead>Urdu Name</TableHead>
               <TableHead className="text-right">Rate</TableHead>
+              <TableHead className="text-right">Weight / unit</TableHead>
               <TableHead className="hidden md:table-cell">{view === "active" ? "Added" : "Archived"}</TableHead>
               <TableHead className="w-0 pr-4" />
             </TableRow>
@@ -194,7 +237,27 @@ export function AddItemPage() {
                     </Badge>
                   )}
                 </TableCell>
+                <TableCell>
+                  <EditableCell
+                    value={item.nameUr ?? ""}
+                    placeholder="+ Add Urdu"
+                    urdu
+                    onSave={(v) => actions.updateDetails(item.id, { nameUr: v })}
+                  />
+                </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{fmt(item.rate)}</TableCell>
+                <TableCell className="text-right">
+                  <EditableCell
+                    value={String(item.unitWeight)}
+                    suffix=" kg"
+                    numeric
+                    onSave={(v) => {
+                      const w = parseFloat(v)
+                      if (!(w > 0)) throw new Error("Weight must be above 0")
+                      return actions.updateDetails(item.id, { unitWeight: w })
+                    }}
+                  />
+                </TableCell>
                 <TableCell className="hidden text-muted-foreground md:table-cell">
                   {formatDistanceToNow(new Date(item.archivedAt ?? item.createdAt), { addSuffix: true })}
                 </TableCell>
@@ -220,7 +283,7 @@ export function AddItemPage() {
             ))}
             {!visible.length && (
               <TableRow>
-                <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
                   {filter
                     ? "No items match your filter."
                     : view === "active"
@@ -261,5 +324,71 @@ export function AddItemPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+/** Click to edit; Enter or blur saves, Esc cancels. */
+function EditableCell({
+  value,
+  onSave,
+  placeholder = "—",
+  suffix = "",
+  urdu,
+  numeric,
+}: {
+  value: string
+  onSave: (v: string) => Promise<void>
+  placeholder?: string
+  suffix?: string
+  urdu?: boolean
+  numeric?: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+
+  const commit = async () => {
+    setEditing(false)
+    if (draft.trim() === value.trim()) return
+    try {
+      await onSave(draft)
+      toast.success("Saved")
+    } catch (e) {
+      toast.error("Not saved", { description: errMsg(e) })
+    }
+  }
+
+  if (!editing)
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value)
+          setEditing(true)
+        }}
+        dir={urdu ? "rtl" : undefined}
+        lang={urdu ? "ur" : undefined}
+        className={`rounded-md border border-transparent px-2 py-1 transition-colors hover:border-border hover:bg-muted ${urdu ? "font-urdu" : "font-mono tabular-nums"} ${value ? "" : "text-muted-foreground"}`}
+      >
+        {value ? `${value}${suffix}` : placeholder}
+      </button>
+    )
+
+  return (
+    <Input
+      autoFocus
+      dir={urdu ? "rtl" : undefined}
+      lang={urdu ? "ur" : undefined}
+      type={numeric ? "number" : "text"}
+      step="any"
+      value={draft}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") void commit()
+        else if (e.key === "Escape") setEditing(false)
+      }}
+      className={`h-9 ${urdu ? "font-urdu w-44" : "ml-auto w-24 text-right font-mono"}`}
+    />
   )
 }
