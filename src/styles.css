@@ -3025,3 +3025,4 @@ body { font-size:18px; }
   .transfer-confirm-bar .btn-submit { width:100%; }
   .report-table td.stock-row-actions { grid-column:1 / -1; }
 }
+.transfer-source { display:flex; align-items:center; min-height:46px; padding:0 16px; border-radius:12px; background:#fff; border:1px solid #cfe4d8; color:#073d25; font-size:16px; text-transform:none; letter-spacing:0; }

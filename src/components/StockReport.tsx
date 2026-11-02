@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Check, History, Plus, Trash2, Truck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
-// Shop is the final sale point: stock can be shifted into it but never out of it.
-const LOCATIONS = ['Godown', 'Site Area', 'Shop'] as const
+// Stock moves one way only: Site Area Godown (bulk) -> Jodia Bazaar Godown -> Shop (final sale point).
+const LOCATIONS = ['Site Area Godown', 'Jodia Bazaar Godown', 'Shop'] as const
 type Location = (typeof LOCATIONS)[number]
-const SOURCES: Location[] = ['Godown', 'Site Area']
-const LOCATION_LABEL: Record<Location, string> = { Godown: 'Godown', 'Site Area': 'Site Area', Shop: 'Shop (Jodia Bazaar)' }
+// Each destination has exactly one source.
+const SOURCE_FOR: Partial<Record<Location, Location>> = { 'Jodia Bazaar Godown': 'Site Area Godown', Shop: 'Jodia Bazaar Godown' }
+const LOCATION_LABEL: Record<Location, string> = { 'Site Area Godown': 'Site Area Godown', 'Jodia Bazaar Godown': 'Jodia Bazaar Godown', Shop: 'Shop' }
 // Older browser-only data used these names.
-const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Shop', 'Godam Site': 'Godown' }
+const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Jodia Bazaar Godown', 'Godam Site': 'Site Area Godown' }
 
 type StockRow = { id: string; location: Location; item: string; weight: string; quantity: string; saved: boolean }
 type TransferLine = { item: string; weight: number | null; quantity: number; bags: number | null }
@@ -24,12 +25,12 @@ const newDraftLine = (): DraftLine => ({ key: crypto.randomUUID(), item: '', qua
 const errorText = (e: unknown) => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
 export function StockReport() {
-  const [location, setLocation] = useState<Location>('Godown')
+  const [location, setLocation] = useState<Location>('Site Area Godown')
   const [rows, setRows] = useState<StockRow[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ text: string; type: 'ok' | 'error' } | null>(null)
   const [view, setView] = useState<'stock' | 'transfer' | 'history'>('stock')
-  const [target, setTarget] = useState<Location>('Godown')
+  const [target, setTarget] = useState<Location>('Jodia Bazaar Godown')
   const [legacyCount, setLegacyCount] = useState(0)
 
   const notify = (text: string, type: 'ok' | 'error' = 'ok') => setMessage({ text, type })
@@ -59,7 +60,7 @@ export function StockReport() {
       const legacy = JSON.parse(localStorage.getItem('ahwmb-stock-report') || '{}') as Record<string, { item: string; weight: string; quantity: string }[]>
       const payload = Object.entries(legacy).flatMap(([site, list]) => list
         .filter(r => r.item?.trim())
-        .map(r => ({ location: LEGACY_LOCATION[site] || 'Godown', item: r.item.trim(), weight: num(r.weight) > 0 ? num(r.weight) : null, quantity: Math.max(0, num(r.quantity)) })))
+        .map(r => ({ location: LEGACY_LOCATION[site] || 'Site Area Godown', item: r.item.trim(), weight: num(r.weight) > 0 ? num(r.weight) : null, quantity: Math.max(0, num(r.quantity)) })))
       let imported = 0, skipped = 0
       for (const row of payload) {
         const { error } = await supabase.from('stock_items').insert(row)
@@ -126,9 +127,8 @@ export function StockReport() {
       <button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button>
       <select className="stock-transfer-select" value="" onChange={e => e.target.value && startTransfer(e.target.value as Location)} aria-label="Transfer stock">
         <option value="">⇄ Transfer stock…</option>
-        <option value="Godown">Shifted to Godown</option>
-        <option value="Shop">Shifted to Shop</option>
-        <option value="Site Area">Shifted to Site Area</option>
+        <option value="Jodia Bazaar Godown">Shifted to Jodia Bazaar Godown (from Site Area Godown)</option>
+        <option value="Shop">Shifted to Shop (from Jodia Bazaar Godown)</option>
       </select>
       <button type="button" className="btn-secondary stock-history-btn" onClick={() => setView('history')}><History size={16} /> Transfer History</button>
     </div>
@@ -147,8 +147,7 @@ export function StockReport() {
 }
 
 function TransferForm({ target, rows, onCancel, onDone }: { target: Location; rows: StockRow[]; onCancel: () => void; onDone: (text: string) => void }) {
-  const sources = SOURCES.filter(l => l !== target)
-  const [from, setFrom] = useState<Location>(sources[0])
+  const from = SOURCE_FOR[target]!
   const [lines, setLines] = useState<DraftLine[]>([newDraftLine()])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -191,11 +190,11 @@ function TransferForm({ target, rows, onCancel, onDone }: { target: Location; ro
   return <section className="panel report-panel">
     <div className="report-heading">
       <div><p className="admin-eyebrow">STOCK TRANSFER</p><h2 className="admin-heading">Shifted to {LOCATION_LABEL[target]}</h2>
-        <p className="panel-sub">{target === 'Shop' ? 'Shop is the final sale point — items moved here cannot be shifted again.' : 'List every item that is moving, then confirm.'}</p></div>
+        <p className="panel-sub">{target === 'Shop' ? 'Shop is the final sale point — items moved here cannot be shifted again.' : 'List every item moving from the Site Area Godown, then confirm.'}</p></div>
       <button type="button" className="btn-secondary" onClick={onCancel}><X size={16} /> Cancel</button>
     </div>
     <div className="transfer-route">
-      <label>From<select className="stock-location-select" value={from} onChange={e => { setFrom(e.target.value as Location); setLines([newDraftLine()]) }}>{sources.map(l => <option key={l} value={l}>{LOCATION_LABEL[l]}</option>)}</select></label>
+      <label>From<span className="transfer-source">{LOCATION_LABEL[from]}</span></label>
       <ArrowRight size={22} aria-hidden="true" />
       <label>To<span className="transfer-target">{LOCATION_LABEL[target]}</span></label>
     </div>
