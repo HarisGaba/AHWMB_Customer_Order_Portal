@@ -13,6 +13,7 @@ import { useDraftOrder } from './hooks/useDraftOrder'
 import { requestTurnstileToken } from './lib/turnstile'
 import { InstallBanner } from './components/InstallBanner'
 import { PushBanner } from './components/PushBanner'
+import { StockReport } from './components/StockReport'
 
 let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
 
@@ -2479,16 +2480,6 @@ function PurchaseReport() {
   return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Purchase Report</h2><p className="panel-sub">Record supplier purchases, deposits, and payment dates.</p></div><button type="button" className="btn-submit report-add" onClick={() => setRows(current => [...current, { id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }])}><Plus size={17} /> Add Purchase</button></div><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Party Name</th><th>Area</th><th>Item</th><th>Amount / Deposit</th><th>Date</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td data-label="Party Name"><input className="report-cell-input" value={row.party} onChange={e => update(row.id, 'party', e.target.value)} placeholder="Supplier" /></td><td data-label="Area"><input className="report-cell-input" value={row.area} onChange={e => update(row.id, 'area', e.target.value)} placeholder="Area" /></td><td data-label="Item"><input className="report-cell-input" value={row.item} onChange={e => update(row.id, 'item', e.target.value)} placeholder="Item" /></td><td data-label="Amount / Deposit"><input className="report-cell-input" type="number" value={row.amount} onChange={e => update(row.id, 'amount', e.target.value)} placeholder="Rs." /></td><td data-label="Date"><input className="report-cell-input" type="date" value={row.date} onChange={e => update(row.id, 'date', e.target.value)} /></td></tr>)}</tbody></table></div></section>
 }
 
-function StockReport() {
-  type StockRow = { id: string; item: string; weight: string; quantity: string; bags: string }
-  const [site, setSite] = useState<'Jodia Bazaar' | 'Godam Site'>('Jodia Bazaar')
-  const [allStock, setAllStock] = useState<Record<string, StockRow[]>>(() => { try { return JSON.parse(localStorage.getItem('ahwmb-stock-report') || '{}') } catch { return {} } })
-  const rows = allStock[site] || [{ id: crypto.randomUUID(), item: '', weight: '', quantity: '', bags: '' }]
-  useEffect(() => { try { localStorage.setItem('ahwmb-stock-report', JSON.stringify(allStock)) } catch { /* storage unavailable */ } }, [allStock])
-  const update = (id: string, key: 'item' | 'weight' | 'quantity' | 'bags', value: string) => setAllStock(current => ({ ...current, [site]: rows.map(row => row.id === id ? { ...row, [key]: value, ...(key === 'quantity' ? { bags: row.weight && Number(row.weight) > 0 ? String(Math.ceil(Number(value || 0) / Number(row.weight))) : value } : {}) } : row) }))
-  const addRow = () => setAllStock(current => ({ ...current, [site]: [...rows, { id: crypto.randomUUID(), item: '', weight: '', quantity: '', bags: '' }] }))
-  return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Stock Report</h2><p className="panel-sub">Manage stock independently by storage location.</p></div><select className="stock-location-select" value={site} onChange={e => setSite(e.target.value as 'Jodia Bazaar' | 'Godam Site')}><option>Jodia Bazaar</option><option>Godam Site</option></select></div><div className="site-tabs"><span className="stock-location-label">Saving in: <strong>{site}</strong></span><button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button></div><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Item</th><th>Weight</th><th>Quantity</th><th>Bags</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td data-label="Item"><input className="report-cell-input" value={row.item} onChange={e => update(row.id, 'item', e.target.value)} placeholder="e.g. Chana Dal" /></td><td data-label="Weight"><input className="report-cell-input" type="number" min="1" value={row.weight} onChange={e => update(row.id, 'weight', e.target.value)} placeholder="50 kg" /></td><td data-label="Quantity"><input className="report-cell-input" type="number" min="0" value={row.quantity} onChange={e => update(row.id, 'quantity', e.target.value)} placeholder="500 kg" /></td><td data-label="Bags"><input className="report-cell-input stock-bags" type="number" value={row.bags} readOnly aria-label="Auto calculated bags" /></td></tr>)}</tbody></table></div></section>
-}
 
 function AdminProducts({ onChanged }: { onChanged: () => void }) {
   const [name, setName] = useState('')

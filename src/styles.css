@@ -2983,3 +2983,45 @@ body { font-size:18px; }
   .report-table td::before { content:attr(data-label); font-size:11px; font-weight:800; color:#5b7266; text-transform:uppercase; letter-spacing:.4px; }
   .report-table .report-cell-input { width:100%; min-width:0; }
 }
+
+/* ─── Stock Report: transfers + history ────────────────────────────────────── */
+.stock-toolbar { align-items:stretch; }
+.stock-transfer-select { min-height:46px; padding:0 14px; border:2px solid var(--c-gold-400,#e4aa2a); border-radius:12px; background:#fffaf0; color:#073d25; font:inherit; font-weight:800; cursor:pointer; }
+.stock-history-btn { margin-left:auto; }
+.stock-message { padding:12px 14px; border-radius:11px; margin:0 0 14px; font-weight:700; }
+.stock-message--ok { background:#ecfdf3; color:#166534; border:1px solid #bbf7d0; }
+.stock-message--error { background:#fff1f2; color:#b42318; border:1px solid #fecdd3; }
+.stock-legacy { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; margin-bottom:14px; border-radius:12px; background:#fffbeb; border:1px solid #fde68a; color:#854d0e; font-weight:700; }
+.stock-empty { padding:22px; text-align:center; color:#5b7266; }
+.stock-row-actions { white-space:nowrap; text-align:right; }
+.stock-unsaved { font-size:11px; color:#a16207; margin-right:8px; }
+.transfer-route { display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; padding:16px; margin-bottom:16px; border-radius:14px; background:linear-gradient(135deg,#f0faf5,#fffaf0); border:1px solid #d8e9de; color:#073d25; }
+.transfer-route label { display:grid; gap:6px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:#286044; }
+.transfer-route svg { margin-bottom:12px; color:#0d6b40; }
+.transfer-target { display:flex; align-items:center; min-height:46px; padding:0 16px; border-radius:12px; background:#073d25; color:#e4aa2a; font-size:16px; text-transform:none; letter-spacing:0; }
+.transfer-available { color:#286044; font-weight:700; white-space:nowrap; }
+.transfer-problem { display:block; margin-top:4px; color:#b42318; font-size:12px; font-weight:700; }
+.transfer-add { margin-top:12px; }
+.transfer-confirm-bar { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-top:20px; padding:16px 18px; border-radius:14px; background:#073d25; color:#fff; }
+.transfer-confirm-bar div { display:grid; gap:2px; }
+.transfer-confirm-bar span { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#b8f0d4; font-weight:800; }
+.transfer-confirm-bar strong { font-size:24px; color:#e4aa2a; }
+.transfer-confirm-bar small { color:#b8f0d4; }
+.transfer-confirm-bar .btn-submit { width:auto; min-width:220px; }
+.transfer-confirm-bar .btn-submit:disabled { opacity:.5; cursor:not-allowed; }
+.transfer-history { display:grid; gap:12px; }
+.transfer-card { border:1px solid #d8e9de; border-radius:14px; background:#fff; overflow:hidden; }
+.transfer-card header { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:12px 14px; background:#f0faf5; color:#073d25; }
+.transfer-card header strong { display:flex; align-items:center; gap:6px; }
+.transfer-card header span { color:#5b7266; font-size:13px; }
+.transfer-card ul { list-style:none; margin:0; padding:6px 14px; }
+.transfer-card li { display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px dotted #d8e9de; }
+.transfer-card li:last-child { border-bottom:0; }
+.transfer-card footer { display:flex; align-items:center; gap:6px; padding:10px 14px; border-top:1px solid #e5f0e8; font-weight:800; color:#0d6b40; }
+@media (max-width: 700px) {
+  .stock-transfer-select, .stock-history-btn { width:100%; margin-left:0; }
+  .transfer-route { flex-direction:column; align-items:stretch; }
+  .transfer-route svg { transform:rotate(90deg); margin:0 auto; }
+  .transfer-confirm-bar .btn-submit { width:100%; }
+  .report-table td.stock-row-actions { grid-column:1 / -1; }
+}
