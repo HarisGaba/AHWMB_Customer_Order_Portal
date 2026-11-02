@@ -147,3 +147,6 @@
   font-family: "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif;
   line-height: 2;
 }
+
+/* Installed iPhone app: keep the POS clear of the status bar / notch. */
+body { padding-top: env(safe-area-inset-top); }

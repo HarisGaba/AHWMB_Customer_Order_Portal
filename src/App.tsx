@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import type { jsPDF as JsPdf } from 'jspdf'
 import {
   AlertCircle, Check, ChevronDown, FileDown, Info, Languages, LogIn, LogOut,
   MapPin, MessageCircle, Navigation, PackageCheck, Phone, Plus,
@@ -824,6 +823,14 @@ function printInvoiceHtml(html: string) {
 }
 
 // ── Pure-jsPDF invoice — no autoTable plugin ─────────────────────────────
+// jsPDF is large, so it is only downloaded when a PDF is first needed.
+let pdfLibs: Promise<{ jsPDF: typeof JsPdf; autoTable: typeof import('jspdf-autotable').default }> | null = null
+const loadPdfLibs = () => (pdfLibs ??= Promise.all([import('jspdf'), import('jspdf-autotable')])
+  .then(([pdf, table]) => ({ jsPDF: pdf.jsPDF, autoTable: table.default }))
+  .catch(error => { pdfLibs = null; throw error }))
+/** Start the download early (on screens that make PDFs) so Print/Share respond instantly. */
+const preloadPdfLibs = () => { void loadPdfLibs().catch(() => undefined) }
+
 async function drawInvoice(
   order: InvoicePayload['order'],
   items: OrderItem[],
@@ -831,6 +838,7 @@ async function drawInvoice(
   financials: InvoicePayload['financials'],
   filename: string,
 ): Promise<Blob> {
+  const { jsPDF } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5', compress: true })
   await document.fonts.ready
   // Browser shaping preserves Urdu joins and Unicode glyphs unsupported by Times.
@@ -1879,7 +1887,8 @@ const reportDayLabel = (date: string) => new Intl.DateTimeFormat('en-GB', { week
 
 const reportAmount = (value: string | number) => Math.round(Number(value) || 0).toLocaleString('en-PK')
 
-function buildExpenseLedgerPdf(date: string, rows: ExpenseRow[]) {
+async function buildExpenseLedgerPdf(date: string, rows: ExpenseRow[]) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
   const validRows = rows.filter(r => r.expense_title.trim() || Number(r.amount))
   const total = validRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
@@ -2179,20 +2188,20 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
     }
   }
 
-  const createPdf = () => {
+  const createPdf = async () => {
     const filename = `ahwmb-expense-ledger-${date}.pdf`
-    const blob = buildExpenseLedgerPdf(date, rows)
+    const blob = await buildExpenseLedgerPdf(date, rows)
     setLastPdf({ blob, name: filename })
     return { blob, filename }
   }
 
-  const print = () => {
-    const { blob, filename } = createPdf()
+  const print = async () => {
+    const { blob, filename } = await createPdf()
     downloadAndPrintPdf(blob, filename)
   }
 
   const share = async () => {
-    const { blob, filename } = createPdf()
+    const { blob, filename } = await createPdf()
     const file = new File([blob], filename, { type: 'application/pdf' })
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
       try { await navigator.share({ title: 'AHWMB Expense Ledger', files: [file] }) }
@@ -2300,7 +2309,7 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
             {saving ? <RefreshCw size={16} className="spin" /> : <Check size={16} />}
             {isRtl ? 'محفوظ کریں' : saving ? 'Saving…' : 'Save'}
           </button>
-          <button type="button" className="btn-print" onClick={print}><FileDown size={18} /> {isRtl ? 'پرنٹ' : 'Print'}</button>
+          <button type="button" className="btn-print" onClick={() => void print()}><FileDown size={18} /> {isRtl ? 'پرنٹ' : 'Print'}</button>
           <button type="button" className="btn-share-pdf" onClick={() => void share()}><Send size={18} /> {isRtl ? 'PDF شیئر کریں' : 'Share PDF'}</button>
         </div>
       </div>
@@ -2528,6 +2537,34 @@ function AdminPage({
   const { toasts, add: addToast, dismiss } = useToasts()
 
   const [authorized, setAuthorized] = useState<boolean | null>(null)
+  const [backupBusy, setBackupBusy] = useState(false)
+  // Full copy of portal + POS data as a JSON file (the server also emails one nightly).
+  const downloadBackup = async () => {
+    if (!supabase || backupBusy) return
+    setBackupBusy(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('daily-backup', { body: {} })
+      if (error || !data?.tables) throw error || new Error(data?.error || 'Backup failed')
+      const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' })
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }))
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `ahwmb-backup-${date}.json`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      const total = Object.values(data.counts as Record<string, number>).reduce((a, b) => a + b, 0)
+      addToast(isRtl ? `بیک اپ ڈاؤن لوڈ ہو گیا (${total} ریکارڈز)` : `Backup downloaded (${total} records)`, 'success')
+    } catch (err) {
+      addToast(`${isRtl ? 'بیک اپ ناکام' : 'Backup failed'}: ${readableError(err)}`, 'error')
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  // Invoices and reports need jsPDF; fetch it in the background once the admin panel opens.
+  useEffect(() => { if (isAuthenticated) preloadPdfLibs() }, [isAuthenticated])
   const [orders, setOrders] = useState<OrderRecord[]>([])
   const [selected, setSelected] = useState<OrderRecord | null>(null)
   const [pricedItems, setPricedItems] = useState<OrderItem[]>([])
@@ -2830,7 +2867,7 @@ function AdminPage({
 
   if (!authorized) return null
 
-  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><PushBanner language={language} adminEmail={adminEmail} onToast={addToast} /><ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>{isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('orders')}>{isRtl ? 'آرڈرز دیکھیں' : 'View Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('reports')}>{isRtl ? 'روزانہ رپورٹ' : 'Daily Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('customer-report')}>{isRtl ? 'گاہک کی رپورٹ' : 'Customer Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('stock-report')}>{isRtl ? 'اسٹاک رپورٹ' : 'Stock Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('purchase-report')}>{isRtl ? 'خریداری رپورٹ' : 'Purchase Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('products')}>{isRtl ? 'مصنوعات شامل کریں' : 'Add Products'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('add-customer')}>{isRtl ? 'گاہک شامل کریں' : 'Add Customer'}</button></section></div></main>
+  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><PushBanner language={language} adminEmail={adminEmail} onToast={addToast} /><ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>{isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('orders')}>{isRtl ? 'آرڈرز دیکھیں' : 'View Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('reports')}>{isRtl ? 'روزانہ رپورٹ' : 'Daily Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('customer-report')}>{isRtl ? 'گاہک کی رپورٹ' : 'Customer Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('stock-report')}>{isRtl ? 'اسٹاک رپورٹ' : 'Stock Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('purchase-report')}>{isRtl ? 'خریداری رپورٹ' : 'Purchase Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('products')}>{isRtl ? 'مصنوعات شامل کریں' : 'Add Products'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('add-customer')}>{isRtl ? 'گاہک شامل کریں' : 'Add Customer'}</button><button type="button" className="admin-home-btn admin-home-btn--backup" disabled={backupBusy} onClick={() => void downloadBackup()}>{backupBusy ? (isRtl ? 'بیک اپ تیار ہو رہا ہے…' : 'Preparing backup…') : (isRtl ? 'بیک اپ ڈاؤن لوڈ کریں' : 'Download Backup')}</button><p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p></section></div></main>
 
   return (
     <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
