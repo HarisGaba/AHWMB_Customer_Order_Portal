@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { addDays, format, parseISO, subDays } from "date-fns"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import {
   BanknoteIcon,
   CalendarDaysIcon,
@@ -10,6 +9,7 @@ import {
   DownloadIcon,
   PrinterIcon,
   ReceiptIcon,
+  Trash2Icon,
   TrendingDownIcon,
   TrendingUpIcon,
   UsersIcon,
@@ -19,7 +19,6 @@ import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,20 +28,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToday } from "@/hooks/use-today"
 import { exportSalesCsv } from "@/lib/export"
 import { printReceipt } from "@/lib/receipt"
-import { CURRENCY, dayKey, fmt, RETENTION_DAYS, useStore, type Sale } from "@/lib/store"
+import { actions, CURRENCY, dayKey, fmt, RETENTION_DAYS, useStore, type Sale } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 const CHART_DAYS = 14
 const sumBy = (sales: Sale[], p?: Sale["payment"]) => sales.filter((s) => !p || s.payment === p).reduce((a, s) => a + s.total, 0)
-const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
 
-const chartConfig = { revenue: { label: "Revenue", color: "var(--chart-1)" } } satisfies ChartConfig
 
 export function SummaryPage() {
   const today = useToday()
@@ -53,22 +60,30 @@ export function SummaryPage() {
 
   const sales = salesByDay[day] ?? []
   const selected = sales.find((s) => s.id === selectedId) ?? sales[sales.length - 1] ?? null
+  const [toDelete, setToDelete] = useState<Sale | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  async function confirmDelete() {
+    const sale = toDelete
+    if (!sale || deleting) return
+    setDeleting(true)
+    try {
+      await actions.deleteSale(sale.id)
+      toast.success(`Deleted sale of ${fmt(sale.total)}`, { description: sale.customerName || `Customer ${sale.customerNo}` })
+      setSelectedId(null)
+      setToDelete(null)
+    } catch (e) {
+      toast.error("Sale not deleted", { description: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setDeleting(false)
+    }
+  }
   const oldest = dayKey(subDays(parseISO(today), RETENTION_DAYS))
 
   // Window of CHART_DAYS days ending on the selected day.
   const windowDays = useMemo(
     () => Array.from({ length: CHART_DAYS }, (_, i) => dayKey(subDays(parseISO(day), CHART_DAYS - 1 - i))),
     [day],
-  )
-  const trend = useMemo(
-    () =>
-      windowDays.map((d) => ({
-        day: d,
-        label: format(parseISO(d), "d MMM"),
-        revenue: sumBy(salesByDay[d] ?? []),
-        customers: salesByDay[d]?.length ?? 0,
-      })),
-    [windowDays, salesByDay],
   )
   const prevDayTotal = sumBy(salesByDay[dayKey(subDays(parseISO(day), 1))] ?? [])
   const dayTotal = sumBy(sales)
@@ -195,65 +210,7 @@ export function SummaryPage() {
       </div>
 
       {/* Analytics */}
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <Card className="rounded-2xl shadow-panel">
-          <CardHeader>
-            <CardTitle>Daily revenue</CardTitle>
-            <CardDescription>
-              {CHART_DAYS} days to {format(parseISO(day), "d MMM")} · {fmt(trend.reduce((a, t) => a + t.revenue, 0))} total · click a day to open it
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="aspect-auto h-64 w-full">
-              <AreaChart
-                data={trend}
-                margin={{ left: 4, right: 12, top: 8 }}
-                onClick={(e) => {
-                  const i = Number(e?.activeTooltipIndex)
-                  if (Number.isInteger(i) && trend[i]) goTo(trend[i].day)
-                }}
-              >
-                <defs>
-                  <linearGradient id="fillRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--color-revenue)" stopOpacity={0.25} />
-                    <stop offset="100%" stopColor="var(--color-revenue)" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
-                <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(v: number) => compact.format(v)} />
-                <ChartTooltip
-                  cursor={{ strokeDasharray: "4 4" }}
-                  content={
-                    <ChartTooltipContent
-                      indicator="line"
-                      labelFormatter={(_, p) => {
-                        const row = p?.[0]?.payload as (typeof trend)[number] | undefined
-                        return row ? `${format(parseISO(row.day), "EEE, d MMM")} · ${row.customers} customers` : ""
-                      }}
-                      formatter={(v) => (
-                        <div className="flex w-full justify-between gap-4">
-                          <span className="text-muted-foreground">Revenue</span>
-                          <span className="font-mono font-medium tabular-nums">{fmt(Number(v))}</span>
-                        </div>
-                      )}
-                    />
-                  }
-                />
-                <Area
-                  dataKey="revenue"
-                  type="monotone"
-                  stroke="var(--color-revenue)"
-                  strokeWidth={2}
-                  fill="url(#fillRevenue)"
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 2, stroke: "var(--card)" }}
-                />
-              </AreaChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-
+      <div className="grid gap-6">
         <Card className="rounded-2xl shadow-panel">
           <CardHeader>
             <CardTitle>Top items by revenue</CardTitle>
@@ -331,14 +288,17 @@ export function SummaryPage() {
         {/* Receipt detail */}
         <Card className="gap-0 py-0 rounded-2xl shadow-panel">
           <CardHeader className="border-b py-4">
-            <CardTitle>{selected ? `Customer ${selected.customerNo}` : "Transaction details"}</CardTitle>
+            <CardTitle>{selected ? selected.customerName || `Customer ${selected.customerNo}` : "Transaction details"}</CardTitle>
             <CardDescription>
               {selected ? `${format(new Date(selected.createdAt), "d MMM yyyy, h:mm a")} · paid by ${selected.payment}` : "Select a customer to view their items."}
             </CardDescription>
             {selected && (
-              <CardAction>
+              <CardAction className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => printReceipt(selected)}>
                   <PrinterIcon /> Print receipt
+                </Button>
+                <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setToDelete(selected)}>
+                  <Trash2Icon /> Delete sale
                 </Button>
               </CardAction>
             )}
@@ -431,6 +391,23 @@ export function SummaryPage() {
           </TableBody>
         </Table>
       </Card>
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && !deleting && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this sale?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {toDelete && `${toDelete.customerName || `Customer ${toDelete.customerNo}`} · ${fmt(toDelete.total)} · ${format(new Date(toDelete.createdAt), "d MMM yyyy, h:mm a")}. `}
+              Use this when goods are returned and the money is given back. The sale is removed from all totals and can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={deleting} onClick={(e) => { e.preventDefault(); void confirmDelete() }}>
+              {deleting ? "Deleting…" : "Delete sale"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

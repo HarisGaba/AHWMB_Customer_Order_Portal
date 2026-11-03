@@ -274,6 +274,14 @@ export const actions = {
     return sale
   },
 
+  /** Remove a sale (e.g. goods returned and refunded). */
+  async deleteSale(id: string) {
+    const { error, count } = await supabase.from("sales").delete({ count: "exact" }).eq("id", id)
+    if (error) throw error
+    if (!count) throw new Error("Sale was not found or you are not allowed to delete it.")
+    removeSale(id)
+  },
+
   /** Drop days that fall outside the rolling retention window. */
   purgeOld() {
     dropOldDays()

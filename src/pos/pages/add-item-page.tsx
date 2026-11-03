@@ -30,7 +30,6 @@ export function AddItemPage() {
   const [name, setName] = useState("")
   const [rate, setRate] = useState("")
   const [nameUr, setNameUr] = useState("")
-  const [unitWeight, setUnitWeight] = useState("1")
   const [filter, setFilter] = useState("")
   const [view, setView] = useState<"active" | "archived">("active")
   const [lastAdded, setLastAdded] = useState<string | null>(null)
@@ -39,7 +38,6 @@ export function AddItemPage() {
   const nameRef = useRef<HTMLInputElement>(null)
   const rateRef = useRef<HTMLInputElement>(null)
   const urRef = useRef<HTMLInputElement>(null)
-  const weightRef = useRef<HTMLInputElement>(null)
 
   const active = useMemo(() => items.filter((i) => !i.archivedAt), [items])
   const archived = useMemo(() => items.filter((i) => i.archivedAt), [items])
@@ -68,15 +66,10 @@ export function AddItemPage() {
       toast.error("Enter a valid rate")
       return rateRef.current?.focus()
     }
-    const w = parseFloat(unitWeight)
-    if (!(w > 0)) {
-      toast.error("Enter the weight of one unit in kg", { description: "Use 1 if the item is sold by the kg." })
-      return weightRef.current?.focus()
-    }
     setSaving(true)
     let item: Item
     try {
-      item = await actions.addItem(n, r, nameUr, w)
+      item = await actions.addItem(n, r, nameUr)
     } catch (e) {
       return void toast.error("Item not saved", { description: errMsg(e) })
     } finally {
@@ -87,7 +80,6 @@ export function AddItemPage() {
     setName("")
     setRate("")
     setNameUr("")
-    setUnitWeight("1")
     nameRef.current?.focus()
   }
 
@@ -122,10 +114,10 @@ export function AddItemPage() {
           <CardTitle className="flex items-center gap-2">
             <PackagePlusIcon className="size-4" /> New item
           </CardTitle>
-          <CardDescription>Type each field and press Enter to move to the next. Weight per unit is used for the Total Weight on bills (1 = sold by the kg).</CardDescription>
+          <CardDescription>Type the English name, Urdu name and rate — press Enter to move to the next field and save.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid items-end gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_150px_150px_auto]">
+          <div className="grid items-end gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_180px_auto]">
             <div className="grid gap-2">
               <Label htmlFor="item-name">Item Name</Label>
               <Input
@@ -169,21 +161,6 @@ export function AddItemPage() {
                 placeholder="0.00"
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && weightRef.current?.select()}
-                className="h-10 text-right font-mono text-base"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="item-weight">Weight / unit (kg)</Label>
-              <Input
-                id="item-weight"
-                ref={weightRef}
-                type="number"
-                min={0}
-                step="any"
-                inputMode="decimal"
-                value={unitWeight}
-                onChange={(e) => setUnitWeight(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void save()}
                 className="h-10 text-right font-mono text-base"
               />
@@ -221,7 +198,6 @@ export function AddItemPage() {
               <TableHead className="pl-4">Item Name</TableHead>
               <TableHead>Urdu Name</TableHead>
               <TableHead className="text-right">Rate</TableHead>
-              <TableHead className="text-right">Weight / unit</TableHead>
               <TableHead className="hidden md:table-cell">{view === "active" ? "Added" : "Archived"}</TableHead>
               <TableHead className="w-0 pr-4" />
             </TableRow>
@@ -246,18 +222,7 @@ export function AddItemPage() {
                   />
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{fmt(item.rate)}</TableCell>
-                <TableCell className="text-right">
-                  <EditableCell
-                    value={String(item.unitWeight)}
-                    suffix=" kg"
-                    numeric
-                    onSave={(v) => {
-                      const w = parseFloat(v)
-                      if (!(w > 0)) throw new Error("Weight must be above 0")
-                      return actions.updateDetails(item.id, { unitWeight: w })
-                    }}
-                  />
-                </TableCell>
+
                 <TableCell className="hidden text-muted-foreground md:table-cell">
                   {formatDistanceToNow(new Date(item.archivedAt ?? item.createdAt), { addSuffix: true })}
                 </TableCell>
@@ -283,7 +248,7 @@ export function AddItemPage() {
             ))}
             {!visible.length && (
               <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
                   {filter
                     ? "No items match your filter."
                     : view === "active"
