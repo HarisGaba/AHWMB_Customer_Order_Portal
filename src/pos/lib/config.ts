@@ -7,4 +7,6 @@ export const SHOP = {
   phone: "+92 321 9229419",
   logo: "/logo.png",
   receiptFooter: "Thank you for shopping with us!",
+  /** Printed in Urdu under the thank-you line: "Goods purchased will not be returned without the bill." */
+  receiptPolicyUr: "خریدا ہوا مال بغیر بل کے واپس نہیں ہوگا",
 }

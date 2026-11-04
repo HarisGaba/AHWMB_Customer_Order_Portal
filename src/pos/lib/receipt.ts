@@ -1,6 +1,6 @@
 import { format } from "date-fns"
 import { SHOP } from "@/lib/config"
-import { fmt, fmtKg, totalWeight, type Sale } from "@/lib/store"
+import { fmt, fmtKg, receiptNo, totalWeight, type Sale } from "@/lib/store"
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
 
@@ -24,14 +24,14 @@ function receiptHtml(sale: Sale) {
   /* 80 mm thermal roll; thermal printers are black-only, so everything is pure black on white. */
   @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { margin: 0; color: #000; background: #fff; font: 11.5px/1.4 Arial, "Helvetica Neue", sans-serif; }
+  body { margin: 0; color: #000; background: #fff; font: 600 13px/1.45 Arial, "Helvetica Neue", sans-serif; }
   .wrap { width: 80mm; padding: 4mm 4mm 6mm; margin: 0 auto; }
   .c { text-align: center; } .r { text-align: right; } .b { font-weight: 700; }
   .mono { font-family: ui-monospace, Consolas, "Courier New", monospace; }
   .logo { width: 26mm; height: 26mm; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto 2mm;
           filter: grayscale(1) contrast(1.6) brightness(1.05); }
-  .addr { font-size: 10.5px; margin-top: 1px; }
-  .title { margin: 3mm 0 2.5mm; padding: 1.4mm 0; background: #000; color: #fff; font-size: 12px; font-weight: 800;
+  .addr { font-size: 12.5px; font-weight: 700; margin-top: 1px; }
+  .title { margin: 3mm 0 2.5mm; padding: 1.4mm 0; background: #000; color: #fff; font-size: 14px; font-weight: 800;
            letter-spacing: 3px; text-align: center; }
   table { width: 100%; border-collapse: collapse; }
   td, th { padding: 0.6mm 0; vertical-align: top; }
@@ -39,28 +39,29 @@ function receiptHtml(sale: Sale) {
   .meta td:last-child { text-align: right; }
   hr { border: 0; border-top: 1px dashed #000; margin: 2.5mm 0; }
   hr.solid { border-top: 1.5px solid #000; }
-  .items th { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; text-align: left;
+  .items th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; text-align: left;
               border-top: 1.5px solid #000; border-bottom: 1.5px solid #000; padding: 1mm 0; }
   .items th.r { text-align: right; }
   .items { table-layout: fixed; }
-  .items col.n { width: 5mm; } .items col.q { width: 9mm; } .items col.rt { width: 15mm; } .items col.am { width: 18mm; }
+  .items col.n { width: 5mm; } .items col.q { width: 8mm; } .items col.rt { width: 16mm; } .items col.am { width: 19mm; }
   .items tbody td { padding: 1.2mm 0 0.6mm; border-bottom: 1px dotted #000; }
   .items .n { font-weight: 700; }
-  .items .name { font-weight: 700; padding-right: 1.5mm; word-break: break-word; }
-  .items .ur { font: 700 12px/1.75 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif;
+  .items .name { font-size: 13.5px; font-weight: 800; padding-right: 1.5mm; word-break: break-word; }
+  .items .ur { font: 700 14px/1.8 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif;
                text-align: left; margin-top: 0.3mm; }
-  .items .q, .items td.r { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 10.5px; }
+  .items .q, .items td.r { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 11.5px; font-weight: 700; }
   .items .q { text-align: center; }
   .items th.q { text-align: center; }
   .grand { margin-top: 2mm; border: 2px solid #000; padding: 2mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
-  .grand span:first-child { font-size: 12px; font-weight: 800; letter-spacing: 2px; }
-  .grand span:last-child { font: 900 19px ui-monospace, Consolas, "Courier New", monospace; }
+  .grand span:first-child { font-size: 14px; font-weight: 800; letter-spacing: 2px; }
+  .grand span:last-child { font: 900 21px ui-monospace, Consolas, "Courier New", monospace; }
   .weight { margin-top: 1.5mm; border: 1.5px dashed #000; padding: 1.6mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
-  .weight span:first-child { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; }
-  .weight span:last-child { font: 900 15px ui-monospace, Consolas, "Courier New", monospace; }
+  .weight span:first-child { font-size: 13px; font-weight: 800; letter-spacing: 1.5px; }
+  .weight span:last-child { font: 900 17px ui-monospace, Consolas, "Courier New", monospace; }
   .payrow { display: flex; align-items: center; justify-content: space-between; margin-top: 2mm; font-weight: 700; }
-  .pay { display: inline-block; background: #000; color: #fff; padding: 0.6mm 3mm; border-radius: 2mm; font-weight: 800; letter-spacing: 1px; font-size: 10.5px; }
-  .thanks { font-size: 13px; font-weight: 800; margin-top: 1mm; }
+  .pay { display: inline-block; background: #000; color: #fff; padding: 0.6mm 3mm; border-radius: 2mm; font-weight: 800; letter-spacing: 1px; font-size: 12px; }
+  .thanks { font-size: 15px; font-weight: 800; margin-top: 1mm; }
+  .policy { font: 700 15px/2 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif; margin-top: 1mm; }
 </style></head><body><div class="wrap">
   <div class="c">
     <img class="logo" src="${logo}" alt="">
@@ -69,7 +70,7 @@ function receiptHtml(sale: Sale) {
   </div>
   <div class="title">SALES RECEIPT</div>
   <table class="meta">
-    <tr><td>Receipt No</td><td class="mono">${sale.id.slice(0, 8).toUpperCase()}</td></tr>
+    <tr><td>Receipt No</td><td class="mono">${receiptNo(sale)}</td></tr>
     ${sale.customerName ? `<tr><td>Customer Name</td><td class="b">${esc(sale.customerName)}</td></tr>` : ""}
     <tr><td>Customer No</td><td>#${sale.customerNo}</td></tr>
     <tr><td>Date</td><td>${format(date, "dd MMM yyyy")}</td></tr>
@@ -86,6 +87,7 @@ function receiptHtml(sale: Sale) {
   <hr>
   <div class="c">
     <div class="thanks">${esc(SHOP.receiptFooter)}</div>
+    ${SHOP.receiptPolicyUr ? `<div class="policy" dir="rtl" lang="ur">${esc(SHOP.receiptPolicyUr)}</div>` : ""}
   </div>
 </div></body></html>`
 }
@@ -119,9 +121,7 @@ export function printReceipt(sale: Sale) {
       resolve()
     })
   })
-  const fontsReady = sale.lines.some((l) => l.nameUr)
-    ? doc.fonts.load('700 13px "Noto Nastaliq Urdu"', "اردو").then(() => doc.fonts.ready).catch(() => undefined)
-    : Promise.resolve()
+  const fontsReady = doc.fonts.load('700 14px "Noto Nastaliq Urdu"', "اردو").then(() => doc.fonts.ready).catch(() => undefined)
   const timeout = new Promise((resolve) => setTimeout(resolve, 3000))
   void Promise.race([Promise.all([logoReady, fontsReady]), timeout]).then(() => setTimeout(print, 50))
 }

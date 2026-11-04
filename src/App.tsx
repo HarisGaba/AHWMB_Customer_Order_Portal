@@ -1954,21 +1954,49 @@ async function buildExpenseLedgerPdf(date: string, rows: ExpenseRow[]) {
   return doc.output('blob')
 }
 
-function downloadAndPrintPdf(blob: Blob, filename: string) {
+function downloadPdf(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url; link.download = filename; link.style.display = 'none'
   document.body.appendChild(link); link.click(); link.remove()
-  const iframe = document.createElement('iframe')
-  iframe.title = 'Expense ledger print preview'
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none'
-  iframe.src = url
-  iframe.onload = () => window.setTimeout(() => {
-    try { iframe.contentWindow?.focus(); iframe.contentWindow?.print() }
-    finally { window.setTimeout(() => iframe.remove(), 1200) }
-  }, 150)
-  document.body.appendChild(iframe)
-  window.setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000)
+  window.setTimeout(() => URL.revokeObjectURL(url), 60 * 1000)
+}
+
+function buildExpenseLedgerHtml(date: string, rows: ExpenseRow[]) {
+  const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+  const validRows = rows.filter(r => r.expense_title.trim() || Number(r.amount))
+  const total = validRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+  const body = validRows.length
+    ? validRows.map((row, i) => `<tr><td class="n">${i + 1}</td><td dir="auto">${esc(row.expense_title || '—')}</td><td class="amt">${reportAmount(row.amount)}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="empty">No expenses recorded</td></tr>'
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Dukan Daily Expense Ledger — ${esc(date)}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=block">
+<style>
+  @page { size: A4 portrait; margin: 14mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; color: #000; font: 700 13px/1.5 "Times New Roman", Times, "Noto Nastaliq Urdu", serif; }
+  .sheet { border: 2px solid #000; padding: 10mm 8mm; min-height: 265mm; display: flex; flex-direction: column; }
+  h1 { margin: 0; text-align: center; font-size: 26px; letter-spacing: 1px; }
+  .meta { text-align: center; margin: 6px 0 18px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #000; padding: 8px 10px; vertical-align: middle; }
+  th { background: #000; color: #fff; font-size: 14px; }
+  td.n { width: 12mm; text-align: center; }
+  td.amt, th.amt { width: 44mm; text-align: right; font-variant-numeric: tabular-nums; }
+  td[dir="auto"]:lang(ur), td[dir="auto"] { unicode-bidi: plaintext; }
+  td.empty { text-align: center; color: #555; padding: 18px; }
+  tfoot td { background: #f2f2f2; font-size: 15px; }
+  .foot { margin-top: auto; padding-top: 10mm; text-align: center; font-size: 11px; }
+</style></head><body><div class="sheet">
+  <h1>DUKAN DAILY EXPENSE LEDGER</h1>
+  <div class="meta">Date: ${esc(reportDateLabel(date))} &nbsp;&nbsp; Day: ${esc(reportDayLabel(date))}</div>
+  <table>
+    <thead><tr><th>#</th><th>Expense Title / Description</th><th class="amt">Amount (Rs.)</th></tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr><td></td><td>Total Daily Kharcha</td><td class="amt">${reportAmount(total)}</td></tr></tfoot>
+  </table>
+  <div class="foot">AHWMB — Dukan Daily Expense Ledger</div>
+</div></body></html>`
 }
 
 /** Build a mini calendar grid for the given year/month, returns array of date strings (YYYY-MM-DD) or null for padding */
@@ -2195,19 +2223,23 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
     return { blob, filename }
   }
 
-  const print = async () => {
-    const { blob, filename } = await createPdf()
-    downloadAndPrintPdf(blob, filename)
-  }
+  // Print the ledger as a web page: reliable on every browser and keeps Urdu titles readable.
+  const print = () => printInvoiceHtml(buildExpenseLedgerHtml(date, rows))
 
   const share = async () => {
     const { blob, filename } = await createPdf()
     const file = new File([blob], filename, { type: 'application/pdf' })
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
       try { await navigator.share({ title: 'AHWMB Expense Ledger', files: [file] }) }
-      catch (error) { if ((error as DOMException)?.name !== 'AbortError') addToast('PDF sharing was not completed.', 'error') }
+      catch (error) {
+        const name = (error as DOMException)?.name
+        if (name === 'AbortError') return // user closed the share sheet
+        // NotAllowedError etc.: the browser refused to share, so hand over the file instead.
+        downloadPdf(blob, filename)
+        addToast('Sharing is not available here, so the PDF was downloaded instead.', 'info')
+      }
     } else {
-      downloadAndPrintPdf(blob, filename)
+      downloadPdf(blob, filename)
       addToast('PDF downloaded. Attach the PDF file to share it.', 'info')
     }
   }
@@ -2309,7 +2341,7 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
             {saving ? <RefreshCw size={16} className="spin" /> : <Check size={16} />}
             {isRtl ? 'محفوظ کریں' : saving ? 'Saving…' : 'Save'}
           </button>
-          <button type="button" className="btn-print" onClick={() => void print()}><FileDown size={18} /> {isRtl ? 'پرنٹ' : 'Print'}</button>
+          <button type="button" className="btn-print" onClick={print}><FileDown size={18} /> {isRtl ? 'پرنٹ' : 'Print'}</button>
           <button type="button" className="btn-share-pdf" onClick={() => void share()}><Send size={18} /> {isRtl ? 'PDF شیئر کریں' : 'Share PDF'}</button>
         </div>
       </div>

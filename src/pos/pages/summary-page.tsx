@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { addDays, format, parseISO, subDays } from "date-fns"
 import {
@@ -9,6 +9,7 @@ import {
   DownloadIcon,
   PrinterIcon,
   ReceiptIcon,
+  SearchIcon,
   Trash2Icon,
   TrendingDownIcon,
   TrendingUpIcon,
@@ -38,13 +39,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToday } from "@/hooks/use-today"
 import { exportSalesCsv } from "@/lib/export"
 import { printReceipt } from "@/lib/receipt"
-import { actions, CURRENCY, dayKey, fmt, RETENTION_DAYS, useStore, type Sale } from "@/lib/store"
+import { actions, CURRENCY, dayKey, fmt, receiptNo, RETENTION_DAYS, useStore, type Sale } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 const CHART_DAYS = 14
@@ -79,6 +81,36 @@ export function SummaryPage() {
     }
   }
   const oldest = dayKey(subDays(parseISO(today), RETENTION_DAYS))
+  const dateInput = useRef<HTMLInputElement>(null)
+
+  // Find a past receipt by its printed number (or customer name / customer #) across all saved days.
+  const [query, setQuery] = useState("")
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase().replace(/^#/, "")
+    if (!q) return []
+    return Object.values(salesByDay)
+      .flat()
+      .filter((s) => receiptNo(s).toLowerCase().includes(q) || (s.customerName ?? "").toLowerCase().includes(q) || String(s.customerNo) === q)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 8)
+  }, [query, salesByDay])
+
+  function openSale(sale: Sale) {
+    setDay(dayKey(new Date(sale.createdAt)))
+    setSelectedId(sale.id)
+    setQuery("")
+  }
+
+  function openCalendar() {
+    const el = dateInput.current
+    if (!el) return
+    try {
+      el.showPicker()
+    } catch {
+      el.focus()
+      el.click()
+    }
+  }
 
   // Window of CHART_DAYS days ending on the selected day.
   const windowDays = useMemo(
@@ -146,10 +178,28 @@ export function SummaryPage() {
             <Button variant="ghost" size="icon-sm" onClick={() => goTo(dayKey(addDays(parseISO(day), -1)))} disabled={day <= oldest} aria-label="Previous day">
               <ChevronLeftIcon />
             </Button>
-            <div className="flex min-w-44 items-center justify-center gap-2 px-2 text-sm font-medium">
-              <CalendarDaysIcon className="size-4 text-muted-foreground" />
-              {format(parseISO(day), "EEE, d MMM yyyy")}
-              {day === today && <Badge variant="secondary">Today</Badge>}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={openCalendar}
+                title="Pick a date"
+                className="flex min-w-44 cursor-pointer items-center justify-center gap-2 rounded-md px-2 py-1 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                <CalendarDaysIcon className="size-4 text-primary" />
+                {format(parseISO(day), "EEE, d MMM yyyy")}
+                {day === today && <Badge variant="secondary">Today</Badge>}
+              </button>
+              <input
+                ref={dateInput}
+                type="date"
+                tabIndex={-1}
+                aria-label="Pick a date"
+                min={oldest}
+                max={today}
+                value={day}
+                onChange={(e) => e.target.value && goTo(e.target.value)}
+                className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+              />
             </div>
             <Button variant="ghost" size="icon-sm" onClick={() => goTo(dayKey(addDays(parseISO(day), 1)))} disabled={day >= today} aria-label="Next day">
               <ChevronRightIcon />
@@ -177,6 +227,42 @@ export function SummaryPage() {
           </DropdownMenu>
         </div>
       </PageHeader>
+
+      <div className="relative max-w-xl">
+        <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && results[0]) openSale(results[0])
+            else if (e.key === "Escape") setQuery("")
+          }}
+          placeholder="Search receipt no. (e.g. D1C4FC2B), customer name or #"
+          className="h-11 rounded-xl bg-card pl-9 font-mono text-base"
+          aria-label="Search receipts"
+        />
+        {query.trim() && (
+          <div className="absolute top-full right-0 left-0 z-30 mt-1 overflow-hidden rounded-xl border bg-popover shadow-lg">
+            {results.length ? (
+              results.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => openSale(s)}
+                  className="flex w-full items-center gap-3 border-b px-3 py-2.5 text-left last:border-b-0 hover:bg-muted"
+                >
+                  <span className="rounded-md bg-gold/15 px-2 py-0.5 font-mono text-xs font-semibold">{receiptNo(s)}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.customerName || `Customer ${s.customerNo}`}</span>
+                  <span className="text-xs text-muted-foreground">{format(new Date(s.createdAt), "d MMM yyyy, h:mm a")}</span>
+                  <span className="font-mono text-sm font-semibold tabular-nums">{fmt(s.total)}</span>
+                </button>
+              ))
+            ) : (
+              <div className="px-3 py-3 text-sm text-muted-foreground">No receipt found in the last {RETENTION_DAYS} days.</div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* KPI tiles */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -269,7 +355,7 @@ export function SummaryPage() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">{s.customerName || `Customer ${s.customerNo}`}</div>
                     <div className="text-xs text-muted-foreground">
-                      {format(new Date(s.createdAt), "h:mm a")} · {s.lines.length} item{s.lines.length === 1 ? "" : "s"}
+                      {format(new Date(s.createdAt), "h:mm a")} · {s.lines.length} item{s.lines.length === 1 ? "" : "s"} · <span className="font-mono">{receiptNo(s)}</span>
                     </div>
                   </div>
                   <div className="text-right">
@@ -290,7 +376,7 @@ export function SummaryPage() {
           <CardHeader className="border-b py-4">
             <CardTitle>{selected ? selected.customerName || `Customer ${selected.customerNo}` : "Transaction details"}</CardTitle>
             <CardDescription>
-              {selected ? `${format(new Date(selected.createdAt), "d MMM yyyy, h:mm a")} · paid by ${selected.payment}` : "Select a customer to view their items."}
+              {selected ? `Receipt ${receiptNo(selected)} · ${format(new Date(selected.createdAt), "d MMM yyyy, h:mm a")} · paid by ${selected.payment}` : "Select a customer to view their items."}
             </CardDescription>
             {selected && (
               <CardAction className="flex gap-2">

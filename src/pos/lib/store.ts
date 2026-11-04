@@ -289,6 +289,9 @@ export const actions = {
   },
 }
 
+/** Number printed on the receipt (first 8 characters of the sale id). */
+export const receiptNo = (sale: Pick<Sale, "id">) => sale.id.slice(0, 8).toUpperCase()
+
 export const lineTotal = (lines: SaleLine[]) => lines.reduce((s, l) => s + l.qty * l.rate, 0)
 /** Total kg on a bill, to match against the weighing scale. */
 export const lineWeight = (l: SaleLine) => l.qty * (l.weight ?? 1)

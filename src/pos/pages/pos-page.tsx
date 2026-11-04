@@ -50,6 +50,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
   const [stage, setStage] = useState<Stage>(null)
   const [payment, setPayment] = useState<PaymentMethod>("Cash")
   const [lastSale, setLastSale] = useState<Sale | null>(null)
+  const [printed, setPrinted] = useState(false)
   const [busy, setBusy] = useState(false)
   const saving = useRef(false)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -103,6 +104,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
     try {
       const sale = await actions.recordSale(cart, method, customer)
       setLastSale(sale)
+      setPrinted(false)
       setCart([])
       setCustomer("")
       setStage("done")
@@ -120,27 +122,61 @@ export function PosPage({ active = true }: { active?: boolean }) {
     focusSearch()
   }
 
-  function onPayKey(e: React.KeyboardEvent) {
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Tab"].includes(e.key)) {
-      e.preventDefault()
-      setPayment((p) => (p === "Cash" ? "Balance" : "Cash"))
-    } else if (e.key === "1" || e.key.toLowerCase() === "c") setPayment("Cash")
-    else if (e.key === "2" || e.key.toLowerCase() === "b") setPayment("Balance")
-    else if (e.key === "Enter") {
-      e.preventDefault()
-      void complete(payment)
-    }
+  function print(sale: Sale) {
+    printReceipt(sale)
+    setPrinted(true)
   }
 
-  function onDoneKey(e: React.KeyboardEvent) {
-    if (e.key === "Enter") {
+  // One keyboard handler for the whole checkout, in the capture phase, so the keys work
+  // whichever button has focus (no Tab needed):
+  //   Total:   Enter = continue to payment
+  //   Payment: ←/→ or 1/2 (C/B) = choose Cash/Balance, Enter = complete sale
+  //   Done:    Enter or P = print bill · N = new sale without a bill · after printing, Enter = new sale
+  const keys = useRef<(e: KeyboardEvent) => void>(() => {})
+  keys.current = (e: KeyboardEvent) => {
+    if (!stage || e.ctrlKey || e.metaKey || e.altKey) return
+    const k = e.key.toLowerCase()
+    const handled = () => {
       e.preventDefault()
-      closeDialogs()
-    } else if (e.key.toLowerCase() === "p" && lastSale) {
-      e.preventDefault()
-      printReceipt(lastSale)
+      e.stopPropagation()
+    }
+    if (stage === "total" && e.key === "Enter") {
+      handled()
+      setPayment("Cash")
+      setStage("pay")
+    } else if (stage === "pay") {
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Tab"].includes(e.key)) {
+        handled()
+        setPayment((p) => (p === "Cash" ? "Balance" : "Cash"))
+      } else if (k === "1" || k === "c") {
+        handled()
+        setPayment("Cash")
+      } else if (k === "2" || k === "b") {
+        handled()
+        setPayment("Balance")
+      } else if (e.key === "Enter") {
+        handled()
+        void complete(payment)
+      }
+    } else if (stage === "done" && lastSale) {
+      if (k === "n") {
+        handled()
+        closeDialogs()
+      } else if (k === "p" || (e.key === "Enter" && !printed)) {
+        handled()
+        print(lastSale)
+      } else if (e.key === "Enter") {
+        handled()
+        closeDialogs()
+      }
     }
   }
+  useEffect(() => {
+    if (!active) return
+    const onKey = (e: KeyboardEvent) => keys.current(e)
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [active])
 
   return (
     <div className="flex h-full flex-col gap-6">
@@ -336,16 +372,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
 
       {/* Step 1: total amount */}
       <Dialog open={stage === "total"} onOpenChange={(o) => !o && closeDialogs()}>
-        <DialogContent
-          className="sm:max-w-md"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault()
-              setPayment("Cash")
-              setStage("pay")
-            }
-          }}
-        >
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Total Amount</DialogTitle>
             <DialogDescription>
@@ -372,7 +399,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
 
       {/* Step 2: payment method */}
       <Dialog open={stage === "pay"} onOpenChange={(o) => !o && closeDialogs()}>
-        <DialogContent className="sm:max-w-md" onKeyDown={onPayKey}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Payment Method</DialogTitle>
             <DialogDescription>
@@ -415,7 +442,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
 
       {/* Step 3: sale complete */}
       <Dialog open={stage === "done"} onOpenChange={(o) => !o && closeDialogs()}>
-        <DialogContent className="sm:max-w-sm" onKeyDown={onDoneKey}>
+        <DialogContent className="sm:max-w-sm">
           {lastSale && (
             <>
               <div className="flex flex-col items-center gap-3 pt-4 text-center">
@@ -430,13 +457,22 @@ export function PosPage({ active = true }: { active?: boolean }) {
                 </DialogDescription>
                 <div className="font-mono text-4xl font-semibold tracking-tight tabular-nums">{fmt(lastSale.total)}</div>
               </div>
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <Button variant="outline" size="lg" className="h-11" onClick={() => printReceipt(lastSale)}>
-                  <PrinterIcon /> Print <Kbd>P</Kbd>
+              <div className="grid gap-2 pt-2">
+                <Button
+                  size="lg"
+                  variant={printed ? "outline" : "default"}
+                  className="h-12 text-base"
+                  autoFocus
+                  onClick={() => print(lastSale)}
+                >
+                  <PrinterIcon /> {printed ? "Print again" : "Print bill"} {printed ? <Kbd>P</Kbd> : <><EnterKbd inverted /> <Kbd className="bg-primary-foreground/15 text-primary-foreground">P</Kbd></>}
                 </Button>
-                <Button size="lg" className="h-11" autoFocus onClick={closeDialogs}>
-                  New sale <EnterKbd inverted />
+                <Button size="lg" variant={printed ? "default" : "outline"} className="h-12 text-base" onClick={closeDialogs}>
+                  {printed ? "New sale" : "New sale — no bill"} {printed ? <><EnterKbd inverted /> <Kbd className="bg-primary-foreground/15 text-primary-foreground">N</Kbd></> : <Kbd>N</Kbd>}
                 </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  {printed ? "Press Enter or N to start the next sale." : "Press Enter to print, or N to skip the bill."}
+                </p>
               </div>
             </>
           )}
