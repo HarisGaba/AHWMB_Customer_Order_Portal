@@ -824,8 +824,10 @@ function printInvoiceHtml(html: string) {
 
 // ── Pure-jsPDF invoice — no autoTable plugin ─────────────────────────────
 // jsPDF is large, so it is only downloaded when a PDF is first needed.
-let pdfLibs: Promise<{ jsPDF: typeof JsPdf; autoTable: typeof import('jspdf-autotable').default }> | null = null
-const loadPdfLibs = () => (pdfLibs ??= Promise.all([import('jspdf'), import('jspdf-autotable')])
+// Use the ES build of jspdf-autotable: its default entry is UMD, and a dynamic import of that
+// returns the module object as "default" instead of the autoTable function.
+let pdfLibs: Promise<{ jsPDF: typeof JsPdf; autoTable: typeof import('jspdf-autotable/es').default }> | null = null
+const loadPdfLibs = () => (pdfLibs ??= Promise.all([import('jspdf'), import('jspdf-autotable/es')])
   .then(([pdf, table]) => ({ jsPDF: pdf.jsPDF, autoTable: table.default }))
   .catch(error => { pdfLibs = null; throw error }))
 /** Start the download early (on screens that make PDFs) so Print/Share respond instantly. */
@@ -1972,10 +1974,14 @@ function buildExpenseLedgerHtml(date: string, rows: ExpenseRow[]) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>Dukan Daily Expense Ledger — ${esc(date)}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=block">
 <style>
-  @page { size: A4 portrait; margin: 14mm; }
+  /* margin 0 removes the browser's own URL/date header and footer; the sheet adds its own margin. */
+  @page { size: A4 portrait; margin: 0; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { margin: 0; color: #000; font: 700 13px/1.5 "Times New Roman", Times, "Noto Nastaliq Urdu", serif; }
-  .sheet { border: 2px solid #000; padding: 10mm 8mm; min-height: 265mm; display: flex; flex-direction: column; }
+  /* Each printed page gets its own margin + border (clone repeats them on every page fragment). */
+  .sheet { border: 2px solid #000; margin: 12mm; padding: 10mm 8mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  tr { break-inside: avoid; }
+  tr.total { break-before: avoid; }
   h1 { margin: 0; text-align: center; font-size: 26px; letter-spacing: 1px; }
   .meta { text-align: center; margin: 6px 0 18px; font-size: 14px; }
   table { width: 100%; border-collapse: collapse; }
@@ -1985,15 +1991,14 @@ function buildExpenseLedgerHtml(date: string, rows: ExpenseRow[]) {
   td.amt, th.amt { width: 44mm; text-align: right; font-variant-numeric: tabular-nums; }
   td[dir="auto"]:lang(ur), td[dir="auto"] { unicode-bidi: plaintext; }
   td.empty { text-align: center; color: #555; padding: 18px; }
-  tfoot td { background: #f2f2f2; font-size: 15px; }
-  .foot { margin-top: auto; padding-top: 10mm; text-align: center; font-size: 11px; }
+  tr.total td { background: #f2f2f2; font-size: 15px; border-top: 2px solid #000; }
+  .foot { padding-top: 8mm; text-align: center; font-size: 11px; }
 </style></head><body><div class="sheet">
   <h1>DUKAN DAILY EXPENSE LEDGER</h1>
   <div class="meta">Date: ${esc(reportDateLabel(date))} &nbsp;&nbsp; Day: ${esc(reportDayLabel(date))}</div>
   <table>
     <thead><tr><th>#</th><th>Expense Title / Description</th><th class="amt">Amount (Rs.)</th></tr></thead>
-    <tbody>${body}</tbody>
-    <tfoot><tr><td></td><td>Total Daily Kharcha</td><td class="amt">${reportAmount(total)}</td></tr></tfoot>
+    <tbody>${body}<tr class="total"><td></td><td>Total Daily Kharcha</td><td class="amt">${reportAmount(total)}</td></tr></tbody>
   </table>
   <div class="foot">AHWMB — Dukan Daily Expense Ledger</div>
 </div></body></html>`
