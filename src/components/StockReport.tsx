@@ -54,7 +54,8 @@ function useLiveTable(tables: string[], onChange: () => void) {
   }, [key])
 }
 
-export function StockReport() {
+/** canEdit = Stock Report permission (add/edit/delete stock); canTransfer = Stock Transfer permission. */
+export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: boolean; canTransfer?: boolean }) {
   const [location, setLocation] = useState<Location>('Site Area Godown')
   const [rows, setRows] = useState<StockRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -149,7 +150,7 @@ export function StockReport() {
 
   const startTransfer = (to: Location) => {
     // Guard: source = viewed godown, destination = another godown, never the Shop.
-    if (!isGodown(location) || !transferTargets(location).includes(to)) return
+    if (!canTransfer || !isGodown(location) || !transferTargets(location).includes(to)) return
     setTransfer({ from: location, to })
     setMessage(null)
     setView('transfer')
@@ -158,7 +159,7 @@ export function StockReport() {
   if (view === 'transfer' && transfer) {
     return <TransferForm from={transfer.from} target={transfer.to} rows={rows} onCancel={() => setView('stock')} onDone={async text => { notify(text); setView('stock'); await load(true) }} />
   }
-  if (view === 'history') return <TransferHistory onBack={() => setView('stock')} />
+  if (view === 'history') return <TransferHistory canDelete={canEdit} onBack={() => setView('stock')} />
 
   return <section className="panel report-panel">
     <div className="report-heading">
@@ -171,8 +172,8 @@ export function StockReport() {
     {legacyCount > 0 && <div className="stock-legacy"><span>{legacyCount} stock items are saved only in this browser.</span><button type="button" className="btn-secondary" onClick={() => void importLegacy()}>Move them to the database</button></div>}
     <div className="site-tabs stock-toolbar">
       <span className="stock-location-label">Viewing: <strong>{LOCATION_LABEL[location]}</strong></span>
-      <button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button>
-      {isGodown(location)
+      {canEdit && <button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button>}
+      {!canTransfer ? null : isGodown(location)
         ? <select className="stock-transfer-select" value="" onChange={e => e.target.value && startTransfer(e.target.value as Location)} aria-label={`Transfer stock from ${LOCATION_LABEL[location]}`}>
           <option value="">⇄ Transfer from {LOCATION_LABEL[location]} to…</option>
           {transferTargets(location).map(to => <option key={to} value={to}>Shifted to {LOCATION_LABEL[to]}</option>)}
@@ -184,11 +185,11 @@ export function StockReport() {
       {loading && <tr><td colSpan={5} className="stock-empty">Loading stock…</td></tr>}
       {!loading && visible.length === 0 && <tr><td colSpan={5} className="stock-empty">No stock in {LOCATION_LABEL[location]} yet. Click “Add Item”.</td></tr>}
       {visible.map(row => <tr key={row.id}>
-        <td data-label="Item"><input className="report-cell-input" value={row.item} onChange={e => editRow(row.id, 'item', e.target.value)} onBlur={() => void saveRow(row)} placeholder="e.g. Chana Dal" /></td>
-        <td data-label="Weight (kg / bag)"><input className="report-cell-input" type="number" min="1" value={row.weight} onChange={e => editRow(row.id, 'weight', e.target.value)} onBlur={() => void saveRow(row)} placeholder="50" /></td>
-        <td data-label="Quantity (kg)"><input className="report-cell-input" type="number" min="0" value={row.quantity} onChange={e => editRow(row.id, 'quantity', e.target.value)} onBlur={() => void saveRow(row)} placeholder="500" /></td>
+        <td data-label="Item"><input className="report-cell-input" value={row.item} onChange={e => editRow(row.id, 'item', e.target.value)} onBlur={() => void saveRow(row)} placeholder="e.g. Chana Dal" readOnly={!canEdit} /></td>
+        <td data-label="Weight (kg / bag)"><input className="report-cell-input" type="number" min="1" value={row.weight} onChange={e => editRow(row.id, 'weight', e.target.value)} onBlur={() => void saveRow(row)} placeholder="50" readOnly={!canEdit} /></td>
+        <td data-label="Quantity (kg)"><input className="report-cell-input" type="number" min="0" value={row.quantity} onChange={e => editRow(row.id, 'quantity', e.target.value)} onBlur={() => void saveRow(row)} placeholder="500" readOnly={!canEdit} /></td>
         <td data-label="Bags"><input className="report-cell-input stock-bags" value={bagsFor(num(row.quantity), num(row.weight) || null) ?? '—'} readOnly aria-label="Auto calculated bags" /></td>
-        <td data-label="Actions" className="stock-row-actions">{!row.saved && row.item.trim() ? <span className="stock-unsaved">Saving…</span> : null}<button type="button" className="ledger-delete-btn" onClick={() => void deleteRow(row)} aria-label={`Delete ${row.item}`}><Trash2 size={14} /></button></td>
+        <td data-label="Actions" className="stock-row-actions">{!row.saved && row.item.trim() ? <span className="stock-unsaved">Saving…</span> : null}{canEdit && <button type="button" className="ledger-delete-btn" onClick={() => void deleteRow(row)} aria-label={`Delete ${row.item}`}><Trash2 size={14} /></button>}</td>
       </tr>)}
     </tbody></table></div>
   </section>
@@ -276,7 +277,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
   </section>
 }
 
-function TransferHistory({ onBack }: { onBack: () => void }) {
+function TransferHistory({ onBack, canDelete }: { onBack: () => void; canDelete: boolean }) {
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [month, setMonth] = useState('')
   const [loading, setLoading] = useState(true)
@@ -325,7 +326,7 @@ function TransferHistory({ onBack }: { onBack: () => void }) {
           {months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
         </select>
         <span className="stock-location-label">{shown.length} transfer{shown.length === 1 ? '' : 's'}</span>
-        <button type="button" className="btn-secondary btn-danger" onClick={() => void deleteMonth()}><Trash2 size={16} /> Delete {monthLabel(month)}</button>
+        {canDelete && <button type="button" className="btn-secondary btn-danger" onClick={() => void deleteMonth()}><Trash2 size={16} /> Delete {monthLabel(month)}</button>}
       </div>
       <div className="transfer-history">
         {shown.map(t => <article key={t.id} className="transfer-card">

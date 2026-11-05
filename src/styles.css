@@ -3040,3 +3040,41 @@ body { font-size:18px; }
 .admin-home-btn--backup:disabled { opacity:.6; cursor:wait; }
 .admin-backup-note { margin:4px 0 0; text-align:center; font-size:13px; color:#5b7266; }
 .stock-transfer-note { display:flex; align-items:center; min-height:46px; padding:0 14px; border-radius:12px; background:#fffbeb; border:1px solid #fde68a; color:#854d0e; font-weight:700; font-size:14px; }
+
+/* ─── Users management ─────────────────────────────────────────────────────── */
+.users-panel .admin-heading { display:flex; align-items:center; gap:10px; }
+.users-table td { vertical-align:middle; }
+.users-main-admin td { background:#f0faf5; }
+.user-last-login { display:block; margin-top:2px; color:#5b7266; font-size:12px; }
+.perm-chips { display:flex; flex-wrap:wrap; gap:5px; }
+.perm-chip { display:inline-block; padding:3px 9px; border-radius:999px; background:#e8f4ec; color:#166534; font-size:12px; font-weight:800; white-space:nowrap; }
+.perm-chip--all { background:#073d25; color:#e4aa2a; }
+.perm-chip--none { background:#fff1f2; color:#b42318; }
+.user-status { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:800; }
+.user-status--on { background:#dcfce7; color:#166534; }
+.user-status--off { background:#f1f5f9; color:#64748b; }
+.users-table .stock-row-actions { display:flex; gap:6px; justify-content:flex-end; align-items:center; }
+.users-table .ledger-edit-btn { display:inline-flex; align-items:center; gap:4px; }
+.user-modal { width:min(640px, 100%); max-height:calc(100dvh - 40px); overflow:auto; background:#fff; border-radius:18px; padding:20px; box-shadow:0 24px 60px rgba(0,0,0,.3); display:grid; gap:14px; }
+.user-modal-head { display:flex; justify-content:space-between; align-items:center; }
+.user-modal-head h3 { margin:0; display:flex; align-items:center; gap:8px; color:#073d25; font-size:19px; overflow-wrap:anywhere; }
+.user-modal-head .install-banner-dismiss { color:#073d25; min-height:40px; min-width:40px; }
+.user-modal-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.user-modal-wide { grid-column:1 / -1; }
+.user-modal .field-label { display:flex; align-items:center; gap:6px; }
+.user-perms { display:grid; gap:10px; }
+.user-perm-group { margin:0; border:1px solid #d8e9de; border-radius:12px; padding:10px 12px 12px; display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px 14px; }
+.user-perm-group legend { padding:0 6px; font-weight:900; color:#073d25; }
+.user-perm { display:flex; align-items:center; gap:8px; font-weight:700; color:#244638; cursor:pointer; min-height:32px; }
+.user-perm input { width:19px; height:19px; accent-color:#0d6b40; }
+.user-active { padding:10px 12px; border-radius:12px; background:#fffbeb; }
+.user-modal-actions { display:flex; justify-content:flex-end; gap:10px; }
+.user-modal-actions .btn-submit { width:auto; min-width:160px; }
+.access-denied { text-align:center; display:grid; gap:12px; justify-items:center; padding:40px 20px; }
+.admin-home-btn--users { border-style:solid !important; background:#073d25 !important; color:#e4aa2a !important; }
+.admin-home-btn--pos { background:#fffaf0 !important; }
+@media (max-width: 700px) {
+  .user-modal-grid, .user-perm-group { grid-template-columns:1fr; }
+  .user-modal-actions { flex-direction:column-reverse; }
+  .user-modal-actions .btn-submit, .user-modal-actions .btn-secondary { width:100%; }
+}

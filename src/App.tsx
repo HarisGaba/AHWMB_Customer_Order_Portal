@@ -6,13 +6,14 @@ import {
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
-import { isPosEmail } from './lib/posSupabase'
+import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
 import { useDraftOrder } from './hooks/useDraftOrder'
 import { requestTurnstileToken } from './lib/turnstile'
 import { InstallBanner } from './components/InstallBanner'
 import { PushBanner } from './components/PushBanner'
 import { StockReport } from './components/StockReport'
+import { AccessDenied, UsersAdmin } from './components/UsersAdmin'
 
 let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
 
@@ -136,11 +137,8 @@ function checkRateLimit(phone: string): boolean {
 }
 
 const formatMoney = (value: number) => `Rs. ${Math.round(value || 0).toLocaleString('en-PK')}`
-const isCurrentAdmin = async () => {
-  if (!supabase) return false
-  const { data, error } = await supabase.rpc('is_ahwmb_admin')
-  return !error && Boolean(data)
-}
+/** Can the signed-in user open the admin panel (main admin, or staff with any portal page)? */
+const isCurrentAdmin = async () => hasPortalAccess(await fetchAccess(supabase))
 
 const readableError = (error: unknown): string => {
   if (error instanceof Error) return error.message
@@ -346,7 +344,7 @@ const copy = {
       setup: 'Supabase is not configured for this preview.',
       submit: 'Order could not be saved. Please try again.',
       login: 'Login failed. Check your email and password.',
-      permission: 'This account is not authorized as shopkeeper.',
+      permission: 'This account has no pages assigned, or has been disabled. Ask the admin.',
       save: 'Invoice could not be saved.',
     },
     confirm: 'Clear the entire order?',
@@ -1216,14 +1214,8 @@ function CustomerPage({
 
   const lookupPreviousOrder = async () => {
     if (!supabase || !validPhone(phone)) return
-    const { data } = await supabase
-      .from('orders')
-      .select('id, order_ref, created_at, items, customer_name, customer_phone, customer_address, grand_total, status')
-      .eq('customer_phone', normalizePhone(phone))
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(1)
-    const previous = data?.[0]
+    const { data } = await supabase.rpc('previous_order', { p_phone: normalizePhone(phone) })
+    const previous = data as OrderRecord | null
     if (previous) {
       setLastOrder({ ...previous, items: safeItems(previous.items), status: 'completed' } as OrderRecord)
       setShowRepeatBanner(true)
@@ -1792,23 +1784,20 @@ function LoginPage({
     if (!supabase) { setError(t.errors.setup); return }
     setBusy(true)
     try {
-      // POS staff land on the POS (same database; POS tables are locked to them by RLS).
-      if (isPosEmail(email)) {
-        const { data, error: posError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        if (posError || !data.user) { setError(t.errors.login); return }
-        await offerToSaveLogin()
-        window.location.assign('/pos')
-        return
-      }
       const { data, error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
       if (authError || !data.user) { setError(t.errors.login); return }
-      if (!(await isCurrentAdmin())) {
+      // Each user lands where their permissions allow: admin panel if they have any
+      // portal page, otherwise the POS. No pages (or disabled) = no entry.
+      const access = await fetchAccess(supabase)
+      const home = homePathFor(access)
+      if (home === '/login') {
         await supabase.auth.signOut()
         setError(t.errors.permission)
         return
       }
       await offerToSaveLogin()
-      navigate('/admin')
+      if (home === '/pos') window.location.assign('/pos')
+      else navigate('/admin')
     } catch {
       setError(t.errors.login)
     } finally {
@@ -2579,11 +2568,17 @@ function AdminProducts({ onChanged }: { onChanged: () => void }) {
 }
 
 // ─── Admin Page ───────────────────────────────────────────────────────────────
+type AdminView = 'home' | 'orders' | 'newOrder' | 'add-customer' | 'reports' | 'customer-report' | 'purchase-report' | 'stock-report' | 'products' | 'users'
+const ADMIN_VIEW_PERMS: Record<Exclude<AdminView, 'home' | 'users'>, Permission[]> = {
+  newOrder: ['orders'], orders: ['orders'], reports: ['daily_report'], 'customer-report': ['customer_report'],
+  'stock-report': ['stock_report', 'stock_transfer'], 'purchase-report': ['purchase_report'], products: ['products'], 'add-customer': ['add_customer'],
+}
+
 function AdminPage({
-  language, setLanguage, onAuth, isAuthenticated, adminEmail,
+  language, setLanguage, onAuth, isAuthenticated, adminEmail, access,
 }: {
   language: Language; setLanguage: (v: Language) => void
-  onAuth: () => void; isAuthenticated: boolean; adminEmail: string
+  onAuth: () => void; isAuthenticated: boolean; adminEmail: string; access: Access | null
 }) {
   const t = copy[language]
   const isRtl = language === 'ur'
@@ -2631,7 +2626,17 @@ function AdminPage({
   const [printPayload, setPrintPayload] = useState<InvoicePayload | null>(null)
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [adminView, setAdminView] = useState<'home' | 'orders' | 'newOrder' | 'add-customer' | 'reports' | 'customer-report' | 'purchase-report' | 'stock-report' | 'products'>('home')
+  const [adminView, setAdminView] = useState<AdminView>('home')
+  // Which admin views this user may open (the database enforces the same rules).
+  const allowed = (view: AdminView) => view === 'home' || (view === 'users' ? !!access?.admin : ADMIN_VIEW_PERMS[view].some(perm => can(access, perm)))
+  // Permissions can change live (admin edits this user): leave the panel if nothing is left.
+  useEffect(() => {
+    if (!access) return
+    if (!hasPortalAccess(access)) {
+      if (hasPosAccess(access)) window.location.replace('/pos')
+      else void supabase?.auth.signOut().then(() => navigate('/login'))
+    }
+  }, [access])
   const [, setCatalogVersion] = useState(0)
   const [editCustomerOrder, setEditCustomerOrder] = useState<OrderRecord | null>(null)
   const [editCustomerName, setEditCustomerName] = useState('')
@@ -2659,6 +2664,7 @@ function AdminPage({
       setAuthorized(false); setLoading(false); navigate('/login'); return
     }
     setAuthorized(true)
+    if (!can(await fetchAccess(supabase), 'orders')) { setOrders([]); setLoading(false); return }
     const { data, error } = await supabase
       .from('orders')
       .select('*')
@@ -2920,12 +2926,33 @@ function AdminPage({
 
   if (!authorized) return null
 
-  if (adminView === 'home') return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><PushBanner language={language} adminEmail={adminEmail} onToast={addToast} /><ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1><button type="button" className="admin-home-btn admin-home-btn--primary" onClick={() => setAdminView('newOrder')}>{isRtl ? 'نیا آرڈر' : 'New Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('orders')}>{isRtl ? 'آرڈرز دیکھیں' : 'View Order'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('reports')}>{isRtl ? 'روزانہ رپورٹ' : 'Daily Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('customer-report')}>{isRtl ? 'گاہک کی رپورٹ' : 'Customer Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('stock-report')}>{isRtl ? 'اسٹاک رپورٹ' : 'Stock Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('purchase-report')}>{isRtl ? 'خریداری رپورٹ' : 'Purchase Report'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('products')}>{isRtl ? 'مصنوعات شامل کریں' : 'Add Products'}</button><button type="button" className="admin-home-btn" onClick={() => setAdminView('add-customer')}>{isRtl ? 'گاہک شامل کریں' : 'Add Customer'}</button><button type="button" className="admin-home-btn admin-home-btn--backup" disabled={backupBusy} onClick={() => void downloadBackup()}>{backupBusy ? (isRtl ? 'بیک اپ تیار ہو رہا ہے…' : 'Preparing backup…') : (isRtl ? 'بیک اپ ڈاؤن لوڈ کریں' : 'Download Backup')}</button><p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p></section></div></main>
+  if (adminView === 'home') {
+    const tiles: { view: AdminView; label: string; primary?: boolean }[] = [
+      { view: 'newOrder', label: isRtl ? 'نیا آرڈر' : 'New Order', primary: true },
+      { view: 'orders', label: isRtl ? 'آرڈرز دیکھیں' : 'View Order' },
+      { view: 'reports', label: isRtl ? 'روزانہ رپورٹ' : 'Daily Report' },
+      { view: 'customer-report', label: isRtl ? 'گاہک کی رپورٹ' : 'Customer Report' },
+      { view: 'stock-report', label: isRtl ? 'اسٹاک رپورٹ' : 'Stock Report' },
+      { view: 'purchase-report', label: isRtl ? 'خریداری رپورٹ' : 'Purchase Report' },
+      { view: 'products', label: isRtl ? 'مصنوعات شامل کریں' : 'Add Products' },
+      { view: 'add-customer', label: isRtl ? 'گاہک شامل کریں' : 'Add Customer' },
+    ]
+    return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />{can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}<ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1>
+      {access && !access.admin && access.name && <p className="panel-sub">{isRtl ? 'خوش آمدید' : 'Welcome'}, {access.name}</p>}
+      {tiles.filter(tile => allowed(tile.view)).map(tile => <button key={tile.view} type="button" className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={() => setAdminView(tile.view)}>{tile.label}</button>)}
+      {hasPosAccess(access) && <button type="button" className="admin-home-btn admin-home-btn--pos" onClick={() => window.location.assign('/pos')}>{isRtl ? 'POS کھولیں' : 'Open POS'}</button>}
+      {access?.admin && <><button type="button" className="admin-home-btn admin-home-btn--backup" disabled={backupBusy} onClick={() => void downloadBackup()}>{backupBusy ? (isRtl ? 'بیک اپ تیار ہو رہا ہے…' : 'Preparing backup…') : (isRtl ? 'بیک اپ ڈاؤن لوڈ کریں' : 'Download Backup')}</button><p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
+      <button type="button" className="admin-home-btn admin-home-btn--users" onClick={() => setAdminView('users')}>{isRtl ? 'صارفین' : 'Users'}</button></>}
+    </section></div></main>
+  }
+
+  // Route guard: a view this user was not given shows "Access denied" (nothing loads).
+  if (!allowed(adminView)) return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} /><div className="admin-wrap"><AccessDenied onBack={() => setAdminView('home')} /></div></main>
 
   return (
     <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
       <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />
-      <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />
+      {can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
       <div className="admin-wrap">
@@ -2945,14 +2972,16 @@ function AdminPage({
         {/* Orders, Daily Reports, and Create Order views */}
         {adminView === 'add-customer'
           ? <AdminAddCustomer language={language} />
+          : adminView === 'users'
+          ? <UsersAdmin />
           : adminView === 'reports'
-          ? <DailyReports language={language} onBack={() => setAdminView('orders')} />
+          ? <DailyReports language={language} onBack={() => setAdminView('home')} />
           : adminView === 'customer-report'
           ? <CustomerReport />
           : adminView === 'purchase-report'
           ? <PurchaseReport />
           : adminView === 'stock-report'
-          ? <StockReport />
+          ? <StockReport canEdit={can(access, 'stock_report')} canTransfer={can(access, 'stock_transfer')} />
           : adminView === 'products'
           ? <AdminProducts onChanged={() => setCatalogVersion(value => value + 1)} />
           : adminView === 'newOrder'
@@ -3620,8 +3649,10 @@ export default function App() {
     try { return (localStorage.getItem('ahwmb-language-v2') as Language) || 'en' }
     catch { return 'en' }
   })
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [adminEmail, setAdminEmail] = useState('')
+  // Who is signed in and which pages they may open; updates live when the admin changes it.
+  const { access, email } = useLiveAccess(supabase)
+  const isAuthenticated = hasPortalAccess(access)
+  const adminEmail = isAuthenticated ? email : ''
 
   useEffect(() => {
     try { localStorage.setItem('ahwmb-language-v2', language) }
@@ -3644,32 +3675,9 @@ export default function App() {
     })
   }, [])
 
-  useEffect(() => {
-    if (!supabase) return
-    supabase.auth.getSession().then(async ({ data }) => {
-      const validAdmin = Boolean(data.session && await isCurrentAdmin())
-      setIsAuthenticated(validAdmin)
-      if (validAdmin) setAdminEmail(data.session?.user?.email || '')
-    })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        setIsAuthenticated(false)
-        setAdminEmail('')
-        return
-      }
-      void isCurrentAdmin().then(validAdmin => {
-        setIsAuthenticated(validAdmin)
-        setAdminEmail(validAdmin ? session.user?.email || '' : '')
-      })
-    })
-    return () => listener.subscription.unsubscribe()
-  }, [])
-
   const onAuth = useCallback(async () => {
     if (isAuthenticated) {
       await supabase?.auth.signOut()
-      setIsAuthenticated(false)
-      setAdminEmail('')
       navigate('/')
     } else {
       navigate('/login')
@@ -3679,6 +3687,6 @@ export default function App() {
   const props = { language, setLanguage, onAuth, isAuthenticated, adminEmail }
 
   if (path === '/login') return <LoginPage {...props} />
-  if (path === '/admin') return <AdminPage {...props} />
+  if (path === '/admin') return <AdminPage {...props} access={access} />
   return <CustomerPage {...props} />
 }

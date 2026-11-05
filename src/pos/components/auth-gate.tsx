@@ -1,37 +1,35 @@
-import { useEffect, useState } from "react"
-import type { Session } from "@supabase/supabase-js"
+import { createContext, useContext, useEffect } from "react"
 import { DatabaseIcon, Loader2Icon, TriangleAlertIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { actions, useStore } from "@/lib/store"
-import { isPosEmail } from "../../lib/posSupabase"
+import { hasPortalAccess, hasPosAccess, NO_ACCESS, useLiveAccess, type Access } from "../../lib/access"
 import { signOutToLogin, supabase, supabaseConfigured } from "@/lib/supabase"
 
-/** Sends signed-out visitors to the portal login, then loads the shop data and renders the app. */
+/** The signed-in user's page permissions, for the POS menu and page guards. */
+const PosAccessContext = createContext<Access>(NO_ACCESS)
+export const usePosAccess = () => useContext(PosAccessContext)
+
+/**
+ * Sends visitors without POS pages away (to the admin panel if they have portal pages,
+ * otherwise to the login), then loads the shop data and renders the app.
+ * Permissions are live: if the admin removes this user's POS access, they leave at once.
+ */
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null | undefined>(undefined)
+  const { access, email } = useLiveAccess(supabaseConfigured ? supabase : null)
   const status = useStore((s) => s.status)
   const error = useStore((s) => s.error)
 
+  const allowed = hasPosAccess(access)
   useEffect(() => {
-    if (!supabaseConfigured) return
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
-    return () => data.subscription.unsubscribe()
-  }, [])
-
-  const userId = session && isPosEmail(session.user.email ?? "") ? session.user.id : undefined
-  useEffect(() => {
-    if (userId) void actions.load()
+    if (allowed) void actions.load()
     else actions.reset()
-  }, [userId])
+  }, [allowed, email])
 
   if (!supabaseConfigured) return <NotConfigured />
-  if (session === undefined) return <FullScreenLoader label="Starting…" />
-  if (!session) return <RedirectToLogin />
-  // Portal admins share this sign-in; only POS users belong here.
-  if (!isPosEmail(session.user.email ?? "")) return <RedirectToLogin />
+  if (access === null) return <FullScreenLoader label="Starting…" />
+  if (!allowed) return hasPortalAccess(access) ? <Redirect to="/admin" /> : <RedirectToLogin />
   if (status === "error")
     return (
       <Centered>
@@ -48,7 +46,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       </Centered>
     )
   if (status !== "ready") return <AppSkeleton />
-  return <>{children}</>
+  return <PosAccessContext.Provider value={access}>{children}</PosAccessContext.Provider>
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
@@ -66,10 +64,14 @@ function FullScreenLoader({ label }: { label: string }) {
 }
 
 function RedirectToLogin() {
+  return <Redirect to="/login" label="Redirecting to sign in…" />
+}
+
+function Redirect({ to, label = "Opening your pages…" }: { to: string; label?: string }) {
   useEffect(() => {
-    window.location.replace("/login")
-  }, [])
-  return <FullScreenLoader label="Redirecting to sign in…" />
+    window.location.replace(to)
+  }, [to])
+  return <FullScreenLoader label={label} />
 }
 
 function NotConfigured() {

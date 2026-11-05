@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { useTheme } from "next-themes"
 import { BarChart3Icon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, SunIcon, TagIcon } from "lucide-react"
@@ -28,22 +28,32 @@ import { signOutToLogin } from "@/lib/supabase"
 import { AddItemPage } from "@/pages/add-item-page"
 import { PosPage } from "@/pages/pos-page"
 import { RatesPage } from "@/pages/rates-page"
+import { usePosAccess } from "@/components/auth-gate"
+import { can, hasPortalAccess } from "../lib/access"
 
 // Summary pulls in the charting library; load it only when opened.
 const SummaryPage = lazy(() => import("@/pages/summary-page").then((m) => ({ default: m.SummaryPage })))
 
-const NAV = [
-  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage },
-  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage },
-  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage },
-  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage },
+const ALL_NAV = [
+  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, perm: "pos_billing" },
+  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, perm: "pos_items" },
+  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, perm: "pos_items" },
+  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, perm: "pos_summary" },
 ] as const
 
-type PageId = (typeof NAV)[number]["id"]
+type PageId = (typeof ALL_NAV)[number]["id"]
 
 export default function App() {
-  const [page, setPage] = useState<PageId>("pos")
-  const current = NAV.find((n) => n.id === page)!
+  const access = usePosAccess()
+  // Only the pages this user was given appear in the menu (the database enforces the same rules).
+  const NAV = useMemo(() => ALL_NAV.filter((n) => can(access, n.perm)), [access])
+  const [page, setPage] = useState<PageId>(() => NAV[0]?.id ?? "pos")
+  // AuthGate only lets users with at least one POS page in, so NAV is never empty.
+  const current = (NAV.find((n) => n.id === page) ?? NAV[0])!
+  // If a page is taken away while it is open, move to the first page still allowed.
+  useEffect(() => {
+    if (NAV.length && !NAV.some((n) => n.id === page)) setPage(NAV[0].id)
+  }, [NAV, page])
   const Page = current.page
   const [helpOpen, setHelpOpen] = useState(false)
 
@@ -55,13 +65,15 @@ export default function App() {
         e.preventDefault()
         setHelpOpen(true)
       } else if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-4]$/.test(e.key)) {
+        const target = NAV[Number(e.key) - 1]
+        if (!target) return
         e.preventDefault()
-        setPage(NAV[Number(e.key) - 1].id)
+        setPage(target.id)
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [])
+  }, [NAV])
 
   return (
     <SidebarProvider>
@@ -116,6 +128,11 @@ export default function App() {
               <KeyboardIcon />
             </Button>
             <ThemeToggle />
+            {hasPortalAccess(access) && (
+              <Button variant="outline" size="sm" onClick={() => window.location.assign("/admin")} title="Open the admin panel">
+                Admin panel
+              </Button>
+            )}
             <Button variant="ghost" size="icon-sm" aria-label="Sign out" title="Sign out" onClick={() => void signOutToLogin()}>
               <LogOutIcon />
             </Button>
@@ -123,10 +140,12 @@ export default function App() {
         </header>
         <div className="min-h-0 flex-1 overflow-auto p-4 md:p-6">
           {/* POS stays mounted so an in-progress cart survives switching modules. */}
-          <div className="h-full" hidden={page !== "pos"}>
-            <PosPage active={page === "pos"} />
-          </div>
-          {page !== "pos" && (
+          {can(access, "pos_billing") && (
+            <div className="h-full" hidden={current.id !== "pos"}>
+              <PosPage active={current.id === "pos"} />
+            </div>
+          )}
+          {current.id !== "pos" && (
             <Suspense fallback={<div className="flex h-40 items-center justify-center text-sm text-muted-foreground">Loading…</div>}>
               <Page />
             </Suspense>
