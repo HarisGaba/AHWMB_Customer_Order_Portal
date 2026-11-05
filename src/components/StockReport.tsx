@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Check, History, Plus, Trash2, Truck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
-// Stock moves one way only: Site Area Godown (bulk) -> Jodia Bazaar Godown -> Shop (final sale point).
 const LOCATIONS = ['Site Area Godown', 'Jodia Bazaar Godown', 'Shop'] as const
 type Location = (typeof LOCATIONS)[number]
-// Each destination has exactly one source.
-const SOURCE_FOR: Partial<Record<Location, Location>> = { 'Jodia Bazaar Godown': 'Site Area Godown', Shop: 'Jodia Bazaar Godown' }
+// Stock transfers happen only between godowns (either direction). The Shop is never a transfer
+// source or destination. The source is always the godown being viewed.
+const GODOWNS: Location[] = ['Site Area Godown', 'Jodia Bazaar Godown']
+const isGodown = (l: Location) => GODOWNS.includes(l)
+const transferTargets = (from: Location) => (isGodown(from) ? GODOWNS.filter(g => g !== from) : [])
 const LOCATION_LABEL: Record<Location, string> = { 'Site Area Godown': 'Site Area Godown', 'Jodia Bazaar Godown': 'Jodia Bazaar Godown', Shop: 'Shop' }
 // Older browser-only data used these names.
 const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Jodia Bazaar Godown', 'Godam Site': 'Site Area Godown' }
@@ -58,7 +60,7 @@ export function StockReport() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ text: string; type: 'ok' | 'error' } | null>(null)
   const [view, setView] = useState<'stock' | 'transfer' | 'history'>('stock')
-  const [target, setTarget] = useState<Location>('Jodia Bazaar Godown')
+  const [transfer, setTransfer] = useState<{ from: Location; to: Location } | null>(null)
   const [legacyCount, setLegacyCount] = useState(0)
 
   const notify = (text: string, type: 'ok' | 'error' = 'ok') => setMessage({ text, type })
@@ -145,10 +147,16 @@ export function StockReport() {
     setRows(current => current.filter(r => r.id !== row.id))
   }
 
-  const startTransfer = (to: Location) => { setTarget(to); setMessage(null); setView('transfer') }
+  const startTransfer = (to: Location) => {
+    // Guard: source = viewed godown, destination = another godown, never the Shop.
+    if (!isGodown(location) || !transferTargets(location).includes(to)) return
+    setTransfer({ from: location, to })
+    setMessage(null)
+    setView('transfer')
+  }
 
-  if (view === 'transfer') {
-    return <TransferForm target={target} rows={rows} onCancel={() => setView('stock')} onDone={async text => { notify(text); setView('stock'); await load(true) }} />
+  if (view === 'transfer' && transfer) {
+    return <TransferForm from={transfer.from} target={transfer.to} rows={rows} onCancel={() => setView('stock')} onDone={async text => { notify(text); setView('stock'); await load(true) }} />
   }
   if (view === 'history') return <TransferHistory onBack={() => setView('stock')} />
 
@@ -164,11 +172,12 @@ export function StockReport() {
     <div className="site-tabs stock-toolbar">
       <span className="stock-location-label">Viewing: <strong>{LOCATION_LABEL[location]}</strong></span>
       <button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button>
-      <select className="stock-transfer-select" value="" onChange={e => e.target.value && startTransfer(e.target.value as Location)} aria-label="Transfer stock">
-        <option value="">⇄ Transfer stock…</option>
-        <option value="Jodia Bazaar Godown">Site Area Godown → Jodia Bazaar Godown</option>
-        <option value="Shop">Jodia Bazaar Godown → Shop</option>
-      </select>
+      {isGodown(location)
+        ? <select className="stock-transfer-select" value="" onChange={e => e.target.value && startTransfer(e.target.value as Location)} aria-label={`Transfer stock from ${LOCATION_LABEL[location]}`}>
+          <option value="">⇄ Transfer from {LOCATION_LABEL[location]} to…</option>
+          {transferTargets(location).map(to => <option key={to} value={to}>Shifted to {LOCATION_LABEL[to]}</option>)}
+        </select>
+        : <span className="stock-transfer-note">Transfers are only between godowns — choose a godown above to transfer.</span>}
       <button type="button" className="btn-secondary stock-history-btn" onClick={() => setView('history')}><History size={16} /> Transfer History</button>
     </div>
     <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Item</th><th>Weight (kg / bag)</th><th>Quantity (kg)</th><th>Bags</th><th aria-label="Actions" /></tr></thead><tbody>
@@ -185,8 +194,7 @@ export function StockReport() {
   </section>
 }
 
-function TransferForm({ target, rows, onCancel, onDone }: { target: Location; rows: StockRow[]; onCancel: () => void; onDone: (text: string) => void }) {
-  const from = SOURCE_FOR[target]!
+function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location; target: Location; rows: StockRow[]; onCancel: () => void; onDone: (text: string) => void }) {
   const [lines, setLines] = useState<DraftLine[]>([newDraftLine()])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -215,7 +223,8 @@ function TransferForm({ target, rows, onCancel, onDone }: { target: Location; ro
   })
   const duplicate = new Set(lines.map(l => l.item).filter(Boolean)).size !== lines.filter(l => l.item).length
   const total = lines.reduce((s, l) => s + num(l.quantity), 0)
-  const canConfirm = !busy && lines.length > 0 && problems.every(p => !p) && !duplicate
+  const validRoute = isGodown(from) && isGodown(target) && from !== target
+  const canConfirm = validRoute && !busy && lines.length > 0 && problems.every(p => !p) && !duplicate
 
   const confirm = async () => {
     if (!supabase || !canConfirm) return
@@ -229,7 +238,7 @@ function TransferForm({ target, rows, onCancel, onDone }: { target: Location; ro
   return <section className="panel report-panel">
     <div className="report-heading">
       <div><p className="admin-eyebrow">STOCK TRANSFER</p><h2 className="admin-heading">{LOCATION_LABEL[from]} → {LOCATION_LABEL[target]}</h2>
-        <p className="panel-sub">{target === 'Shop' ? 'Shop is the final sale point — items moved here cannot be shifted again.' : 'List every item moving from the Site Area Godown, then confirm.'}</p></div>
+        <p className="panel-sub">List every item moving from {LOCATION_LABEL[from]} to {LOCATION_LABEL[target]}, then confirm.</p></div>
       <button type="button" className="btn-secondary" onClick={onCancel}><X size={16} /> Cancel</button>
     </div>
     <div className="transfer-route">
