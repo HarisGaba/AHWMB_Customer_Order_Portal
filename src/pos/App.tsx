@@ -29,7 +29,7 @@ import { AddItemPage } from "@/pages/add-item-page"
 import { PosPage } from "@/pages/pos-page"
 import { RatesPage } from "@/pages/rates-page"
 import { usePosAccess } from "@/components/auth-gate"
-import { can, hasPortalAccess } from "../lib/access"
+import { can } from "../lib/access"
 
 // Summary pulls in the charting library; load it only when opened.
 const SummaryPage = lazy(() => import("@/pages/summary-page").then((m) => ({ default: m.SummaryPage })))
@@ -128,11 +128,6 @@ export default function App() {
               <KeyboardIcon />
             </Button>
             <ThemeToggle />
-            {hasPortalAccess(access) && (
-              <Button variant="outline" size="sm" onClick={() => window.location.assign("/admin")} title="Open the admin panel">
-                Admin panel
-              </Button>
-            )}
             <Button variant="ghost" size="icon-sm" aria-label="Sign out" title="Sign out" onClick={() => void signOutToLogin()}>
               <LogOutIcon />
             </Button>

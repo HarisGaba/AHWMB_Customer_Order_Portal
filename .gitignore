@@ -7,3 +7,5 @@ dist
 
 .vercel
 supabase/.temp/
+
+.env*

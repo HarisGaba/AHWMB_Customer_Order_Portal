@@ -21,14 +21,18 @@ export const PORTAL_PERMISSIONS = PERMISSIONS.filter(p => p.area === 'Portal').m
 export const POS_PERMISSIONS = PERMISSIONS.filter(p => p.area === 'POS').map(p => p.key) as Permission[]
 export const permissionLabel = (key: string) => PERMISSIONS.find(p => p.key === key)?.label ?? key
 
-/** admin = the main admin (ahwmb1965@gmail.com): everything, plus the Users page. */
+/**
+ * admin = the main admin (ahwmb1965@gmail.com): every admin-panel page plus Users.
+ * The POS is separate: only users explicitly given POS pages (e.g. Ahmed) can open it.
+ */
 export type Access = { admin: boolean; active: boolean; name: string; permissions: Permission[] }
 export const NO_ACCESS: Access = { admin: false, active: false, name: '', permissions: [] }
 
+const isPosPermission = (perm: Permission) => POS_PERMISSIONS.includes(perm)
 export const can = (access: Access | null | undefined, perm: Permission) =>
-  !!access && (access.admin || (access.active && access.permissions.includes(perm)))
+  !!access && ((access.admin && !isPosPermission(perm)) || (access.active && access.permissions.includes(perm)))
 export const hasPortalAccess = (access: Access | null | undefined) => !!access && (access.admin || PORTAL_PERMISSIONS.some(p => can(access, p)))
-export const hasPosAccess = (access: Access | null | undefined) => !!access && (access.admin || POS_PERMISSIONS.some(p => can(access, p)))
+export const hasPosAccess = (access: Access | null | undefined) => POS_PERMISSIONS.some(p => can(access, p))
 /** Where a user lands after login: the admin panel if they have any portal page, else the POS. */
 export const homePathFor = (access: Access | null | undefined) =>
   hasPortalAccess(access) ? '/admin' : hasPosAccess(access) ? '/pos' : '/login'
