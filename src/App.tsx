@@ -1778,6 +1778,14 @@ function LoginPage({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Ask the browser to remember this login (Chrome/Edge show "Save password?"). Others rely on autocomplete.
+  const offerToSaveLogin = async () => {
+    const Credential = (window as Window & { PasswordCredential?: new (data: { id: string; password: string; name?: string }) => Credential }).PasswordCredential
+    if (!Credential || !navigator.credentials?.store) return
+    try { await navigator.credentials.store(new Credential({ id: email.trim(), password, name: email.trim() })) }
+    catch { /* user declined or browser blocked it */ }
+  }
+
   const login = async (event: React.FormEvent) => {
     event.preventDefault()
     setError('')
@@ -1788,6 +1796,7 @@ function LoginPage({
       if (isPosEmail(email)) {
         const { data, error: posError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
         if (posError || !data.user) { setError(t.errors.login); return }
+        await offerToSaveLogin()
         window.location.assign('/pos')
         return
       }
@@ -1798,6 +1807,7 @@ function LoginPage({
         setError(t.errors.permission)
         return
       }
+      await offerToSaveLogin()
       navigate('/admin')
     } catch {
       setError(t.errors.login)
@@ -1816,7 +1826,8 @@ function LoginPage({
           </div>
           <h2 className="auth-title">{t.loginTitle}</h2>
           <p className="auth-sub">{t.loginSub}</p>
-          <form onSubmit={e => void login(e)} autoComplete="off" noValidate>
+          {/* name/autocomplete let the browser's password manager offer to save and fill the login. */}
+          <form onSubmit={e => void login(e)} method="post" action="/login" autoComplete="on" noValidate>
             <label className="field">
               <span className="field-label">{t.email}</span>
               <input
@@ -1824,7 +1835,10 @@ function LoginPage({
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 type="email"
-                autoComplete="off"
+                name="email"
+                id="login-email"
+                autoComplete="username"
+                inputMode="email"
                 dir="ltr"
               />
             </label>
@@ -1835,7 +1849,9 @@ function LoginPage({
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 type="password"
-                autoComplete="off"
+                name="password"
+                id="login-password"
+                autoComplete="current-password"
                 dir="ltr"
               />
             </label>

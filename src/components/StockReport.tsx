@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Check, History, Plus, Trash2, Truck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -24,6 +24,34 @@ const monthLabel = (key: string) => new Date(`${key}-01T00:00:00`).toLocaleDateS
 const newDraftLine = (): DraftLine => ({ key: crypto.randomUUID(), item: '', quantity: '', bags: '' })
 const errorText = (e: unknown) => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
+/**
+ * Calls onChange when any of the tables change (Supabase Realtime), and again when the tab
+ * becomes visible or the device comes back online, in case live events were missed.
+ * Bursts (a transfer touches several rows) are collapsed into one refresh.
+ */
+function useLiveTable(tables: string[], onChange: () => void) {
+  const key = tables.join(',')
+  const callback = useRef(onChange)
+  callback.current = onChange
+  useEffect(() => {
+    if (!supabase) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const refresh = () => { clearTimeout(timer); timer = setTimeout(() => callback.current(), 250) }
+    let channel = supabase.channel(`live-${key}-${crypto.randomUUID()}`)
+    for (const table of key.split(',')) channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, refresh)
+    channel.subscribe()
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', refresh)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', refresh)
+      void supabase?.removeChannel(channel)
+    }
+  }, [key])
+}
+
 export function StockReport() {
   const [location, setLocation] = useState<Location>('Site Area Godown')
   const [rows, setRows] = useState<StockRow[]>([])
@@ -35,16 +63,27 @@ export function StockReport() {
 
   const notify = (text: string, type: 'ok' | 'error' = 'ok') => setMessage({ text, type })
 
-  const load = useCallback(async () => {
+  // Rows come back in the order they were entered / transferred (sort_order), never re-sorted A-Z.
+  // Rows the user is still editing (unsaved) are kept as typed, so a live update never wipes them.
+  const load = useCallback(async (quiet = false) => {
     if (!supabase) return
-    setLoading(true)
-    const { data, error } = await supabase.from('stock_items').select('id,location,item,weight,quantity').order('item')
-    setLoading(false)
-    if (error) { notify(`Could not load stock: ${error.message}`, 'error'); return }
-    setRows((data || []).map(r => ({ id: r.id, location: r.location, item: r.item, weight: r.weight == null ? '' : String(r.weight), quantity: String(r.quantity), saved: true })))
+    if (!quiet) setLoading(true)
+    const { data, error } = await supabase.from('stock_items').select('id,location,item,weight,quantity,sort_order').order('sort_order').order('created_at')
+    if (!quiet) setLoading(false)
+    if (error) { if (!quiet) notify(`Could not load stock: ${error.message}`, 'error'); return }
+    const fresh: StockRow[] = (data || []).map(r => ({ id: r.id, location: r.location, item: r.item, weight: r.weight == null ? '' : String(r.weight), quantity: String(r.quantity), saved: true }))
+    setRows(current => {
+      const editing = new Map(current.filter(r => !r.saved).map(r => [r.id, r]))
+      const merged = fresh.map(r => editing.get(r.id) ?? r)
+      const unsavedNew = current.filter(r => !r.saved && r.id.startsWith('new-'))
+      return [...merged, ...unsavedNew]
+    })
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  // Live sync: any change on any device (stock edits or transfers) refreshes this screen.
+  useLiveTable(['stock_items', 'stock_transfers'], () => void load(true))
 
   // Offer a one-time import of stock that was only saved in this browser before.
   useEffect(() => {
@@ -109,7 +148,7 @@ export function StockReport() {
   const startTransfer = (to: Location) => { setTarget(to); setMessage(null); setView('transfer') }
 
   if (view === 'transfer') {
-    return <TransferForm target={target} rows={rows} onCancel={() => setView('stock')} onDone={async text => { notify(text); setView('stock'); await load() }} />
+    return <TransferForm target={target} rows={rows} onCancel={() => setView('stock')} onDone={async text => { notify(text); setView('stock'); await load(true) }} />
   }
   if (view === 'history') return <TransferHistory onBack={() => setView('stock')} />
 
@@ -248,6 +287,7 @@ function TransferHistory({ onBack }: { onBack: () => void }) {
     setLoading(false)
   }, [])
   useEffect(() => { void load() }, [load])
+  useLiveTable(['stock_transfers'], () => void load())
 
   const months = useMemo(() => [...new Set(transfers.map(t => monthKey(t.created_at)))], [transfers])
   useEffect(() => { if (!months.includes(month)) setMonth(months[0] || '') }, [months, month])
@@ -282,7 +322,7 @@ function TransferHistory({ onBack }: { onBack: () => void }) {
         {shown.map(t => <article key={t.id} className="transfer-card">
           <header><strong>{LOCATION_LABEL[t.from_location]} <ArrowRight size={14} /> {LOCATION_LABEL[t.to_location]}</strong>
             <span>{new Date(t.created_at).toLocaleString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></header>
-          <ul>{t.lines.map(l => <li key={l.item}><span>{l.item}</span><span>{kg(Number(l.quantity))}{l.bags ? ` · ${l.bags} bags` : ''}</span></li>)}</ul>
+          <ul>{t.lines.map((l, i) => <li key={`${i}-${l.item}`}><span>{l.item}</span><span>{kg(Number(l.quantity))}{l.bags ? ` · ${l.bags} bags` : ''}</span></li>)}</ul>
           <footer><Check size={14} /> Total {kg(Number(t.total_quantity))}</footer>
         </article>)}
       </div>
