@@ -2585,32 +2585,6 @@ function AdminPage({
   const { toasts, add: addToast, dismiss } = useToasts()
 
   const [authorized, setAuthorized] = useState<boolean | null>(null)
-  const [backupBusy, setBackupBusy] = useState(false)
-  // Full copy of portal + POS data as a JSON file (the server also emails one nightly).
-  const downloadBackup = async () => {
-    if (!supabase || backupBusy) return
-    setBackupBusy(true)
-    try {
-      const { data, error } = await supabase.functions.invoke('daily-backup', { body: {} })
-      if (error || !data?.tables) throw error || new Error(data?.error || 'Backup failed')
-      const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' })
-      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }))
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `ahwmb-backup-${date}.json`
-      document.body.appendChild(anchor)
-      anchor.click()
-      anchor.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      const total = Object.values(data.counts as Record<string, number>).reduce((a, b) => a + b, 0)
-      addToast(isRtl ? `بیک اپ ڈاؤن لوڈ ہو گیا (${total} ریکارڈز)` : `Backup downloaded (${total} records)`, 'success')
-    } catch (err) {
-      addToast(`${isRtl ? 'بیک اپ ناکام' : 'Backup failed'}: ${readableError(err)}`, 'error')
-    } finally {
-      setBackupBusy(false)
-    }
-  }
-
   // Invoices and reports need jsPDF; fetch it in the background once the admin panel opens.
   useEffect(() => { if (isAuthenticated) preloadPdfLibs() }, [isAuthenticated])
   const [orders, setOrders] = useState<OrderRecord[]>([])
@@ -2940,7 +2914,7 @@ function AdminPage({
     return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />{can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}<ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1>
       {access && !access.admin && access.name && <p className="panel-sub">{isRtl ? 'خوش آمدید' : 'Welcome'}, {access.name}</p>}
       {tiles.filter(tile => allowed(tile.view)).map(tile => <button key={tile.view} type="button" className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={() => setAdminView(tile.view)}>{tile.label}</button>)}
-      {access?.admin && <><button type="button" className="admin-home-btn admin-home-btn--backup" disabled={backupBusy} onClick={() => void downloadBackup()}>{backupBusy ? (isRtl ? 'بیک اپ تیار ہو رہا ہے…' : 'Preparing backup…') : (isRtl ? 'بیک اپ ڈاؤن لوڈ کریں' : 'Download Backup')}</button><p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
+      {access?.admin && <><p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
       <button type="button" className="admin-home-btn admin-home-btn--users" onClick={() => setAdminView('users')}>{isRtl ? 'صارفین' : 'Users'}</button></>}
     </section></div></main>
   }
