@@ -3078,3 +3078,9 @@ body { font-size:18px; }
   .user-modal-actions { flex-direction:column-reverse; }
   .user-modal-actions .btn-submit, .user-modal-actions .btn-secondary { width:100%; }
 }
+.stock-search { display:flex; align-items:center; gap:8px; min-height:46px; min-width:240px; flex:1 1 240px; max-width:360px; padding:0 12px; border:1px solid #cfe4d8; border-radius:12px; background:#fff; color:#286044; }
+.stock-search:focus-within { border-color:#0d6b40; box-shadow:0 0 0 3px rgba(13,107,64,.15); }
+.stock-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; font:inherit; font-size:16px; color:#073d25; }
+.stock-search input::-webkit-search-cancel-button { display:none; }
+.stock-search button { display:grid; place-items:center; border:0; background:#e8f4ec; color:#286044; width:26px; height:26px; border-radius:50%; cursor:pointer; }
+@media (max-width: 700px) { .stock-search { max-width:none; width:100%; } }

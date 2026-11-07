@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, History, Plus, Trash2, Truck, X } from 'lucide-react'
+import { ArrowRight, Check, History, Plus, Search, Trash2, Truck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const LOCATIONS = ['Site Area Godown', 'Jodia Bazaar Godown', 'Shop'] as const
@@ -117,7 +117,11 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
     } catch (e) { notify(`Import failed: ${errorText(e)}`, 'error') }
   }
 
-  const visible = rows.filter(r => r.location === location)
+  const [search, setSearch] = useState('')
+  const query = search.trim().toLowerCase()
+  const atLocation = rows.filter(r => r.location === location)
+  // Search by item name. Rows still being typed (unsaved) always stay visible.
+  const visible = query ? atLocation.filter(r => !r.saved || r.item.toLowerCase().includes(query)) : atLocation
 
   const editRow = (id: string, key: 'item' | 'weight' | 'quantity', value: string) =>
     setRows(current => current.map(r => (r.id === id ? { ...r, [key]: value, saved: false } : r)))
@@ -171,7 +175,12 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
     {message && <p className={`stock-message stock-message--${message.type}`} role="status">{message.text}</p>}
     {legacyCount > 0 && <div className="stock-legacy"><span>{legacyCount} stock items are saved only in this browser.</span><button type="button" className="btn-secondary" onClick={() => void importLegacy()}>Move them to the database</button></div>}
     <div className="site-tabs stock-toolbar">
-      <span className="stock-location-label">Viewing: <strong>{LOCATION_LABEL[location]}</strong></span>
+      <label className="stock-search">
+        <Search size={17} aria-hidden="true" />
+        <input type="search" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setSearch('') }}
+          placeholder={`Search items in ${LOCATION_LABEL[location]}…`} aria-label={`Search items in ${LOCATION_LABEL[location]}`} />
+        {search && <button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={15} /></button>}
+      </label>
       {canEdit && <button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button>}
       {!canTransfer ? null : isGodown(location)
         ? <select className="stock-transfer-select" value="" onChange={e => e.target.value && startTransfer(e.target.value as Location)} aria-label={`Transfer stock from ${LOCATION_LABEL[location]}`}>
@@ -183,7 +192,7 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
     </div>
     <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Item</th><th>Weight (kg / bag)</th><th>Quantity (kg)</th><th>Bags</th><th aria-label="Actions" /></tr></thead><tbody>
       {loading && <tr><td colSpan={5} className="stock-empty">Loading stock…</td></tr>}
-      {!loading && visible.length === 0 && <tr><td colSpan={5} className="stock-empty">No stock in {LOCATION_LABEL[location]} yet. Click “Add Item”.</td></tr>}
+      {!loading && visible.length === 0 && <tr><td colSpan={5} className="stock-empty">{query && atLocation.length ? `No item matching “${search.trim()}” in ${LOCATION_LABEL[location]}.` : `No stock in ${LOCATION_LABEL[location]} yet. Click “Add Item”.`}</td></tr>}
       {visible.map(row => <tr key={row.id}>
         <td data-label="Item"><input className="report-cell-input" value={row.item} onChange={e => editRow(row.id, 'item', e.target.value)} onBlur={() => void saveRow(row)} placeholder="e.g. Chana Dal" readOnly={!canEdit} /></td>
         <td data-label="Weight (kg / bag)"><input className="report-cell-input" type="number" min="1" value={row.weight} onChange={e => editRow(row.id, 'weight', e.target.value)} onBlur={() => void saveRow(row)} placeholder="50" readOnly={!canEdit} /></td>
