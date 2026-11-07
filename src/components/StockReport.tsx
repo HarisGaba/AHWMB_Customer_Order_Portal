@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, History, Plus, Search, Trash2, Truck, X } from 'lucide-react'
+import { ArrowRight, Check, History, Pencil, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const LOCATIONS = ['Site Area Godown', 'Jodia Bazaar Godown', 'Shop'] as const
@@ -15,7 +15,7 @@ const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Jodia Bazaa
 
 type StockRow = { id: string; location: Location; item: string; weight: string; quantity: string; saved: boolean }
 type TransferLine = { item: string; weight: number | null; quantity: number; bags: number | null }
-type Transfer = { id: string; from_location: Location; to_location: Location; lines: TransferLine[]; total_quantity: number; created_at: string }
+type Transfer = { id: string; from_location: Location; to_location: Location; lines: TransferLine[]; total_quantity: number; created_at: string; edited_at?: string | null }
 type DraftLine = { key: string; item: string; quantity: string; bags: string }
 
 const num = (v: string) => Number(v || 0)
@@ -163,7 +163,7 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
   if (view === 'transfer' && transfer) {
     return <TransferForm from={transfer.from} target={transfer.to} rows={rows} onCancel={() => setView('stock')} onDone={async text => { notify(text); setView('stock'); await load(true) }} />
   }
-  if (view === 'history') return <TransferHistory canDelete={canEdit} onBack={() => setView('stock')} />
+  if (view === 'history') return <TransferHistory canDelete={canEdit} canChange={canTransfer} onBack={() => setView('stock')} />
 
   return <section className="panel report-panel">
     <div className="report-heading">
@@ -286,7 +286,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
   </section>
 }
 
-function TransferHistory({ onBack, canDelete }: { onBack: () => void; canDelete: boolean }) {
+function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void; canDelete: boolean; canChange: boolean }) {
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [month, setMonth] = useState('')
   const [loading, setLoading] = useState(true)
@@ -338,13 +338,139 @@ function TransferHistory({ onBack, canDelete }: { onBack: () => void; canDelete:
         {canDelete && <button type="button" className="btn-secondary btn-danger" onClick={() => void deleteMonth()}><Trash2 size={16} /> Delete {monthLabel(month)}</button>}
       </div>
       <div className="transfer-history">
-        {shown.map(t => <article key={t.id} className="transfer-card">
-          <header><strong>{LOCATION_LABEL[t.from_location]} <ArrowRight size={14} /> {LOCATION_LABEL[t.to_location]}</strong>
-            <span>{new Date(t.created_at).toLocaleString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></header>
-          <ul>{t.lines.map((l, i) => <li key={`${i}-${l.item}`}><span>{l.item}</span><span>{kg(Number(l.quantity))}{l.bags ? ` · ${l.bags} bags` : ''}</span></li>)}</ul>
-          <footer><Check size={14} /> Total {kg(Number(t.total_quantity))}</footer>
-        </article>)}
+        {shown.map(t => <TransferCard key={t.id} transfer={t} canChange={canChange} onChanged={text => { setMessage(text); void load() }} />)}
       </div>
     </>}
   </section>
+}
+
+const when = (iso: string) => new Date(iso).toLocaleString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+const escapeHtml = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+
+/** Printable transfer slip (gate pass), printed through a hidden same-origin frame. */
+function printTransfer(t: Transfer) {
+  const rows = t.lines.map((l, i) => `<tr><td class="n">${i + 1}</td><td>${escapeHtml(l.item)}</td><td class="r">${kg(Number(l.quantity))}</td><td class="r">${l.bags ?? '—'}</td></tr>`).join('')
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Stock Transfer — ${escapeHtml(when(t.created_at))}</title><style>
+    @page { size: A4 portrait; margin: 0; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; color: #000; font: 600 14px/1.5 Arial, Helvetica, sans-serif; }
+    .sheet { margin: 14mm; border: 2px solid #000; padding: 10mm; }
+    .head { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #000; padding-bottom: 6mm; margin-bottom: 6mm; }
+    .head img { width: 18mm; height: 18mm; border-radius: 50%; filter: grayscale(1) contrast(1.4); }
+    h1 { margin: 0; font-size: 24px; letter-spacing: 1px; }
+    .sub { margin: 2px 0 0; font-size: 13px; }
+    .route { display: flex; justify-content: space-between; gap: 10px; padding: 4mm 5mm; border: 1.5px solid #000; margin-bottom: 6mm; font-size: 16px; }
+    .route b { font-size: 17px; }
+    .meta { margin-bottom: 5mm; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #000; padding: 7px 10px; text-align: left; }
+    th { background: #000; color: #fff; }
+    td.n { width: 12mm; text-align: center; } .r { text-align: right; }
+    tfoot td { font-size: 16px; background: #eee; }
+    .sign { display: flex; justify-content: space-between; gap: 20mm; margin-top: 22mm; }
+    .sign div { flex: 1; border-top: 1.5px solid #000; padding-top: 2mm; text-align: center; font-size: 13px; }
+  </style></head><body><div class="sheet">
+    <div class="head"><img src="${window.location.origin}/logo.png" alt=""><div><h1>STOCK TRANSFER SLIP</h1><p class="sub">AHWMB · Jodia Bazaar, Karachi</p></div></div>
+    <div class="route"><span>From<br><b>${escapeHtml(LOCATION_LABEL[t.from_location] ?? t.from_location)}</b></span><span style="text-align:right">To<br><b>${escapeHtml(LOCATION_LABEL[t.to_location] ?? t.to_location)}</b></span></div>
+    <div class="meta">Date: <b>${escapeHtml(when(t.created_at))}</b>${t.edited_at ? ` &nbsp;·&nbsp; Edited: ${escapeHtml(when(t.edited_at))}` : ''} &nbsp;·&nbsp; Ref: <b>${t.id.slice(0, 8).toUpperCase()}</b></div>
+    <table><thead><tr><th>#</th><th>Item</th><th class="r">Quantity</th><th class="r">Bags</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td></td><td>Total</td><td class="r">${kg(Number(t.total_quantity))}</td><td class="r">${t.lines.reduce((a, l) => a + (Number(l.bags) || 0), 0) || '—'}</td></tr></tfoot></table>
+    <div class="sign"><div>Sent by</div><div>Received by</div></div>
+  </div></body></html>`
+  const frame = document.createElement('iframe')
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'
+  frame.srcdoc = html
+  frame.onload = () => {
+    const win = frame.contentWindow
+    const img = frame.contentDocument?.querySelector('img')
+    const go = () => { win?.focus(); win?.print(); setTimeout(() => frame.remove(), 60_000) }
+    if (img && !img.complete) { img.addEventListener('load', go, { once: true }); img.addEventListener('error', go, { once: true }); setTimeout(go, 2500) } else go()
+  }
+  document.body.appendChild(frame)
+}
+
+type EditLine = { key: string; item: string; quantity: string }
+
+/** One transfer in the history, with Edit / Delete / Print. Edit and Delete keep stock correct. */
+function TransferCard({ transfer: t, canChange, onChanged }: { transfer: Transfer; canChange: boolean; onChanged: (text: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [lines, setLines] = useState<EditLine[]>([])
+  const [sourceStock, setSourceStock] = useState<{ item: string; quantity: number }[]>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const startEdit = async () => {
+    setError('')
+    setLines(t.lines.map(l => ({ key: crypto.randomUUID(), item: l.item, quantity: String(l.quantity) })))
+    setEditing(true)
+    const { data } = await supabase!.from('stock_items').select('item,quantity').eq('location', t.from_location).order('sort_order')
+    setSourceStock((data || []).map(r => ({ item: r.item, quantity: Number(r.quantity) })))
+  }
+
+  // What can be sent for an item = what is left at the source + what this transfer already sent.
+  const already = (item: string) => t.lines.filter(l => l.item.toLowerCase() === item.toLowerCase()).reduce((a, l) => a + Number(l.quantity), 0)
+  const maxFor = (item: string) => (sourceStock.find(r => r.item.toLowerCase() === item.toLowerCase())?.quantity ?? 0) + already(item)
+  const problems = lines.map(l => {
+    if (!l.item) return 'Choose an item'
+    if (num(l.quantity) <= 0) return 'Enter a quantity'
+    if (sourceStock.length && num(l.quantity) > maxFor(l.item)) return `Only ${kg(maxFor(l.item))} available`
+    return ''
+  })
+  const duplicate = new Set(lines.map(l => l.item.toLowerCase()).filter(Boolean)).size !== lines.filter(l => l.item).length
+  const canSave = !busy && lines.length > 0 && problems.every(p => !p) && !duplicate
+  const choices = [...new Set([...t.lines.map(l => l.item), ...sourceStock.filter(r => r.quantity > 0).map(r => r.item)])]
+
+  const save = async () => {
+    if (!canSave) return
+    setBusy(true); setError('')
+    const { error: rpcError } = await supabase!.rpc('edit_transfer', { p_id: t.id, p_lines: lines.map(l => ({ item: l.item, quantity: num(l.quantity) })) })
+    setBusy(false)
+    if (rpcError) { setError(rpcError.message); return }
+    setEditing(false)
+    onChanged('✓ Transfer updated. Stock in both godowns was adjusted.')
+  }
+
+  const remove = async () => {
+    const summary = t.lines.map(l => `• ${l.item}: ${kg(Number(l.quantity))}`).join('\n')
+    if (!window.confirm(`Delete this transfer and move the stock back to ${LOCATION_LABEL[t.from_location] ?? t.from_location}?\n\n${summary}`)) return
+    setBusy(true); setError('')
+    const { error: rpcError } = await supabase!.rpc('delete_transfer', { p_id: t.id })
+    setBusy(false)
+    if (rpcError) { setError(rpcError.message); return }
+    onChanged(`✓ Transfer deleted. ${kg(Number(t.total_quantity))} moved back to ${LOCATION_LABEL[t.from_location] ?? t.from_location}.`)
+  }
+
+  return <article className={`transfer-card${editing ? ' transfer-card--editing' : ''}`}>
+    <header><strong>{LOCATION_LABEL[t.from_location] ?? t.from_location} <ArrowRight size={14} /> {LOCATION_LABEL[t.to_location] ?? t.to_location}</strong>
+      <span>{when(t.created_at)}{t.edited_at ? ` · edited ${when(t.edited_at)}` : ''}</span></header>
+    {!editing
+      ? <ul>{t.lines.map((l, i) => <li key={`${i}-${l.item}`}><span>{l.item}</span><span>{kg(Number(l.quantity))}{l.bags ? ` · ${l.bags} bags` : ''}</span></li>)}</ul>
+      : <div className="transfer-edit">
+        {lines.map((l, i) => <div key={l.key} className="transfer-edit-row">
+          <select className="report-cell-input" value={l.item} onChange={e => setLines(c => c.map(x => x.key === l.key ? { ...x, item: e.target.value } : x))}>
+            <option value="">Select item…</option>
+            {choices.map(item => <option key={item} value={item} disabled={lines.some(o => o.key !== l.key && o.item.toLowerCase() === item.toLowerCase())}>{item}</option>)}
+          </select>
+          <input className="report-cell-input" type="number" min="0" value={l.quantity} onChange={e => setLines(c => c.map(x => x.key === l.key ? { ...x, quantity: e.target.value } : x))} placeholder="kg" aria-label="Quantity (kg)" />
+          <button type="button" className="ledger-delete-btn" onClick={() => setLines(c => c.filter(x => x.key !== l.key))} disabled={lines.length === 1} aria-label="Remove line"><X size={14} /></button>
+          {problems[i] && l.item && <small className="transfer-problem">{problems[i]}</small>}
+        </div>)}
+        <button type="button" className="btn-secondary transfer-add" onClick={() => setLines(c => [...c, { key: crypto.randomUUID(), item: '', quantity: '' }])}><Plus size={15} /> Add item</button>
+      </div>}
+    {error && <p className="stock-message stock-message--error" role="alert">{error}</p>}
+    <footer>
+      <span className="transfer-total"><Check size={14} /> Total {editing ? kg(lines.reduce((a, l) => a + num(l.quantity), 0)) : kg(Number(t.total_quantity))}</span>
+      <span className="transfer-actions">
+        {editing ? <>
+          <button type="button" className="btn-secondary" onClick={() => setEditing(false)} disabled={busy}>Cancel</button>
+          <button type="button" className="btn-submit" onClick={() => void save()} disabled={!canSave}>{busy ? 'Saving…' : 'Save changes'}</button>
+        </> : <>
+          {canChange && <button type="button" className="ledger-edit-btn" onClick={() => void startEdit()} disabled={busy}><Pencil size={14} /> Edit</button>}
+          {canChange && <button type="button" className="ledger-delete-btn" onClick={() => void remove()} disabled={busy}><Trash2 size={14} /> Delete</button>}
+          <button type="button" className="ledger-print-btn" onClick={() => printTransfer(t)}><Printer size={14} /> Print</button>
+        </>}
+      </span>
+    </footer>
+  </article>
 }

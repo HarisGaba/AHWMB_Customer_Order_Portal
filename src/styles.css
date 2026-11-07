@@ -3084,3 +3084,14 @@ body { font-size:18px; }
 .stock-search input::-webkit-search-cancel-button { display:none; }
 .stock-search button { display:grid; place-items:center; border:0; background:#e8f4ec; color:#286044; width:26px; height:26px; border-radius:50%; cursor:pointer; }
 @media (max-width: 700px) { .stock-search { max-width:none; width:100%; } }
+.transfer-card footer { justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.transfer-total { display:flex; align-items:center; gap:6px; }
+.transfer-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.transfer-actions .ledger-edit-btn, .transfer-actions .ledger-delete-btn, .ledger-print-btn { display:inline-flex; align-items:center; gap:5px; min-height:36px; padding:0 12px; font-size:13px; }
+.ledger-print-btn { border:0; border-radius:7px; cursor:pointer; font:inherit; font-weight:800; background:#073d25; color:#e4aa2a; }
+.transfer-actions .btn-secondary, .transfer-actions .btn-submit { min-height:38px; width:auto; padding:0 14px; font-size:14px; }
+.transfer-card--editing { border-color:#e4aa2a; box-shadow:0 0 0 3px rgba(228,170,42,.18); }
+.transfer-edit { display:grid; gap:8px; padding:10px 14px; }
+.transfer-edit-row { display:grid; grid-template-columns:minmax(0,1fr) 130px auto; gap:8px; align-items:center; }
+.transfer-edit-row .transfer-problem { grid-column:1 / -1; margin-top:-4px; }
+@media (max-width: 700px) { .transfer-edit-row { grid-template-columns:minmax(0,1fr) 100px auto; } .transfer-actions { width:100%; } .transfer-actions > * { flex:1; justify-content:center; } }
