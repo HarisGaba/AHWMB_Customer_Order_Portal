@@ -169,7 +169,8 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
     <div className="report-heading">
       <div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Stock Report</h2><p className="panel-sub">Stock is saved permanently. Transfers deduct from the source automatically.</p></div>
       <select className="stock-location-select" value={location} onChange={e => setLocation(e.target.value as Location)}>
-        {LOCATIONS.map(l => <option key={l} value={l}>{LOCATION_LABEL[l]}</option>)}
+        {/* Only the two godowns; the Shop is not part of the Stock Report. */}
+        {GODOWNS.map(l => <option key={l} value={l}>{LOCATION_LABEL[l]}</option>)}
       </select>
     </div>
     {message && <p className={`stock-message stock-message--${message.type}`} role="status">{message.text}</p>}
