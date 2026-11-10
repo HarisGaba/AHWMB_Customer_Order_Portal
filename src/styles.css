@@ -3093,3 +3093,18 @@ body { font-size:18px; }
 .transfer-edit-row { display:grid; grid-template-columns:minmax(0,1fr) 130px auto; gap:8px; align-items:center; }
 .transfer-edit-row .transfer-problem { grid-column:1 / -1; margin-top:-4px; }
 @media (max-width: 700px) { .transfer-edit-row { grid-template-columns:minmax(0,1fr) 100px auto; } .transfer-actions { width:100%; } .transfer-actions > * { flex:1; justify-content:center; } }
+
+/* ─── Stock: confirmation pop-up + print button ───────────────────────────── */
+.confirm-modal { width:min(440px, 100%); background:#fff; border-radius:18px; padding:24px 22px 20px; text-align:center; box-shadow:0 24px 60px rgba(0,0,0,.3); display:grid; gap:10px; justify-items:center; }
+.confirm-icon { display:grid; place-items:center; width:56px; height:56px; border-radius:50%; background:#fff1f2; color:#b42318; }
+.confirm-modal h3 { margin:4px 0 0; font-size:19px; color:#073d25; }
+.confirm-modal p { margin:0; color:#4b5d54; font-size:15px; overflow-wrap:anywhere; }
+.confirm-modal .stock-message { width:100%; margin:0; text-align:left; }
+.confirm-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:8px; }
+.confirm-actions .btn-secondary { justify-content:center; min-height:48px; }
+.confirm-delete { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:48px; border:0; border-radius:12px; background:#b42318; color:#fff; font:inherit; font-weight:800; font-size:16px; cursor:pointer; }
+.confirm-delete:hover:not(:disabled) { background:#911b13; }
+.confirm-delete:disabled, .confirm-actions .btn-secondary:disabled { opacity:.6; cursor:wait; }
+.stock-heading-actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:flex-end; }
+.stock-print-btn { display:inline-flex; align-items:center; gap:7px; min-height:46px; }
+@media (max-width: 700px) { .stock-heading-actions { width:100%; } .stock-heading-actions > * { flex:1 1 100%; justify-content:center; } }

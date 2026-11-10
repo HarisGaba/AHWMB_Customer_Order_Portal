@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, History, Pencil, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Check, History, Pencil, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const LOCATIONS = ['Site Area Godown', 'Jodia Bazaar Godown', 'Shop'] as const
@@ -143,13 +143,21 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
 
   const addRow = () => setRows(current => [...current, { id: `new-${crypto.randomUUID()}`, location, item: '', weight: '', quantity: '', saved: false }])
 
-  const deleteRow = async (row: StockRow) => {
-    if (!row.id.startsWith('new-')) {
-      if (!window.confirm(`Delete ${row.item || 'this item'} from ${LOCATION_LABEL[row.location]}?`)) return
-      const { error } = await supabase!.from('stock_items').delete().eq('id', row.id)
-      if (error) { notify(`Could not delete: ${error.message}`, 'error'); return }
-    }
-    setRows(current => current.filter(r => r.id !== row.id))
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null)
+
+  const deleteRow = (row: StockRow) => {
+    // A blank row that was never saved is just removed.
+    if (row.id.startsWith('new-')) { setRows(current => current.filter(r => r.id !== row.id)); return }
+    setConfirm({
+      title: 'Are you sure you want to delete this item?',
+      detail: `${row.item || 'This item'} (${kg(num(row.quantity))}) will be removed from ${LOCATION_LABEL[row.location]}.`,
+      onConfirm: async () => {
+        const { error } = await supabase!.from('stock_items').delete().eq('id', row.id)
+        if (error) throw error
+        setRows(current => current.filter(r => r.id !== row.id))
+        notify(`✓ Deleted ${row.item} from ${LOCATION_LABEL[row.location]}.`)
+      },
+    })
   }
 
   const startTransfer = (to: Location) => {
@@ -168,10 +176,13 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
   return <section className="panel report-panel">
     <div className="report-heading">
       <div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Stock Report</h2><p className="panel-sub">Stock is saved permanently. Transfers deduct from the source automatically.</p></div>
-      <select className="stock-location-select" value={location} onChange={e => setLocation(e.target.value as Location)}>
-        {/* Only the two godowns; the Shop is not part of the Stock Report. */}
-        {GODOWNS.map(l => <option key={l} value={l}>{LOCATION_LABEL[l]}</option>)}
-      </select>
+      <div className="stock-heading-actions">
+        <button type="button" className="btn-secondary stock-print-btn" onClick={() => printStockReport(location, atLocation.filter(r => r.saved && r.item.trim()))} disabled={loading}><Printer size={17} /> Print Stock Report</button>
+        <select className="stock-location-select" value={location} onChange={e => setLocation(e.target.value as Location)}>
+          {/* Only the two godowns; the Shop is not part of the Stock Report. */}
+          {GODOWNS.map(l => <option key={l} value={l}>{LOCATION_LABEL[l]}</option>)}
+        </select>
+      </div>
     </div>
     {message && <p className={`stock-message stock-message--${message.type}`} role="status">{message.text}</p>}
     {legacyCount > 0 && <div className="stock-legacy"><span>{legacyCount} stock items are saved only in this browser.</span><button type="button" className="btn-secondary" onClick={() => void importLegacy()}>Move them to the database</button></div>}
@@ -199,9 +210,10 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
         <td data-label="Weight (kg / bag)"><input className="report-cell-input" type="number" min="1" value={row.weight} onChange={e => editRow(row.id, 'weight', e.target.value)} onBlur={() => void saveRow(row)} placeholder="50" readOnly={!canEdit} /></td>
         <td data-label="Quantity (kg)"><input className="report-cell-input" type="number" min="0" value={row.quantity} onChange={e => editRow(row.id, 'quantity', e.target.value)} onBlur={() => void saveRow(row)} placeholder="500" readOnly={!canEdit} /></td>
         <td data-label="Bags"><input className="report-cell-input stock-bags" value={bagsFor(num(row.quantity), num(row.weight) || null) ?? '—'} readOnly aria-label="Auto calculated bags" /></td>
-        <td data-label="Actions" className="stock-row-actions">{!row.saved && row.item.trim() ? <span className="stock-unsaved">Saving…</span> : null}{canEdit && <button type="button" className="ledger-delete-btn" onClick={() => void deleteRow(row)} aria-label={`Delete ${row.item}`}><Trash2 size={14} /></button>}</td>
+        <td data-label="Actions" className="stock-row-actions">{!row.saved && row.item.trim() ? <span className="stock-unsaved">Saving…</span> : null}{canEdit && <button type="button" className="ledger-delete-btn" onClick={() => deleteRow(row)} aria-label={`Delete ${row.item}`}><Trash2 size={14} /></button>}</td>
       </tr>)}
     </tbody></table></div>
+    {confirm && <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />}
   </section>
 }
 
@@ -288,6 +300,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
 }
 
 function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void; canDelete: boolean; canChange: boolean }) {
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null)
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [month, setMonth] = useState('')
   const [loading, setLoading] = useState(true)
@@ -313,15 +326,20 @@ function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void;
   useEffect(() => { if (!months.includes(month)) setMonth(months[0] || '') }, [months, month])
   const shown = transfers.filter(t => monthKey(t.created_at) === month)
 
-  const deleteMonth = async () => {
+  const deleteMonth = () => {
     if (!supabase || !month || !shown.length) return
-    if (!window.confirm(`Delete all ${shown.length} transfer records from ${monthLabel(month)}?\n\nThis only removes the history. Current stock stays as it is.`)) return
-    const start = new Date(`${month}-01T00:00:00`)
-    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1)
-    const { error } = await supabase.from('stock_transfers').delete().gte('created_at', start.toISOString()).lt('created_at', end.toISOString())
-    if (error) { setMessage(`Could not delete: ${error.message}`); return }
-    setMessage(`✓ Deleted transfer history for ${monthLabel(month)}.`)
-    await load()
+    setConfirm({
+      title: `Delete all ${shown.length} transfer records from ${monthLabel(month)}?`,
+      detail: 'This only removes the history. Current stock stays as it is.',
+      onConfirm: async () => {
+        const start = new Date(`${month}-01T00:00:00`)
+        const end = new Date(start.getFullYear(), start.getMonth() + 1, 1)
+        const { error } = await supabase!.from('stock_transfers').delete().gte('created_at', start.toISOString()).lt('created_at', end.toISOString())
+        if (error) throw error
+        setMessage(`✓ Deleted transfer history for ${monthLabel(month)}.`)
+        await load()
+      },
+    })
   }
 
   return <section className="panel report-panel">
@@ -339,9 +357,10 @@ function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void;
         {canDelete && <button type="button" className="btn-secondary btn-danger" onClick={() => void deleteMonth()}><Trash2 size={16} /> Delete {monthLabel(month)}</button>}
       </div>
       <div className="transfer-history">
-        {shown.map(t => <TransferCard key={t.id} transfer={t} canChange={canChange} onChanged={text => { setMessage(text); void load() }} />)}
+        {shown.map(t => <TransferCard key={t.id} transfer={t} canChange={canChange} onConfirm={setConfirm} onChanged={text => { setMessage(text); void load() }} />)}
       </div>
     </>}
+    {confirm && <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />}
   </section>
 }
 
@@ -379,22 +398,13 @@ function printTransfer(t: Transfer) {
       <tfoot><tr><td></td><td>Total</td><td class="r">${kg(Number(t.total_quantity))}</td><td class="r">${t.lines.reduce((a, l) => a + (Number(l.bags) || 0), 0) || '—'}</td></tr></tfoot></table>
     <div class="sign"><div>Sent by</div><div>Received by</div></div>
   </div></body></html>`
-  const frame = document.createElement('iframe')
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'
-  frame.srcdoc = html
-  frame.onload = () => {
-    const win = frame.contentWindow
-    const img = frame.contentDocument?.querySelector('img')
-    const go = () => { win?.focus(); win?.print(); setTimeout(() => frame.remove(), 60_000) }
-    if (img && !img.complete) { img.addEventListener('load', go, { once: true }); img.addEventListener('error', go, { once: true }); setTimeout(go, 2500) } else go()
-  }
-  document.body.appendChild(frame)
+  printHtml(html)
 }
 
 type EditLine = { key: string; item: string; quantity: string }
 
 /** One transfer in the history, with Edit / Delete / Print. Edit and Delete keep stock correct. */
-function TransferCard({ transfer: t, canChange, onChanged }: { transfer: Transfer; canChange: boolean; onChanged: (text: string) => void }) {
+function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transfer: Transfer; canChange: boolean; onChanged: (text: string) => void; onConfirm: (request: ConfirmRequest) => void }) {
   const [editing, setEditing] = useState(false)
   const [lines, setLines] = useState<EditLine[]>([])
   const [sourceStock, setSourceStock] = useState<{ item: string; quantity: number }[]>([])
@@ -432,14 +442,22 @@ function TransferCard({ transfer: t, canChange, onChanged }: { transfer: Transfe
     onChanged('✓ Transfer updated. Stock in both godowns was adjusted.')
   }
 
-  const remove = async () => {
-    const summary = t.lines.map(l => `• ${l.item}: ${kg(Number(l.quantity))}`).join('\n')
-    if (!window.confirm(`Delete this transfer and move the stock back to ${LOCATION_LABEL[t.from_location] ?? t.from_location}?\n\n${summary}`)) return
-    setBusy(true); setError('')
-    const { error: rpcError } = await supabase!.rpc('delete_transfer', { p_id: t.id })
-    setBusy(false)
-    if (rpcError) { setError(rpcError.message); return }
-    onChanged(`✓ Transfer deleted. ${kg(Number(t.total_quantity))} moved back to ${LOCATION_LABEL[t.from_location] ?? t.from_location}.`)
+  const remove = () => {
+    const source = LOCATION_LABEL[t.from_location] ?? t.from_location
+    onConfirm({
+      title: 'Are you sure you want to delete this transfer?',
+      detail: `The stock still in ${LOCATION_LABEL[t.to_location] ?? t.to_location} will be moved back to ${source}: ${t.lines.map(l => `${l.item} ${kg(Number(l.quantity))}`).join(', ')}.`,
+      onConfirm: async () => {
+        setError('')
+        const { data, error: rpcError } = await supabase!.rpc('delete_transfer', { p_id: t.id })
+        if (rpcError) throw rpcError
+        // The record is always removed; report anything that could not be moved back.
+        const result = (data || {}) as { returned?: { item: string; quantity: number }[]; not_returned?: { item: string; quantity: number }[] }
+        const returned = (result.returned || []).reduce((a, l) => a + Number(l.quantity), 0)
+        const missing = result.not_returned || []
+        onChanged(`✓ Transfer deleted.${returned ? ` ${kg(returned)} moved back to ${source}.` : ''}${missing.length ? ` Not returned (no longer in stock): ${missing.map(l => `${l.item} ${kg(Number(l.quantity))}`).join(', ')}.` : ''}`)
+      },
+    })
   }
 
   return <article className={`transfer-card${editing ? ' transfer-card--editing' : ''}`}>
@@ -468,10 +486,103 @@ function TransferCard({ transfer: t, canChange, onChanged }: { transfer: Transfe
           <button type="button" className="btn-submit" onClick={() => void save()} disabled={!canSave}>{busy ? 'Saving…' : 'Save changes'}</button>
         </> : <>
           {canChange && <button type="button" className="ledger-edit-btn" onClick={() => void startEdit()} disabled={busy}><Pencil size={14} /> Edit</button>}
-          {canChange && <button type="button" className="ledger-delete-btn" onClick={() => void remove()} disabled={busy}><Trash2 size={14} /> Delete</button>}
+          {canChange && <button type="button" className="ledger-delete-btn" onClick={remove} disabled={busy}><Trash2 size={14} /> Delete</button>}
           <button type="button" className="ledger-print-btn" onClick={() => printTransfer(t)}><Printer size={14} /> Print</button>
         </>}
       </span>
     </footer>
   </article>
+}
+
+/**
+ * Prints a standalone HTML document through a hidden same-origin frame. Only that
+ * document is printed, so no buttons, menus or app headers appear on paper.
+ */
+function printHtml(html: string) {
+  const frame = document.createElement('iframe')
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'
+  frame.srcdoc = html
+  frame.onload = () => {
+    const win = frame.contentWindow
+    const img = frame.contentDocument?.querySelector('img')
+    let printed = false
+    const go = () => { if (printed) return; printed = true; win?.focus(); win?.print(); setTimeout(() => frame.remove(), 60_000) }
+    if (img && !img.complete) { img.addEventListener('load', go, { once: true }); img.addEventListener('error', go, { once: true }); setTimeout(go, 2500) } else go()
+  }
+  document.body.appendChild(frame)
+}
+
+/** Month-end stock audit sheet for one godown: Item, Weight, Quantity (kg), Bags, with totals. */
+function printStockReport(location: Location, rows: StockRow[]) {
+  const now = new Date()
+  const totalKg = rows.reduce((a, r) => a + num(r.quantity), 0)
+  const totalBags = rows.reduce((a, r) => a + (bagsFor(num(r.quantity), num(r.weight) || null) ?? 0), 0)
+  const body = rows.length
+    ? rows.map((r, i) => {
+      const bags = bagsFor(num(r.quantity), num(r.weight) || null)
+      return `<tr><td class="n">${i + 1}</td><td>${escapeHtml(r.item)}</td><td class="r">${r.weight ? `${escapeHtml(r.weight)} kg` : '—'}</td><td class="r">${kg(num(r.quantity))}</td><td class="r">${bags ?? '—'}</td></tr>`
+    }).join('')
+    : '<tr><td colspan="5" class="empty">No stock recorded</td></tr>'
+  printHtml(`<!doctype html><html><head><meta charset="utf-8"><title>Stock Report — ${escapeHtml(LOCATION_LABEL[location])}</title><style>
+    /* margin 0 removes the browser's own URL/date header and footer; .sheet adds the page margin. */
+    @page { size: A4 portrait; margin: 0; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; color: #000; font: 600 13px/1.45 Arial, Helvetica, sans-serif; }
+    .sheet { margin: 12mm; border: 2px solid #000; padding: 9mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .head { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #000; padding-bottom: 5mm; margin-bottom: 5mm; }
+    .head img { width: 17mm; height: 17mm; border-radius: 50%; filter: grayscale(1) contrast(1.4); }
+    h1 { margin: 0; font-size: 23px; letter-spacing: 1px; }
+    .sub { margin: 2px 0 0; font-size: 12.5px; }
+    .meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 5mm; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+    th, td { border: 1px solid #000; padding: 6px 9px; text-align: left; }
+    th { background: #000; color: #fff; font-size: 12.5px; text-transform: uppercase; letter-spacing: .4px; }
+    td.n { width: 11mm; text-align: center; } .r { text-align: right; font-variant-numeric: tabular-nums; }
+    td.empty { text-align: center; padding: 14px; }
+    tr.total td { background: #eee; font-size: 15px; border-top: 2px solid #000; }
+    .sign { display: flex; justify-content: space-between; gap: 20mm; margin-top: 18mm; break-inside: avoid; }
+    .sign div { flex: 1; border-top: 1.5px solid #000; padding-top: 2mm; text-align: center; font-size: 12.5px; }
+  </style></head><body><div class="sheet">
+    <div class="head"><img src="${window.location.origin}/logo.png" alt=""><div><h1>STOCK REPORT</h1><p class="sub">AHWMB · Jodia Bazaar, Karachi</p></div></div>
+    <div class="meta"><span>Location: <b>${escapeHtml(LOCATION_LABEL[location])}</b></span><span>Date: <b>${escapeHtml(now.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' }))}</b>, ${escapeHtml(now.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }))}</span></div>
+    <table>
+      <thead><tr><th>#</th><th>Item Name</th><th class="r">Weight (kg / bag)</th><th class="r">Total Quantity (kg)</th><th class="r">Bags</th></tr></thead>
+      <tbody>${body}${rows.length ? `<tr class="total"><td></td><td>Total (${rows.length} item${rows.length === 1 ? '' : 's'})</td><td></td><td class="r">${kg(totalKg)}</td><td class="r">${totalBags || '—'}</td></tr>` : ''}</tbody>
+    </table>
+    <div class="sign"><div>Checked by</div><div>Approved by</div></div>
+  </div></body></html>`)
+}
+
+type ConfirmRequest = { title: string; detail?: string; confirmLabel?: string; onConfirm: () => Promise<void> }
+
+/** Cancel / Delete confirmation pop-up. Esc or clicking outside cancels. */
+function ConfirmModal({ request, onClose }: { request: ConfirmRequest; onClose: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => { cancelRef.current?.focus() }, [])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [busy, onClose])
+  const confirm = async () => {
+    setBusy(true); setError('')
+    try { await request.onConfirm(); onClose() }
+    catch (e) { setError(errorText(e)); setBusy(false) }
+  }
+  return <div className="confirm-overlay" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" onClick={e => { if (e.target === e.currentTarget && !busy) onClose() }}>
+    <div className="confirm-modal">
+      <div className="confirm-icon" aria-hidden="true"><AlertTriangle size={26} /></div>
+      <h3 id="confirm-title">{request.title}</h3>
+      {request.detail && <p>{request.detail}</p>}
+      {error && <p className="stock-message stock-message--error" role="alert">{error}</p>}
+      <div className="confirm-actions">
+        <button ref={cancelRef} type="button" className="btn-secondary" onClick={onClose} disabled={busy}>Cancel</button>
+        <button type="button" className="confirm-delete" onClick={() => void confirm()} disabled={busy}><Trash2 size={16} /> {busy ? 'Deleting…' : request.confirmLabel || 'Delete'}</button>
+      </div>
+    </div>
+  </div>
 }
