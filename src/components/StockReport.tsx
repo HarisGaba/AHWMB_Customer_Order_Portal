@@ -236,18 +236,19 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
     return next
   }))
 
+  // The same item may appear on several lines; together they may not exceed the stock.
+  const totalFor = (item: string) => lines.filter(l => l.item === item).reduce((a, l) => a + num(l.quantity), 0)
   const problems = lines.map(l => {
     if (!l.item) return 'Choose an item'
     const stock = stockOf(l.item)
     if (!stock) return 'Not available here'
     if (num(l.quantity) <= 0) return 'Enter a quantity'
-    if (num(l.quantity) > num(stock.quantity)) return `Only ${kg(num(stock.quantity))} available`
+    if (totalFor(l.item) > num(stock.quantity)) return `Only ${kg(num(stock.quantity))} available${lines.filter(o => o.item === l.item).length > 1 ? ' (all lines of this item together)' : ''}`
     return ''
   })
-  const duplicate = new Set(lines.map(l => l.item).filter(Boolean)).size !== lines.filter(l => l.item).length
   const total = lines.reduce((s, l) => s + num(l.quantity), 0)
   const validRoute = isGodown(from) && isGodown(target) && from !== target
-  const canConfirm = validRoute && !busy && lines.length > 0 && problems.every(p => !p) && !duplicate
+  const canConfirm = validRoute && !busy && lines.length > 0 && problems.every(p => !p)
 
   const confirm = async () => {
     if (!supabase || !canConfirm) return
@@ -277,10 +278,8 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
             const stock = stockOf(l.item)
             const weight = num(stock?.weight || '') || null
             return <tr key={l.key}>
-              <td data-label="Item"><select className="report-cell-input" value={l.item} onChange={e => setLine(l.key, { item: e.target.value })}>
-                <option value="">Select item…</option>
-                {available.map(r => <option key={r.id} value={r.item} disabled={lines.some(o => o.key !== l.key && o.item === r.item)}>{r.item}</option>)}
-              </select></td>
+              <td data-label="Item"><ItemPicker value={l.item} onChange={item => setLine(l.key, { item })}
+                options={available.map(r => ({ item: r.item, hint: kg(num(r.quantity)) }))} /></td>
               <td data-label="Available" className="transfer-available">{stock ? `${kg(num(stock.quantity))}${weight ? ` · ${bagsFor(num(stock.quantity), weight)} bags` : ''}` : '—'}</td>
               <td data-label="Quantity (kg)"><input className="report-cell-input" type="number" min="0" value={l.quantity} disabled={!l.item} onChange={e => setLine(l.key, { quantity: e.target.value })} placeholder="kg" />
                 {problems[i] && l.item && l.quantity && <small className="transfer-problem">{problems[i]}</small>}</td>
@@ -289,7 +288,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
             </tr>
           })}
         </tbody></table></div>
-        <button type="button" className="btn-secondary transfer-add" onClick={() => setLines(c => [...c, newDraftLine()])} disabled={lines.length >= available.length}><Plus size={16} /> Add another item</button>
+        <button type="button" className="btn-secondary transfer-add" onClick={() => setLines(c => [...c, newDraftLine()])} ><Plus size={16} /> Add another item</button>
       </>}
     {error && <p className="stock-message stock-message--error" role="alert">{error}</p>}
     <div className="transfer-confirm-bar">
@@ -422,14 +421,14 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
   // What can be sent for an item = what is left at the source + what this transfer already sent.
   const already = (item: string) => t.lines.filter(l => l.item.toLowerCase() === item.toLowerCase()).reduce((a, l) => a + Number(l.quantity), 0)
   const maxFor = (item: string) => (sourceStock.find(r => r.item.toLowerCase() === item.toLowerCase())?.quantity ?? 0) + already(item)
+  const totalFor = (item: string) => lines.filter(l => l.item.toLowerCase() === item.toLowerCase()).reduce((a, l) => a + num(l.quantity), 0)
   const problems = lines.map(l => {
     if (!l.item) return 'Choose an item'
     if (num(l.quantity) <= 0) return 'Enter a quantity'
-    if (sourceStock.length && num(l.quantity) > maxFor(l.item)) return `Only ${kg(maxFor(l.item))} available`
+    if (sourceStock.length && totalFor(l.item) > maxFor(l.item)) return `Only ${kg(maxFor(l.item))} available`
     return ''
   })
-  const duplicate = new Set(lines.map(l => l.item.toLowerCase()).filter(Boolean)).size !== lines.filter(l => l.item).length
-  const canSave = !busy && lines.length > 0 && problems.every(p => !p) && !duplicate
+  const canSave = !busy && lines.length > 0 && problems.every(p => !p)
   const choices = [...new Set([...t.lines.map(l => l.item), ...sourceStock.filter(r => r.quantity > 0).map(r => r.item)])]
 
   const save = async () => {
@@ -467,10 +466,8 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
       ? <ul>{t.lines.map((l, i) => <li key={`${i}-${l.item}`}><span>{l.item}</span><span>{kg(Number(l.quantity))}{l.bags ? ` · ${l.bags} bags` : ''}</span></li>)}</ul>
       : <div className="transfer-edit">
         {lines.map((l, i) => <div key={l.key} className="transfer-edit-row">
-          <select className="report-cell-input" value={l.item} onChange={e => setLines(c => c.map(x => x.key === l.key ? { ...x, item: e.target.value } : x))}>
-            <option value="">Select item…</option>
-            {choices.map(item => <option key={item} value={item} disabled={lines.some(o => o.key !== l.key && o.item.toLowerCase() === item.toLowerCase())}>{item}</option>)}
-          </select>
+          <ItemPicker value={l.item} onChange={item => setLines(c => c.map(x => x.key === l.key ? { ...x, item } : x))}
+            options={choices.map(item => ({ item, hint: sourceStock.length ? kg(maxFor(item)) : undefined }))} />
           <input className="report-cell-input" type="number" min="0" value={l.quantity} onChange={e => setLines(c => c.map(x => x.key === l.key ? { ...x, quantity: e.target.value } : x))} placeholder="kg" aria-label="Quantity (kg)" />
           <button type="button" className="ledger-delete-btn" onClick={() => setLines(c => c.filter(x => x.key !== l.key))} disabled={lines.length === 1} aria-label="Remove line"><X size={14} /></button>
           {problems[i] && l.item && <small className="transfer-problem">{problems[i]}</small>}
@@ -584,5 +581,80 @@ function ConfirmModal({ request, onClose }: { request: ConfirmRequest; onClose: 
         <button type="button" className="confirm-delete" onClick={() => void confirm()} disabled={busy}><Trash2 size={16} /> {busy ? 'Deleting…' : request.confirmLabel || 'Delete'}</button>
       </div>
     </div>
+  </div>
+}
+
+/**
+ * Searchable item picker. The list floats above the page (position: fixed), so it is never
+ * cut off by the scrolling table, with a solid background, its own scroll and keyboard support.
+ * Every item can be picked on any line, as often as needed.
+ */
+function ItemPicker({ value, onChange, options, placeholder = 'Select or type item…' }: {
+  value: string
+  onChange: (item: string) => void
+  options: { item: string; hint?: string }[]
+  placeholder?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [active, setActive] = useState(0)
+  const [box, setBox] = useState<{ left: number; top: number; width: number; maxHeight: number; above: boolean } | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const q = text.trim().toLowerCase()
+  const filtered = q ? options.filter(o => o.item.toLowerCase().includes(q)) : options
+
+  const place = useCallback(() => {
+    const rect = inputRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const below = window.innerHeight - rect.bottom - 12
+    const above = rect.top - 12
+    const showAbove = below < 220 && above > below
+    setBox({ left: rect.left, width: Math.max(rect.width, 240), top: showAbove ? rect.top - 4 : rect.bottom + 4, maxHeight: Math.min(320, showAbove ? above : below), above: showAbove })
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    place()
+    const onMove = () => place()
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (!inputRef.current?.contains(target) && !listRef.current?.contains(target)) setOpen(false)
+    }
+    window.addEventListener('scroll', onMove, true)
+    window.addEventListener('resize', onMove)
+    document.addEventListener('mousedown', onDown)
+    return () => {
+      window.removeEventListener('scroll', onMove, true)
+      window.removeEventListener('resize', onMove)
+      document.removeEventListener('mousedown', onDown)
+    }
+  }, [open, place])
+
+  useEffect(() => { listRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: 'nearest' }) }, [active])
+
+  const choose = (item: string) => { onChange(item); setText(''); setOpen(false) }
+  const openList = () => { setText(''); setActive(Math.max(0, options.findIndex(o => o.item === value))); setOpen(true) }
+
+  return <div className="item-picker">
+    <input ref={inputRef} className="report-cell-input item-picker-input" value={open ? text : value} placeholder={open && value ? value : placeholder}
+      onFocus={openList} onClick={() => { if (!open) openList() }}
+      onChange={e => { setText(e.target.value); setActive(0); if (!open) setOpen(true) }}
+      onKeyDown={e => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); if (!open) openList(); else setActive(a => Math.min(a + 1, filtered.length - 1)) }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(a - 1, 0)) }
+        else if (e.key === 'Enter') { if (open && filtered[active]) { e.preventDefault(); choose(filtered[active].item) } }
+        else if (e.key === 'Escape' || e.key === 'Tab') setOpen(false)
+      }}
+      role="combobox" aria-expanded={open} aria-autocomplete="list" aria-label="Item" autoComplete="off" />
+    {open && box && <ul ref={listRef} className="item-picker-list" role="listbox"
+      style={{ left: box.left, width: box.width, maxHeight: box.maxHeight, ...(box.above ? { bottom: window.innerHeight - box.top } : { top: box.top }) }}>
+      {filtered.length === 0 && <li className="item-picker-empty">No item matches “{text.trim()}”</li>}
+      {filtered.map((o, i) => <li key={o.item} role="option" aria-selected={o.item === value} data-active={i === active}
+        className={`item-picker-option${i === active ? ' is-active' : ''}${o.item === value ? ' is-selected' : ''}`}
+        onMouseEnter={() => setActive(i)} onMouseDown={e => { e.preventDefault(); choose(o.item) }}>
+        <span>{o.item}</span>{o.hint && <small>{o.hint}</small>}
+      </li>)}
+    </ul>}
   </div>
 }
