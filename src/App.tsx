@@ -562,7 +562,7 @@ function InvoiceDocument({ order, items, financials }: InvoicePayload) {
 const invoicePrintCss = `
   @page { size: A4 portrait; margin: 10mm; }
   *, *::before, *::after { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  html, body { margin: 0; background: #fff; color: #000; font-family: Georgia, 'Times New Roman', serif; font-weight: 750; }
+  html, body { margin: 0; background: #fff; color: #000; font-family: Georgia, 'Times New Roman', "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif; font-weight: 750; }
   .invoice-document { width: 100%; max-width: 190mm; margin: 0 auto; padding: 6mm; border: 3px double #050505; font-size: 11px; }
   .invoice-header { text-align: center; margin-bottom: 4mm; }
   .invoice-header h1 { display: inline-block; margin: 0 auto; border: 2.5px solid #050505; padding: 2mm 10mm; font-size: 22px; line-height: 1.2; font-weight: 900; letter-spacing: .05em; }
@@ -616,7 +616,10 @@ function buildInvoiceHtml(payload: InvoicePayload): string {
   // ── Data rows ─────────────────────────────────────────────────────────────
   // Convert \n to <br> and escape HTML special chars in item names
   const escHtml = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  const nameHtml = (name: string) => escHtml(name || '—').replace(/\n/g, '<br>')
+  // Each Urdu run goes in its own right-to-left span: bold Nastaliq, never reordered.
+  const nameHtml = (name: string) => escHtml(name || '—')
+    .replace(/[\u0600-\u06ff](?:[\u0600-\u06ff\u200c\u200d \d.,،()-]*[\u0600-\u06ff])?/g, run => `<span class="ur" dir="rtl" lang="ur">${run}</span>`)
+    .replace(/\n/g, '<br>')
 
   const dataRows = items.map((item, i) => `
     <tr>
@@ -628,10 +631,12 @@ function buildInvoiceHtml(payload: InvoicePayload): string {
     </tr>`).join('')
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@700&display=block">
   <style>
     @page { size:A4 portrait; margin:12mm; }
     *, *::before, *::after { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    html, body { margin:0; padding:0; background:#fff; font-family:Georgia,"Times New Roman",serif; font-size:13px; color:#000; font-weight:700; }
+    html, body { margin:0; padding:0; background:#fff; font-family:Georgia,"Times New Roman","Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting",serif; font-size:13px; color:#000; font-weight:700; }
+    .ur { font-family:"Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting",serif; font-weight:700; font-size:15px; line-height:2.1; direction:rtl; unicode-bidi:isolate; display:inline-block; -webkit-text-stroke:.25px #000; }
 
     /* ── Outer frame ── */
     .page { position:relative; width:100%; padding:8mm; border:3px solid #000; }
@@ -843,8 +848,14 @@ async function drawInvoice(
 ): Promise<Blob> {
   const { jsPDF } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5', compress: true })
+  // Load the bold Urdu font before drawing, otherwise the canvas falls back to a thin system font.
+  await Promise.race([
+    Promise.all([document.fonts.load('700 44px "Noto Nastaliq Urdu"', 'اردو'), document.fonts.load('700 46px "Noto Naskh Arabic"', 'اردو')]),
+    new Promise(resolve => setTimeout(resolve, 4000)),
+  ]).catch(() => undefined)
   await document.fonts.ready
   // Browser shaping preserves Urdu joins and Unicode glyphs unsupported by Times.
+  // Urdu is drawn in bold Nastaliq, right-to-left; English stays in a bold serif.
   const unicodeName = (text: string, width: number) => {
     if (!/[^\x00-\x7F]/.test(text)) return null
     const scale = 12
@@ -852,7 +863,8 @@ async function drawInvoice(
     canvas.width = Math.ceil(width * scale)
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Invoice text rendering is unavailable')
-    const font = 'bold 46px "Noto Naskh Arabic", Arial, sans-serif'
+    const hasUrdu = /[\u0600-\u06ff]/.test(text)
+    const font = hasUrdu ? '700 44px "Noto Nastaliq Urdu", "Noto Naskh Arabic", Georgia, serif' : 'bold 46px Georgia, "Times New Roman", serif'
     ctx.font = font
     const lines: string[] = []
     for (const paragraph of text.split(/\r?\n/)) {
@@ -866,16 +878,25 @@ async function drawInvoice(
       }
       lines.push(line)
     }
-    const lineHeight = 80
+    // Nastaliq is tall: give each line enough room so nothing is clipped.
+    const lineHeight = hasUrdu ? 104 : 80
     canvas.height = lines.length * lineHeight + 24
     ctx.font = font
     ctx.fillStyle = '#000'
+    ctx.strokeStyle = '#000'
+    ctx.lineWidth = 1.6 // a thin outline makes the strokes print dark, not faded
+    ctx.lineJoin = 'round'
     ctx.textBaseline = 'middle'
     lines.forEach((line, index) => {
-      const rtl = /^[^A-Za-z\u0600-\u06ff]*[\u0600-\u06ff]/.test(line)
+      // A line that is mostly Urdu is laid out right-to-left and right-aligned, so word order is kept.
+      const urduChars = (line.match(/[\u0600-\u06ff]/g) || []).length
+      const latinChars = (line.match(/[A-Za-z]/g) || []).length
+      const rtl = urduChars > 0 && urduChars >= latinChars
       ctx.direction = rtl ? 'rtl' : 'ltr'
       ctx.textAlign = rtl ? 'right' : 'left'
-      ctx.fillText(line, rtl ? canvas.width - 8 : 8, 12 + (index + 0.5) * lineHeight, canvas.width - 16)
+      const x = rtl ? canvas.width - 8 : 8, y = 12 + (index + 0.5) * lineHeight
+      if (hasUrdu) ctx.strokeText(line, x, y, canvas.width - 16)
+      ctx.fillText(line, x, y, canvas.width - 16)
     })
     return { canvas, height: canvas.height / scale }
   }
@@ -1979,7 +2000,7 @@ function buildExpenseLedgerHtml(date: string, rows: ExpenseRow[]) {
   const body = validRows.length
     ? validRows.map((row, i) => `<tr><td class="n">${i + 1}</td><td dir="auto">${esc(row.expense_title || '—')}</td><td class="amt">${reportAmount(row.amount)}</td></tr>`).join('')
     : '<tr><td colspan="3" class="empty">No expenses recorded</td></tr>'
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Dukan Daily Expense Ledger — ${esc(date)}</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Dukan Daily Expense Ledger — ${esc(date)}</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@700&display=block">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=block">
 <style>
   /* margin 0 removes the browser's own URL/date header and footer; the sheet adds its own margin. */

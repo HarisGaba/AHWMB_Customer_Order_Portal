@@ -398,7 +398,7 @@ function printTransfer(t: Transfer) {
       <tfoot><tr><td></td><td>Total</td><td class="r">${kg(Number(t.total_quantity))}</td><td class="r">${t.lines.reduce((a, l) => a + (Number(l.bags) || 0), 0) || '—'}</td></tr></tfoot></table>
     <div class="sign"><div>Sent by</div><div>Received by</div></div>
   </div></body></html>`
-  printHtml(html)
+  printHtml(html, `stock-transfer-${t.created_at.slice(0, 10)}.pdf`)
 }
 
 type EditLine = { key: string; item: string; quantity: string }
@@ -493,7 +493,7 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
 }
 
 /** Prints a standalone document (only it reaches paper: no buttons, menus or headers). Works on phones too. */
-const printHtml = (html: string) => printDocument(html)
+const printHtml = (html: string, filename?: string) => printDocument(html, null, { filename })
 
 /** Month-end stock audit sheet for one godown: Item, Weight, Quantity (kg), Bags, with totals. */
 function printStockReport(location: Location, rows: StockRow[]) {
@@ -535,7 +535,7 @@ function printStockReport(location: Location, rows: StockRow[]) {
       <tbody>${body}${rows.length ? `<tr class="total"><td></td><td>Total (${rows.length} item${rows.length === 1 ? '' : 's'})</td><td></td><td class="r">${kg(totalKg)}</td><td class="r">${totalBags || '—'}</td></tr>` : ''}</tbody>
     </table>
     <div class="sign"><div>Checked by</div><div>Approved by</div></div>
-  </div></body></html>`)
+  </div></body></html>`, `stock-report-${location}-${new Date().toISOString().slice(0, 10)}.pdf`)
 }
 
 type ConfirmRequest = { title: string; detail?: string; confirmLabel?: string; onConfirm: () => Promise<void> }
