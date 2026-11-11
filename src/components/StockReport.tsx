@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowRight, Check, History, Pencil, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { printDocument } from '../lib/print'
 
 const LOCATIONS = ['Site Area Godown', 'Jodia Bazaar Godown', 'Shop'] as const
 type Location = (typeof LOCATIONS)[number]
@@ -491,23 +492,8 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
   </article>
 }
 
-/**
- * Prints a standalone HTML document through a hidden same-origin frame. Only that
- * document is printed, so no buttons, menus or app headers appear on paper.
- */
-function printHtml(html: string) {
-  const frame = document.createElement('iframe')
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'
-  frame.srcdoc = html
-  frame.onload = () => {
-    const win = frame.contentWindow
-    const img = frame.contentDocument?.querySelector('img')
-    let printed = false
-    const go = () => { if (printed) return; printed = true; win?.focus(); win?.print(); setTimeout(() => frame.remove(), 60_000) }
-    if (img && !img.complete) { img.addEventListener('load', go, { once: true }); img.addEventListener('error', go, { once: true }); setTimeout(go, 2500) } else go()
-  }
-  document.body.appendChild(frame)
-}
+/** Prints a standalone document (only it reaches paper: no buttons, menus or headers). Works on phones too. */
+const printHtml = (html: string) => printDocument(html)
 
 /** Month-end stock audit sheet for one godown: Item, Weight, Quantity (kg), Bags, with totals. */
 function printStockReport(location: Location, rows: StockRow[]) {

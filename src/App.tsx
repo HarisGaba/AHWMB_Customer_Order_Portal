@@ -6,6 +6,7 @@ import {
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
+import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
 import { useDraftOrder } from './hooks/useDraftOrder'
@@ -778,7 +779,9 @@ async function waitForInvoiceAssets(printDocument: Document) {
   })
   await Promise.race([Promise.allSettled([fontReady, ...imageReady]), new Promise(resolve => window.setTimeout(resolve, 5000))])
 }
-function printInvoiceHtml(html: string) {
+function printInvoiceHtml(html: string, preparedTab?: Window | null) {
+  // Phones can't print from a hidden frame: open the document as its own page instead.
+  if (isMobileDevice()) { printDocument(html, preparedTab); return }
   const iframe = document.createElement('iframe')
   iframe.title = 'Invoice print preview'
   iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none'
@@ -2226,7 +2229,24 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
     }
   }
 
+  // Phones only open the share sheet straight after a tap, so the PDF is prepared in the
+  // background whenever the ledger changes; tapping Share then uses it immediately.
+  const pdfKey = JSON.stringify([date, rows.map(r => [r.expense_title, r.amount])])
+  const readyPdf = useRef<{ key: string; blob: Blob; filename: string } | null>(null)
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void buildExpenseLedgerPdf(date, rows)
+        .then(blob => { readyPdf.current = { key: pdfKey, blob, filename: `ahwmb-expense-ledger-${date}.pdf` } })
+        .catch(() => undefined)
+    }, 600)
+    return () => window.clearTimeout(timer)
+  }, [pdfKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const createPdf = async () => {
+    if (readyPdf.current?.key === pdfKey) {
+      setLastPdf({ blob: readyPdf.current.blob, name: readyPdf.current.filename })
+      return { blob: readyPdf.current.blob, filename: readyPdf.current.filename }
+    }
     const filename = `ahwmb-expense-ledger-${date}.pdf`
     const blob = await buildExpenseLedgerPdf(date, rows)
     setLastPdf({ blob, name: filename })
@@ -2799,6 +2819,8 @@ function AdminPage({
   const saveAndPrint = async () => {
     if (!selected) return
     if (!supabase) { addToast(t.errors.setup, 'error'); return }
+    // On phones the print page must open right at the tap (before the PDF is generated).
+    const printTab = openPrintTab()
     setSaving(true)
 
     const items = pricedItems
@@ -2849,9 +2871,10 @@ function AdminPage({
           order: nextOrder,
           items,
           financials: { totalAmount: finalTotalAmount, balance: finalBalance, totalBalance: finalTotalBalance, deposit: finalDeposit, remainingBalance: finalRemaining },
-        }))
+        }), printTab)
         addToast('Invoice saved and PDF downloaded successfully.', 'success')
       } catch (invoiceErr) {
+        printTab?.close()
         addToast('The invoice could not be exported. Please try again.', 'error')
       }
     } catch (err) {

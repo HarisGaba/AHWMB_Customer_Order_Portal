@@ -1,5 +1,6 @@
 import { format } from "date-fns"
 import { SHOP } from "@/lib/config"
+import { isMobileDevice, printDocument } from "../../lib/print"
 import { fmt, fmtKg, receiptNo, totalWeight, type Sale } from "@/lib/store"
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
@@ -92,8 +93,9 @@ function receiptHtml(sale: Sale) {
 </div></body></html>`
 }
 
-/** Print a receipt via a hidden iframe so the app's own styles don't interfere. */
+/** Print a receipt via a hidden iframe so the app's own styles don't interfere (own page on phones). */
 export function printReceipt(sale: Sale) {
+  if (isMobileDevice()) return printDocument(receiptHtml(sale))
   const frame = document.createElement("iframe")
   frame.setAttribute("aria-hidden", "true")
   Object.assign(frame.style, { position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0" })
