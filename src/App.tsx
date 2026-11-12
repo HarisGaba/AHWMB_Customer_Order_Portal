@@ -1773,6 +1773,9 @@ function CustomerPage({
 }
 
 // ─── Login Page ───────────────────────────────────────────────────────────────
+/** Where the login was opened from: /login?next=/pos (POS) — otherwise the portal. */
+const loginNext = () => new URLSearchParams(window.location.search).get('next')
+
 function LoginPage({
   language, setLanguage, onAuth, isAuthenticated, adminEmail,
 }: {
@@ -1795,7 +1798,7 @@ function LoginPage({
       const { data } = await supabase!.auth.getSession()
       if (!data.session) { if (!cancelled) setChecking(false); return }
       try {
-        const home = homePathFor(await fetchAccess(supabase))
+        const home = homePathFor(await fetchAccess(supabase), loginNext())
         if (cancelled) return
         if (home === '/pos') { window.location.replace('/pos'); return }
         if (home === '/admin') { navigate('/admin'); return }
@@ -1824,7 +1827,7 @@ function LoginPage({
       // Each user lands where their permissions allow: admin panel if they have any
       // portal page, otherwise the POS. No pages (or disabled) = no entry.
       const access = await fetchAccess(supabase)
-      const home = homePathFor(access)
+      const home = homePathFor(access, loginNext())
       if (home === '/login') {
         await supabase.auth.signOut()
         setError(t.errors.permission)

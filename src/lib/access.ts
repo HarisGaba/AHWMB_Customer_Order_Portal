@@ -37,14 +37,20 @@ export const NO_ACCESS: Access = { admin: false, active: false, name: '', permis
 const isPosPermission = (perm: Permission) => POS_PERMISSIONS.includes(perm)
 export const can = (access: Access | null | undefined, perm: Permission) =>
   !!access && ((access.admin && !isPosPermission(perm)) || (access.active && access.permissions.includes(perm)))
-export const hasPortalAccess = (access: Access | null | undefined) => !!access && (access.admin || PORTAL_PERMISSIONS.some(p => can(access, p)))
+/** Can open the Customer Order Portal (/admin). System pages count too: the portal home links to them. */
+export const hasPortalAccess = (access: Access | null | undefined) => !!access && (access.admin || [...PORTAL_PERMISSIONS, ...SYSTEM_PERMISSIONS].some(p => can(access, p)))
 /** Can open the POS / Admin System at all (POS pages, system pages or Users). */
 export const hasPosAccess = (access: Access | null | undefined) => !!access && (access.admin || [...POS_PERMISSIONS, ...SYSTEM_PERMISSIONS].some(p => can(access, p)))
 /** Has POS billing data pages (sales/items), which need the POS data loaded. */
 export const hasPosDataAccess = (access: Access | null | undefined) => POS_PERMISSIONS.some(p => can(access, p))
-/** Where a user lands after login: the admin panel if they have any portal page, else the POS. */
-export const homePathFor = (access: Access | null | undefined) =>
-  hasPortalAccess(access) ? '/admin' : hasPosAccess(access) ? '/pos' : '/login'
+/**
+ * Where a user lands after login. The portal (/admin) for everyone who has portal pages;
+ * the POS only when they came from the POS (next = '/pos') or have nothing but POS billing.
+ */
+export const homePathFor = (access: Access | null | undefined, next?: string | null) => {
+  if (next === '/pos' && hasPosAccess(access)) return '/pos'
+  return hasPortalAccess(access) ? '/admin' : hasPosAccess(access) ? '/pos' : '/login'
+}
 
 export async function fetchAccess(client: SupabaseClient | null): Promise<Access> {
   if (!client) return NO_ACCESS

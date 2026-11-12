@@ -66,7 +66,7 @@ function FullScreenLoader({ label }: { label: string }) {
 }
 
 function RedirectToLogin() {
-  return <Redirect to="/login" label="Redirecting to sign in…" />
+  return <Redirect to="/login?next=/pos" label="Redirecting to sign in…" />
 }
 
 function Redirect({ to, label = "Opening your pages…" }: { to: string; label?: string }) {
