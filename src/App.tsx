@@ -1785,6 +1785,25 @@ function LoginPage({
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  // Already signed in on this device? Skip the form and go straight in.
+  useEffect(() => {
+    if (!supabase) { setChecking(false); return }
+    let cancelled = false
+    void (async () => {
+      const { data } = await supabase!.auth.getSession()
+      if (!data.session) { if (!cancelled) setChecking(false); return }
+      try {
+        const home = homePathFor(await fetchAccess(supabase))
+        if (cancelled) return
+        if (home === '/pos') { window.location.replace('/pos'); return }
+        if (home === '/admin') { navigate('/admin'); return }
+      } catch { if (!cancelled) { navigate('/admin'); return } } // offline: the session is still valid
+      if (!cancelled) setChecking(false)
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   // Ask the browser to remember this login (Chrome/Edge show "Save password?"). Others rely on autocomplete.
   const offerToSaveLogin = async () => {
@@ -1821,6 +1840,7 @@ function LoginPage({
     }
   }
 
+  if (checking) return <main className="app-shell"><p style={{ padding: 48, textAlign: "center", fontWeight: 700 }}>{isRtl ? "سائن ان ہو رہا ہے…" : "Signing you in…"}</p></main>
   return (
     <main className={`app-shell auth-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
       <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />
@@ -2668,8 +2688,11 @@ function AdminPage({
     if (!supabase) { setLoading(false); return }
     // The session is stored on the device and refreshed automatically: only a real
     // sign-out (no session) sends the user to the login page.
-    const { data: session } = await supabase.auth.getSession()
+    const { data: session, error: sessionError } = await supabase.auth.getSession()
     if (!session.session) {
+      // Phone just woke up / no signal yet: the token could not be refreshed. That is not
+      // a logout. Try again shortly instead of showing the login page.
+      if (sessionError) { window.setTimeout(() => void refresh(), 2500); return }
       setAuthorized(false); setLoading(false); navigate('/login'); return
     }
     setAuthorized(true)
@@ -3691,12 +3714,20 @@ export default function App() {
 
   const onAuth = useCallback(async () => {
     if (isAuthenticated) {
-      await supabase?.auth.signOut()
+      await supabase?.auth.signOut() // the explicit Logout
       navigate('/')
-    } else {
-      navigate('/login')
+      return
     }
+    const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } }
+    navigate(data.session ? '/admin' : '/login')
   }, [isAuthenticated])
+
+  // The installed app opens at "/": staff who are signed in go straight to their panel.
+  useEffect(() => {
+    if (path !== '/' || !access) return
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone
+    if (standalone && hasPortalAccess(access)) navigate('/admin')
+  }, [path, access])
 
   const props = { language, setLanguage, onAuth, isAuthenticated, adminEmail }
 

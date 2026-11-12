@@ -7,6 +7,14 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKe
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl!, supabasePublishableKey!, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      // The login is kept in localStorage (not sessionStorage), so it survives closing the
+      // app, restarting the phone and new tabs. Tokens refresh automatically; only the
+      // Logout button ends the session.
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      },
     })
   : null
