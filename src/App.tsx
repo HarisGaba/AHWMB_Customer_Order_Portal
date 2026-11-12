@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
-import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, SYSTEM_PERMISSIONS, useLiveAccess, type Access, type Permission } from './lib/access'
+import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
 import { useDraftOrder } from './hooks/useDraftOrder'
 import { requestTurnstileToken } from './lib/turnstile'
@@ -2986,13 +2986,12 @@ function AdminPage({
       { view: 'purchase-report', label: isRtl ? 'خریداری رپورٹ' : 'Purchase Report' },
     ]
     // Stock, customers, catalog and users live in the POS / Admin System (/pos).
-    const systemAccess = !!access?.admin || SYSTEM_PERMISSIONS.some(perm => can(access, perm))
     return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />{can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}<ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1>
       {access && !access.admin && access.name && <p className="panel-sub">{isRtl ? 'خوش آمدید' : 'Welcome'}, {access.name}</p>}
       {tiles.filter(tile => allowed(tile.view)).map(tile => <button key={tile.view} type="button" className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={() => setAdminView(tile.view)}>{tile.label}</button>)}
       {access?.admin && <><p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
 </>}
-      {systemAccess && <a className="admin-home-btn admin-home-btn--users" href="/pos">{isRtl ? 'ایڈمن سسٹم' : 'Admin System'}<small style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: .8 }}>{isRtl ? 'اسٹاک، گاہک، صارفین' : 'Stock · Customers · Catalog · Users'}</small></a>}
+
     </section></div></main>
   }
 

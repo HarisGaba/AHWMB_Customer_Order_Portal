@@ -29,14 +29,14 @@ export const permissionLabel = (key: string) => PERMISSIONS.find(p => p.key === 
  *  - POS / Admin System (/pos): POS billing, items & rates, summary, plus Stock Report,
  *    Customer Report, Add Customer, Order Catalog and Users.
  * admin = the main admin (ahwmb1965@gmail.com): every portal and system page plus Users.
- * POS billing pages are only for users explicitly given them (e.g. Ahmed).
+ * Other users see only the pages given to them in Users.
  */
 export type Access = { admin: boolean; active: boolean; name: string; permissions: Permission[] }
 export const NO_ACCESS: Access = { admin: false, active: false, name: '', permissions: [] }
 
-const isPosPermission = (perm: Permission) => POS_PERMISSIONS.includes(perm)
+// The main admin may open every page, including POS billing in /pos (the database allows it too).
 export const can = (access: Access | null | undefined, perm: Permission) =>
-  !!access && ((access.admin && !isPosPermission(perm)) || (access.active && access.permissions.includes(perm)))
+  !!access && (access.admin || (access.active && access.permissions.includes(perm)))
 /** Can open the Customer Order Portal (/admin). System pages count too: the portal home links to them. */
 export const hasPortalAccess = (access: Access | null | undefined) => !!access && (access.admin || [...PORTAL_PERMISSIONS, ...SYSTEM_PERMISSIONS].some(p => can(access, p)))
 /** Can open the POS / Admin System at all (POS pages, system pages or Users). */
