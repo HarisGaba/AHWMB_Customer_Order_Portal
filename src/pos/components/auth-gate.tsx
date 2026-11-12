@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { actions, useStore } from "@/lib/store"
-import { hasPortalAccess, hasPosAccess, NO_ACCESS, useLiveAccess, type Access } from "../../lib/access"
+import { hasPortalAccess, hasPosAccess, hasPosDataAccess, NO_ACCESS, useLiveAccess, type Access } from "../../lib/access"
 import { signOutToLogin, supabase, supabaseConfigured } from "@/lib/supabase"
 
 /** The signed-in user's page permissions, for the POS menu and page guards. */
@@ -22,10 +22,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const error = useStore((s) => s.error)
 
   const allowed = hasPosAccess(access)
+  const posData = hasPosDataAccess(access)
   useEffect(() => {
-    if (allowed) void actions.load()
+    if (allowed && posData) void actions.load()
+    else if (allowed) actions.skip() // Admin System pages only: no sales/items to load
     else actions.reset()
-  }, [allowed, email])
+  }, [allowed, posData, email])
 
   if (!supabaseConfigured) return <NotConfigured />
   if (access === null) return <FullScreenLoader label="Starting…" />

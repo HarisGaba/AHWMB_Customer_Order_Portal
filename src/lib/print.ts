@@ -36,7 +36,7 @@ function withBase(html: string) {
 /** Waits for images (logo) and web fonts (Urdu) in a frame, at most 4 s. */
 function frameReady(doc: Document | null | undefined) {
   const images = [...(doc?.images ?? [])].filter(img => !img.complete).map(img => new Promise(resolve => { img.addEventListener('load', resolve, { once: true }); img.addEventListener('error', resolve, { once: true }) }))
-  const urdu = doc?.fonts?.load('700 16px "Noto Nastaliq Urdu"', 'اردو').catch(() => undefined) ?? Promise.resolve()
+  const urdu = doc?.fonts ? Promise.all([doc.fonts.load('700 16px "Noto Naskh Arabic"', 'اردو'), doc.fonts.load('700 16px "Noto Nastaliq Urdu"', 'اردو')]).catch(() => undefined) : Promise.resolve()
   const fonts = Promise.resolve(urdu).then(() => doc?.fonts?.ready)
   return Promise.race([Promise.all([...images, fonts]), new Promise(resolve => setTimeout(resolve, 4000))])
 }

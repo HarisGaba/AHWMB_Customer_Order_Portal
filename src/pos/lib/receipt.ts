@@ -48,10 +48,8 @@ function receiptHtml(sale: Sale) {
   .items tbody td { padding: 1.2mm 0 0.6mm; border-bottom: 1px dotted #000; }
   .items .n { font-weight: 700; }
   .items .name { font-size: 13.5px; font-weight: 800; padding-right: 1.5mm; word-break: break-word; }
-  /* Urdu: bold Nastaliq, strictly right-to-left; a hairline outline keeps thermal print dark. */
-  .ur, .policy { direction: rtl; unicode-bidi: isolate; -webkit-text-stroke: 0.3px #000; }
-  .items .ur { font: 700 15px/2 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif;
-               text-align: right; margin-top: 0.3mm; }
+  .items .ur { font: 700 14px/1.8 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif;
+               text-align: left; margin-top: 0.3mm; }
   .items .q, .items td.r { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 11.5px; font-weight: 700; }
   .items .q { text-align: center; }
   .items th.q { text-align: center; }

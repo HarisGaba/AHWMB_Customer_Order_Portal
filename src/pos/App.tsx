@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { useTheme } from "next-themes"
-import { BarChart3Icon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, SunIcon, TagIcon } from "lucide-react"
+import { BarChart3Icon, BookUserIcon, BoxesIcon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, SunIcon, TagIcon, UserPlusIcon, UsersIcon, ListPlusIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -29,16 +29,26 @@ import { AddItemPage } from "@/pages/add-item-page"
 import { PosPage } from "@/pages/pos-page"
 import { RatesPage } from "@/pages/rates-page"
 import { usePosAccess } from "@/components/auth-gate"
-import { can } from "../lib/access"
+import { can, hasPosDataAccess, type Access, type Permission } from "../lib/access"
 
 // Summary pulls in the charting library; load it only when opened.
 const SummaryPage = lazy(() => import("@/pages/summary-page").then((m) => ({ default: m.SummaryPage })))
 
+// Admin System pages (reports & management, moved here from the order portal); loaded on demand.
+const sys = (name: "StockReportPage" | "CustomerReportPage" | "AddCustomerPage" | "CatalogPage" | "UsersPage") =>
+  lazy(() => import("@/pages/system-pages").then((m) => ({ default: m[name] })))
+
+const anyOf = (...perms: Permission[]) => (a: Access | null) => perms.some((p) => can(a, p))
 const ALL_NAV = [
-  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, perm: "pos_billing" },
-  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, perm: "pos_items" },
-  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, perm: "pos_items" },
-  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, perm: "pos_summary" },
+  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, allow: anyOf("pos_billing") },
+  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items") },
+  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items") },
+  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary") },
+  { id: "stock", label: "Stock Report", icon: BoxesIcon, page: sys("StockReportPage"), allow: anyOf("stock_report", "stock_transfer") },
+  { id: "customers", label: "Customer Report", icon: BookUserIcon, page: sys("CustomerReportPage"), allow: anyOf("customer_report") },
+  { id: "add-customer", label: "Add Customer", icon: UserPlusIcon, page: sys("AddCustomerPage"), allow: anyOf("add_customer") },
+  { id: "catalog", label: "Order Catalog", icon: ListPlusIcon, page: sys("CatalogPage"), allow: anyOf("products") },
+  { id: "users", label: "Users", icon: UsersIcon, page: sys("UsersPage"), allow: (a: Access | null) => !!a?.admin },
 ] as const
 
 type PageId = (typeof ALL_NAV)[number]["id"]
@@ -46,7 +56,7 @@ type PageId = (typeof ALL_NAV)[number]["id"]
 export default function App() {
   const access = usePosAccess()
   // Only the pages this user was given appear in the menu (the database enforces the same rules).
-  const NAV = useMemo(() => ALL_NAV.filter((n) => can(access, n.perm)), [access])
+  const NAV = useMemo(() => ALL_NAV.filter((n) => n.allow(access)), [access])
   const [page, setPage] = useState<PageId>(() => NAV[0]?.id ?? "pos")
   // AuthGate only lets users with at least one POS page in, so NAV is never empty.
   const current = (NAV.find((n) => n.id === page) ?? NAV[0])!
@@ -64,7 +74,7 @@ export default function App() {
       if (e.key === "F1" || (e.key === "?" && !typing)) {
         e.preventDefault()
         setHelpOpen(true)
-      } else if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-4]$/.test(e.key)) {
+      } else if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
         const target = NAV[Number(e.key) - 1]
         if (!target) return
         e.preventDefault()
@@ -112,7 +122,8 @@ export default function App() {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
-          <TodayCard />
+          {hasPosDataAccess(access) && <TodayCard />}
+          {access?.admin && <a href="/admin" className="rounded-lg px-3 py-2 text-center text-xs font-semibold text-sidebar-foreground/70 ring-1 ring-sidebar-border hover:bg-sidebar-accent group-data-[collapsible=icon]:hidden">← Customer Order Portal</a>}
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>

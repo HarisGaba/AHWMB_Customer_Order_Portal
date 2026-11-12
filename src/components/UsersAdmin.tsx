@@ -95,7 +95,7 @@ export function UsersAdmin() {
     }
   }
 
-  const areas = ['Portal', 'POS'] as const
+  const areas = ['Portal', 'System', 'POS'] as const
 
   return <section className="panel report-panel users-panel">
     <div className="report-heading">
@@ -138,7 +138,7 @@ export function UsersAdmin() {
         <div className="user-perms">
           <span className="field-label">Allowed pages</span>
           {areas.map(area => <fieldset key={area} className="user-perm-group">
-            <legend>{area === 'Portal' ? 'Admin panel' : 'POS'}</legend>
+            <legend>{area === 'Portal' ? 'Customer Order Portal' : area === 'System' ? 'Admin System (reports & management)' : 'POS billing'}</legend>
             {PERMISSIONS.filter(p => p.area === area).map(p => <label key={p.key} className="user-perm">
               <input type="checkbox" checked={draft.permissions.includes(p.key)} onChange={() => togglePermission(p.key)} /> {p.label}
             </label>)}

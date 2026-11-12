@@ -7,14 +7,13 @@ import {
 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
-import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
+import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, SYSTEM_PERMISSIONS, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
 import { useDraftOrder } from './hooks/useDraftOrder'
 import { requestTurnstileToken } from './lib/turnstile'
 import { InstallBanner } from './components/InstallBanner'
 import { PushBanner } from './components/PushBanner'
-import { StockReport } from './components/StockReport'
-import { AccessDenied, UsersAdmin } from './components/UsersAdmin'
+import { AccessDenied } from './components/UsersAdmin'
 
 let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
 
@@ -561,7 +560,7 @@ function InvoiceDocument({ order, items, financials }: InvoicePayload) {
 const invoicePrintCss = `
   @page { size: A4 portrait; margin: 10mm; }
   *, *::before, *::after { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  html, body { margin: 0; background: #fff; color: #000; font-family: Georgia, 'Times New Roman', "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif; font-weight: 750; }
+  html, body { margin: 0; background: #fff; color: #000; font-family: Georgia, 'Times New Roman', "Noto Naskh Arabic", "Urdu Typesetting", "Segoe UI", Tahoma, serif; font-weight: 750; }
   .invoice-document { width: 100%; max-width: 190mm; margin: 0 auto; padding: 6mm; border: 3px double #050505; font-size: 11px; }
   .invoice-header { text-align: center; margin-bottom: 4mm; }
   .invoice-header h1 { display: inline-block; margin: 0 auto; border: 2.5px solid #050505; padding: 2mm 10mm; font-size: 22px; line-height: 1.2; font-weight: 900; letter-spacing: .05em; }
@@ -615,7 +614,7 @@ function buildInvoiceHtml(payload: InvoicePayload): string {
   // ── Data rows ─────────────────────────────────────────────────────────────
   // Convert \n to <br> and escape HTML special chars in item names
   const escHtml = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  // Each Urdu run goes in its own right-to-left span: bold Nastaliq, never reordered.
+  // Each Urdu run goes in its own right-to-left span: clean bold Urdu font, never reordered.
   const nameHtml = (name: string) => escHtml(name || '—')
     .replace(/[\u0600-\u06ff](?:[\u0600-\u06ff\u200c\u200d \d.,،()-]*[\u0600-\u06ff])?/g, run => `<span class="ur" dir="rtl" lang="ur">${run}</span>`)
     .replace(/\n/g, '<br>')
@@ -630,12 +629,12 @@ function buildInvoiceHtml(payload: InvoicePayload): string {
     </tr>`).join('')
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@700&display=block">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@700&display=block">
   <style>
     @page { size:A4 portrait; margin:12mm; }
     *, *::before, *::after { box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    html, body { margin:0; padding:0; background:#fff; font-family:Georgia,"Times New Roman","Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting",serif; font-size:13px; color:#000; font-weight:700; }
-    .ur { font-family:"Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting",serif; font-weight:700; font-size:15px; line-height:2.1; direction:rtl; unicode-bidi:isolate; display:inline-block; -webkit-text-stroke:.25px #000; }
+    html, body { margin:0; padding:0; background:#fff; font-family:Georgia,"Times New Roman","Noto Naskh Arabic", "Urdu Typesetting", "Segoe UI", Tahoma,serif; font-size:13px; color:#000; font-weight:700; }
+    .ur { font-family:"Noto Naskh Arabic", "Urdu Typesetting", "Segoe UI", Tahoma,serif; font-weight:700; font-size:15px; line-height:2.1; direction:rtl; unicode-bidi:isolate; display:inline-block; }
 
     /* ── Outer frame ── */
     .page { position:relative; width:100%; padding:8mm; border:3px solid #000; }
@@ -849,12 +848,12 @@ async function drawInvoice(
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5', compress: true })
   // Load the bold Urdu font before drawing, otherwise the canvas falls back to a thin system font.
   await Promise.race([
-    Promise.all([document.fonts.load('700 44px "Noto Nastaliq Urdu"', 'اردو'), document.fonts.load('700 46px "Noto Naskh Arabic"', 'اردو')]),
+    document.fonts.load('700 44px "Noto Naskh Arabic"', 'اردو'),
     new Promise(resolve => setTimeout(resolve, 4000)),
   ]).catch(() => undefined)
   await document.fonts.ready
   // Browser shaping preserves Urdu joins and Unicode glyphs unsupported by Times.
-  // Urdu is drawn in bold Nastaliq, right-to-left; English stays in a bold serif.
+  // Urdu is drawn in the clean bold Naskh font; English comes first, Urdu after it.
   const unicodeName = (text: string, width: number) => {
     if (!/[^\x00-\x7F]/.test(text)) return null
     const scale = 12
@@ -863,7 +862,7 @@ async function drawInvoice(
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Invoice text rendering is unavailable')
     const hasUrdu = /[\u0600-\u06ff]/.test(text)
-    const font = hasUrdu ? '700 44px "Noto Nastaliq Urdu", "Noto Naskh Arabic", Georgia, serif' : 'bold 46px Georgia, "Times New Roman", serif'
+    const font = hasUrdu ? '700 44px Georgia, "Noto Naskh Arabic", serif' : 'bold 46px Georgia, "Times New Roman", serif'
     ctx.font = font
     const lines: string[] = []
     for (const paragraph of text.split(/\r?\n/)) {
@@ -877,25 +876,19 @@ async function drawInvoice(
       }
       lines.push(line)
     }
-    // Nastaliq is tall: give each line enough room so nothing is clipped.
-    const lineHeight = hasUrdu ? 104 : 80
+    const lineHeight = hasUrdu ? 90 : 80
     canvas.height = lines.length * lineHeight + 24
     ctx.font = font
     ctx.fillStyle = '#000'
-    ctx.strokeStyle = '#000'
-    ctx.lineWidth = 1.6 // a thin outline makes the strokes print dark, not faded
-    ctx.lineJoin = 'round'
     ctx.textBaseline = 'middle'
     lines.forEach((line, index) => {
-      // A line that is mostly Urdu is laid out right-to-left and right-aligned, so word order is kept.
-      const urduChars = (line.match(/[\u0600-\u06ff]/g) || []).length
-      const latinChars = (line.match(/[A-Za-z]/g) || []).length
-      const rtl = urduChars > 0 && urduChars >= latinChars
+      // Any English in the line: left-to-right, English first, each Urdu run kept whole (isolated).
+      // Pure Urdu: right-to-left and right-aligned.
+      const rtl = !/[A-Za-z]/.test(line) && /[\u0600-\u06ff]/.test(line)
+      const text = rtl ? line : line.replace(/[\u0600-\u06ff](?:[\u0600-\u06ff\u200c\u200d \d.,،-]*[\u0600-\u06ff])?/g, run => `\u2067${run}\u2069`)
       ctx.direction = rtl ? 'rtl' : 'ltr'
       ctx.textAlign = rtl ? 'right' : 'left'
-      const x = rtl ? canvas.width - 8 : 8, y = 12 + (index + 0.5) * lineHeight
-      if (hasUrdu) ctx.strokeText(line, x, y, canvas.width - 16)
-      ctx.fillText(line, x, y, canvas.width - 16)
+      ctx.fillText(text, rtl ? canvas.width - 8 : 8, 12 + (index + 0.5) * lineHeight, canvas.width - 16)
     })
     return { canvas, height: canvas.height / scale }
   }
@@ -1999,13 +1992,13 @@ function buildExpenseLedgerHtml(date: string, rows: ExpenseRow[]) {
   const body = validRows.length
     ? validRows.map((row, i) => `<tr><td class="n">${i + 1}</td><td dir="auto">${esc(row.expense_title || '—')}</td><td class="amt">${reportAmount(row.amount)}</td></tr>`).join('')
     : '<tr><td colspan="3" class="empty">No expenses recorded</td></tr>'
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Dukan Daily Expense Ledger — ${esc(date)}</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@700&display=block">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=block">
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Dukan Daily Expense Ledger — ${esc(date)}</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&display=block">
 <style>
   /* margin 0 removes the browser's own URL/date header and footer; the sheet adds its own margin. */
   @page { size: A4 portrait; margin: 0; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { margin: 0; color: #000; font: 700 13px/1.5 "Times New Roman", Times, "Noto Nastaliq Urdu", serif; }
+  body { margin: 0; color: #000; font: 700 13px/1.5 "Times New Roman", Times, "Noto Naskh Arabic", serif; }
   /* Each printed page gets its own margin + border (clone repeats them on every page fragment). */
   .sheet { border: 2px solid #000; margin: 12mm; padding: 10mm 8mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   tr { break-inside: avoid; }
@@ -2232,8 +2225,7 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
         if (error) { addToast(`Save failed: ${error.message}`, 'error'); setSaving(false); return }
       }
 
-      // Prune records older than 60 days
-      try { await supabase.rpc('prune_old_expenses') } catch { /* non-blocking */ }
+      // (Old expense records are kept: nothing is ever deleted automatically.)
 
       // Mark all rows as saved
       setRows(current => current.map(r => ({ ...r, saved: true })))
@@ -2406,7 +2398,7 @@ function DailyReports({ language, onBack }: { language: Language; onBack: () => 
 }
 
 type SavedCustomer = { name: string; address: string; phone: string }
-function CustomerReport() {
+export function CustomerReport() {
   const [customers, setCustomers] = useState<SavedCustomer[]>(() => { try { return JSON.parse(localStorage.getItem('ahwmb-saved-customers') || 'null') || SAVED_CUSTOMERS.map(customer => ({ ...customer, phone: '' })) } catch { return SAVED_CUSTOMERS.map(customer => ({ ...customer, phone: '' })) } })
   const [ledger, setLedger] = useState<Record<string, { id: string; date: string; amount: string; type: 'cash' | 'balance' }[]>>(() => { try { return JSON.parse(localStorage.getItem('ahwmb-customer-ledger') || '{}') } catch { return {} } })
   const [editing, setEditing] = useState<number | null>(null)
@@ -2536,7 +2528,7 @@ function CustomerReportV2() {
   return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Customer Report</h2><p className="panel-sub">Search saved customers and open their account ledger.</p></div><button type="button" className="btn-submit report-add" onClick={() => { setDraft({ name: '', phone: '', address: '' }); setMessage(''); setFormOpen(true) }}><Plus size={17} /> Add Customer</button></div>{message && <p className="form-message">{message}</p>}<div className="account-search-wrap"><input className="report-search account-search" value={query} onChange={event => { setQuery(event.target.value); setSelectedName('') }} placeholder="Search customer name, e.g. Ahmed Store" />{query && !selectedName && matches.length > 0 && <div className="customer-suggestions report-suggestions">{matches.map(item => <button type="button" key={item.name} onClick={() => { setSelectedName(item.name); setQuery(item.name) }}><strong>{item.name}</strong><small>{item.address}</small></button>)}</div>}</div>{selected ? <div className="ledger-card ledger-card--top"><div className="report-heading"><div><p className="admin-eyebrow">CUSTOMER ACCOUNT</p><h3 className="panel-title">{selected.name}</h3><p className="panel-sub">{selected.phone || 'No contact saved'} · {selected.address}</p></div><button type="button" className="btn-secondary" onClick={() => { setSelectedName(''); setQuery('') }}>Close</button></div><div className="account-empty"><UserRound size={36} /><p>Customer account selected. Existing ledger entries remain available in the Customer Report workflow.</p></div></div> : <div className="account-empty"><UserRound size={42} /><p>Search and select a customer to open the account.</p></div>}{formOpen && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-box admin-entry-modal"><h2 className="modal-title">Add Customer</h2><label className="field"><span className="field-label">Customer name *</span><input className="field-input" value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} autoFocus /></label><label className="field"><span className="field-label">Phone number</span><input className="field-input" value={draft.phone} onChange={event => setDraft({ ...draft, phone: event.target.value })} /></label><label className="field"><span className="field-label">Address</span><textarea className="field-textarea" value={draft.address} onChange={event => setDraft({ ...draft, address: event.target.value })} rows={3} /></label><div className="modal-actions"><button type="button" className="btn-secondary" onClick={() => setFormOpen(false)}>Cancel</button><button type="button" className="btn-submit" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save Customer'}</button></div></div></div>}</section>
 }
 
-function AdminAddCustomer({ language }: { language: Language }) {
+export function AdminAddCustomer({ language }: { language: Language }) {
   const ur = language === 'ur'
   const [draft, setDraft] = useState({ name: '', phone: '', address: '' })
   const [saving, setSaving] = useState(false)
@@ -2572,7 +2564,7 @@ function PurchaseReport() {
 }
 
 
-function AdminProducts({ onChanged }: { onChanged: () => void }) {
+export function AdminProducts({ onChanged }: { onChanged: () => void }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState('EXTRA ITEMS')
   const [saving, setSaving] = useState(false)
@@ -2642,7 +2634,8 @@ function AdminPage({
   const [deleting, setDeleting] = useState(false)
   const [adminView, setAdminView] = useState<AdminView>('home')
   // Which admin views this user may open (the database enforces the same rules).
-  const allowed = (view: AdminView) => view === 'home' || (view === 'users' ? !!access?.admin : ADMIN_VIEW_PERMS[view].some(perm => can(access, perm)))
+  const MOVED: AdminView[] = ['users', 'stock-report', 'customer-report', 'products', 'add-customer']
+  const allowed = (view: AdminView) => view === 'home' || (!MOVED.includes(view) && ADMIN_VIEW_PERMS[view as Exclude<AdminView, 'home' | 'users'>].some(perm => can(access, perm)))
   // Permissions can change live (admin edits this user): leave the panel if nothing is left.
   useEffect(() => {
     if (!access) return
@@ -2964,17 +2957,16 @@ function AdminPage({
       { view: 'newOrder', label: isRtl ? 'نیا آرڈر' : 'New Order', primary: true },
       { view: 'orders', label: isRtl ? 'آرڈرز دیکھیں' : 'View Order' },
       { view: 'reports', label: isRtl ? 'روزانہ رپورٹ' : 'Daily Report' },
-      { view: 'customer-report', label: isRtl ? 'گاہک کی رپورٹ' : 'Customer Report' },
-      { view: 'stock-report', label: isRtl ? 'اسٹاک رپورٹ' : 'Stock Report' },
       { view: 'purchase-report', label: isRtl ? 'خریداری رپورٹ' : 'Purchase Report' },
-      { view: 'products', label: isRtl ? 'مصنوعات شامل کریں' : 'Add Products' },
-      { view: 'add-customer', label: isRtl ? 'گاہک شامل کریں' : 'Add Customer' },
     ]
+    // Stock, customers, catalog and users live in the POS / Admin System (/pos).
+    const systemAccess = !!access?.admin || SYSTEM_PERMISSIONS.some(perm => can(access, perm))
     return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />{can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}<ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1>
       {access && !access.admin && access.name && <p className="panel-sub">{isRtl ? 'خوش آمدید' : 'Welcome'}, {access.name}</p>}
       {tiles.filter(tile => allowed(tile.view)).map(tile => <button key={tile.view} type="button" className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={() => setAdminView(tile.view)}>{tile.label}</button>)}
       {access?.admin && <><p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
-      <button type="button" className="admin-home-btn admin-home-btn--users" onClick={() => setAdminView('users')}>{isRtl ? 'صارفین' : 'Users'}</button></>}
+</>}
+      {systemAccess && <a className="admin-home-btn admin-home-btn--users" href="/pos">{isRtl ? 'ایڈمن سسٹم' : 'Admin System'}<small style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: .8 }}>{isRtl ? 'اسٹاک، گاہک، صارفین' : 'Stock · Customers · Catalog · Users'}</small></a>}
     </section></div></main>
   }
 
@@ -3002,20 +2994,10 @@ function AdminPage({
         </div>
 
         {/* Orders, Daily Reports, and Create Order views */}
-        {adminView === 'add-customer'
-          ? <AdminAddCustomer language={language} />
-          : adminView === 'users'
-          ? <UsersAdmin />
-          : adminView === 'reports'
+        {adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('home')} />
-          : adminView === 'customer-report'
-          ? <CustomerReport />
           : adminView === 'purchase-report'
           ? <PurchaseReport />
-          : adminView === 'stock-report'
-          ? <StockReport canEdit={can(access, 'stock_report')} canTransfer={can(access, 'stock_transfer')} />
-          : adminView === 'products'
-          ? <AdminProducts onChanged={() => setCatalogVersion(value => value + 1)} />
           : adminView === 'newOrder'
           ? <AdminCreateOrder language={language} onSuccess={() => { setAdminView('orders'); void refresh() }} onBack={() => setAdminView('orders')} />
           : <div className={`admin-grid ${selected ? 'has-open-order' : ''}`}>

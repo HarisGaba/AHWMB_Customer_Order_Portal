@@ -175,7 +175,6 @@ export const actions = {
   async load() {
     setState({ status: "loading", error: null })
     try {
-      await supabase.rpc("purge_old_sales", { p_keep_days: RETENTION_DAYS })
       setState({ ...(await fetchAll()), status: "ready" })
       actions.listen()
       watchConnection()
@@ -203,6 +202,12 @@ export const actions = {
           subscribedOnce = true
         }
       })
+  },
+
+  /** Admin-System-only users (no POS billing pages): nothing to load. */
+  skip() {
+    actions.reset()
+    setState({ status: "ready" })
   },
 
   reset() {
@@ -282,10 +287,9 @@ export const actions = {
     removeSale(id)
   },
 
-  /** Drop days that fall outside the rolling retention window. */
+  /** Hide days outside the on-screen window. Nothing is deleted from the database. */
   purgeOld() {
     dropOldDays()
-    if (state.status === "ready") void supabase.rpc("purge_old_sales", { p_keep_days: RETENTION_DAYS })
   },
 }
 

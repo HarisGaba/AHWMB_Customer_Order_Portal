@@ -6,12 +6,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export const PERMISSIONS = [
   { key: 'orders', label: 'Orders (New & View)', area: 'Portal' },
   { key: 'daily_report', label: 'Daily Report (Expenses)', area: 'Portal' },
-  { key: 'customer_report', label: 'Customer Ledger', area: 'Portal' },
-  { key: 'add_customer', label: 'Add Customer', area: 'Portal' },
-  { key: 'stock_report', label: 'Stock Report', area: 'Portal' },
-  { key: 'stock_transfer', label: 'Stock Transfer', area: 'Portal' },
   { key: 'purchase_report', label: 'Purchase Report', area: 'Portal' },
-  { key: 'products', label: 'Add Products', area: 'Portal' },
+  { key: 'stock_report', label: 'Stock Report', area: 'System' },
+  { key: 'stock_transfer', label: 'Stock Transfer', area: 'System' },
+  { key: 'customer_report', label: 'Customer Ledger', area: 'System' },
+  { key: 'add_customer', label: 'Add Customer', area: 'System' },
+  { key: 'products', label: 'Order Catalog (Add Products)', area: 'System' },
   { key: 'pos_billing', label: 'POS Billing', area: 'POS' },
   { key: 'pos_items', label: 'POS Items & Rates', area: 'POS' },
   { key: 'pos_summary', label: 'POS Total Summary (Financial Totals)', area: 'POS' },
@@ -19,11 +19,17 @@ export const PERMISSIONS = [
 export type Permission = (typeof PERMISSIONS)[number]['key']
 export const PORTAL_PERMISSIONS = PERMISSIONS.filter(p => p.area === 'Portal').map(p => p.key) as Permission[]
 export const POS_PERMISSIONS = PERMISSIONS.filter(p => p.area === 'POS').map(p => p.key) as Permission[]
+/** Reports & management pages that live in the POS / Admin System (/pos). */
+export const SYSTEM_PERMISSIONS = PERMISSIONS.filter(p => p.area === 'System').map(p => p.key) as Permission[]
 export const permissionLabel = (key: string) => PERMISSIONS.find(p => p.key === key)?.label ?? key
 
 /**
- * admin = the main admin (ahwmb1965@gmail.com): every admin-panel page plus Users.
- * The POS is separate: only users explicitly given POS pages (e.g. Ahmed) can open it.
+ * Two systems:
+ *  - Customer Order Portal (/admin): New Order, View Orders, Daily Report, Purchase Report.
+ *  - POS / Admin System (/pos): POS billing, items & rates, summary, plus Stock Report,
+ *    Customer Report, Add Customer, Order Catalog and Users.
+ * admin = the main admin (ahwmb1965@gmail.com): every portal and system page plus Users.
+ * POS billing pages are only for users explicitly given them (e.g. Ahmed).
  */
 export type Access = { admin: boolean; active: boolean; name: string; permissions: Permission[] }
 export const NO_ACCESS: Access = { admin: false, active: false, name: '', permissions: [] }
@@ -32,7 +38,10 @@ const isPosPermission = (perm: Permission) => POS_PERMISSIONS.includes(perm)
 export const can = (access: Access | null | undefined, perm: Permission) =>
   !!access && ((access.admin && !isPosPermission(perm)) || (access.active && access.permissions.includes(perm)))
 export const hasPortalAccess = (access: Access | null | undefined) => !!access && (access.admin || PORTAL_PERMISSIONS.some(p => can(access, p)))
-export const hasPosAccess = (access: Access | null | undefined) => POS_PERMISSIONS.some(p => can(access, p))
+/** Can open the POS / Admin System at all (POS pages, system pages or Users). */
+export const hasPosAccess = (access: Access | null | undefined) => !!access && (access.admin || [...POS_PERMISSIONS, ...SYSTEM_PERMISSIONS].some(p => can(access, p)))
+/** Has POS billing data pages (sales/items), which need the POS data loaded. */
+export const hasPosDataAccess = (access: Access | null | undefined) => POS_PERMISSIONS.some(p => can(access, p))
 /** Where a user lands after login: the admin panel if they have any portal page, else the POS. */
 export const homePathFor = (access: Access | null | undefined) =>
   hasPortalAccess(access) ? '/admin' : hasPosAccess(access) ? '/pos' : '/login'

@@ -172,7 +172,7 @@ export function SummaryPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Total Summary" description={`Daily logs roll over automatically at midnight and are kept for ${RETENTION_DAYS} days.`}>
+      <PageHeader title="Total Summary" description={`Daily logs roll over automatically at midnight; the last ${RETENTION_DAYS} days are shown here. Older sales stay saved.`}>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border bg-card p-1 shadow-xs">
             <Button variant="ghost" size="icon-sm" onClick={() => goTo(dayKey(addDays(parseISO(day), -1)))} disabled={day <= oldest} aria-label="Previous day">
