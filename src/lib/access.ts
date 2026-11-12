@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { isPosEmail } from './posSupabase'
 
 // Page permissions. Keys must match the has_perm() checks in the database
 // (supabase/migrations/20261107_user_permissions.sql) and the manage-users function.
@@ -11,7 +12,7 @@ export const PERMISSIONS = [
   { key: 'stock_transfer', label: 'Stock Transfer', area: 'System' },
   { key: 'customer_report', label: 'Customer Ledger', area: 'System' },
   { key: 'add_customer', label: 'Add Customer', area: 'System' },
-  { key: 'products', label: 'Order Catalog (Add Products)', area: 'System' },
+  { key: 'products', label: 'Add Products (Order Catalog)', area: 'Portal' },
   { key: 'pos_billing', label: 'POS Billing', area: 'POS' },
   { key: 'pos_items', label: 'POS Items & Rates', area: 'POS' },
   { key: 'pos_summary', label: 'POS Total Summary (Financial Totals)', area: 'POS' },
@@ -47,7 +48,13 @@ export const hasPosDataAccess = (access: Access | null | undefined) => POS_PERMI
  * Where a user lands after login. The portal (/admin) for everyone who has portal pages;
  * the POS only when they came from the POS (next = '/pos') or have nothing but POS billing.
  */
-export const homePathFor = (access: Access | null | undefined, next?: string | null) => {
+/** Accounts that always open the Customer Order Portal after login. */
+const PORTAL_EMAILS = ['ahwmb1965@gmail.com']
+export const homePathFor = (access: Access | null | undefined, next?: string | null, email = '') => {
+  const e = email.trim().toLowerCase()
+  // Fixed homes by account: ahwmb1965 -> portal; POS accounts (ahmedyounus1978) -> POS.
+  if (PORTAL_EMAILS.includes(e) && hasPortalAccess(access)) return '/admin'
+  if (isPosEmail(e) && hasPosAccess(access)) return '/pos'
   if (next === '/pos' && hasPosAccess(access)) return '/pos'
   return hasPortalAccess(access) ? '/admin' : hasPosAccess(access) ? '/pos' : '/login'
 }

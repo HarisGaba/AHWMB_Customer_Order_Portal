@@ -13,7 +13,7 @@ import { useDraftOrder } from './hooks/useDraftOrder'
 import { requestTurnstileToken } from './lib/turnstile'
 import { InstallBanner } from './components/InstallBanner'
 import { PushBanner } from './components/PushBanner'
-import { AccessDenied } from './components/UsersAdmin'
+import { AccessDenied, UsersAdmin } from './components/UsersAdmin'
 
 let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
 
@@ -1798,7 +1798,7 @@ function LoginPage({
       const { data } = await supabase!.auth.getSession()
       if (!data.session) { if (!cancelled) setChecking(false); return }
       try {
-        const home = homePathFor(await fetchAccess(supabase), loginNext())
+        const home = homePathFor(await fetchAccess(supabase), loginNext(), data.session.user.email || '')
         if (cancelled) return
         if (home === '/pos') { window.location.replace('/pos'); return }
         if (home === '/admin') { navigate('/admin'); return }
@@ -1827,7 +1827,7 @@ function LoginPage({
       // Each user lands where their permissions allow: admin panel if they have any
       // portal page, otherwise the POS. No pages (or disabled) = no entry.
       const access = await fetchAccess(supabase)
-      const home = homePathFor(access, loginNext())
+      const home = homePathFor(access, loginNext(), data.user.email || email)
       if (home === '/login') {
         await supabase.auth.signOut()
         setError(t.errors.permission)
@@ -2657,8 +2657,9 @@ function AdminPage({
   const [deleting, setDeleting] = useState(false)
   const [adminView, setAdminView] = useState<AdminView>('home')
   // Which admin views this user may open (the database enforces the same rules).
-  const MOVED: AdminView[] = ['users', 'stock-report', 'customer-report', 'products', 'add-customer']
-  const allowed = (view: AdminView) => view === 'home' || (!MOVED.includes(view) && ADMIN_VIEW_PERMS[view as Exclude<AdminView, 'home' | 'users'>].some(perm => can(access, perm)))
+  // Stock, Customer Report and Add Customer live in the POS / Admin System (/pos).
+  const MOVED: AdminView[] = ['stock-report', 'customer-report', 'add-customer']
+  const allowed = (view: AdminView) => view === 'home' || (view === 'users' ? !!access?.admin : !MOVED.includes(view) && ADMIN_VIEW_PERMS[view as Exclude<AdminView, 'home' | 'users'>].some(perm => can(access, perm)))
   // Permissions can change live (admin edits this user): leave the panel if nothing is left.
   useEffect(() => {
     if (!access) return
@@ -2984,12 +2985,14 @@ function AdminPage({
       { view: 'orders', label: isRtl ? 'آرڈرز دیکھیں' : 'View Order' },
       { view: 'reports', label: isRtl ? 'روزانہ رپورٹ' : 'Daily Report' },
       { view: 'purchase-report', label: isRtl ? 'خریداری رپورٹ' : 'Purchase Report' },
+      { view: 'products', label: isRtl ? 'مصنوعات شامل کریں' : 'Add Products' },
     ]
     // Stock, customers, catalog and users live in the POS / Admin System (/pos).
     return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />{can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}<ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1>
       {access && !access.admin && access.name && <p className="panel-sub">{isRtl ? 'خوش آمدید' : 'Welcome'}, {access.name}</p>}
       {tiles.filter(tile => allowed(tile.view)).map(tile => <button key={tile.view} type="button" className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={() => setAdminView(tile.view)}>{tile.label}</button>)}
-      {access?.admin && <><p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
+      {access?.admin && <><button type="button" className="admin-home-btn admin-home-btn--users" onClick={() => setAdminView('users')}>{isRtl ? 'صارفین' : 'Users'}</button>
+      <p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
 </>}
 
     </section></div></main>
@@ -3019,7 +3022,11 @@ function AdminPage({
         </div>
 
         {/* Orders, Daily Reports, and Create Order views */}
-        {adminView === 'reports'
+        {adminView === 'users'
+          ? <UsersAdmin />
+          : adminView === 'products'
+          ? <AdminProducts onChanged={() => setCatalogVersion(value => value + 1)} />
+          : adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('home')} />
           : adminView === 'purchase-report'
           ? <PurchaseReport />
