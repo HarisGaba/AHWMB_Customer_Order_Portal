@@ -5,7 +5,7 @@ import {
   MapPin, MessageCircle, Navigation, PackageCheck, Phone, Plus,
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
-import { supabase } from './lib/supabase'
+import { checkClient, clientFor, supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
@@ -1800,8 +1800,12 @@ function LoginPage({
       try {
         const home = homePathFor(await fetchAccess(supabase), loginNext(), data.session.user.email || '')
         if (cancelled) return
+        if (home === '/login') { setChecking(false); return }
+        // Each portal keeps its own login: only go straight in if that portal is signed in.
+        const target = clientFor(home)
+        if (target !== supabase && !(await target?.auth.getSession())?.data.session) { if (!cancelled) setChecking(false); return }
         if (home === '/pos') { window.location.replace('/pos'); return }
-        if (home === '/admin') { navigate('/admin'); return }
+        window.location.replace('/admin'); return
       } catch { if (!cancelled) { navigate('/admin'); return } } // offline: the session is still valid
       if (!cancelled) setChecking(false)
     })()
@@ -1822,20 +1826,22 @@ function LoginPage({
     if (!supabase) { setError(t.errors.setup); return }
     setBusy(true)
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      // 1) Check the account with a temporary login (nothing saved, no other login touched).
+      const check = checkClient()!
+      const { data, error: authError } = await check.auth.signInWithPassword({ email: email.trim(), password })
       if (authError || !data.user) { setError(t.errors.login); return }
-      // Each user lands where their permissions allow: admin panel if they have any
-      // portal page, otherwise the POS. No pages (or disabled) = no entry.
-      const access = await fetchAccess(supabase)
+      // 2) Where this account belongs: portal or POS (by account and permissions).
+      const access = await fetchAccess(check)
       const home = homePathFor(access, loginNext(), data.user.email || email)
-      if (home === '/login') {
-        await supabase.auth.signOut()
-        setError(t.errors.permission)
-        return
-      }
+      await check.auth.signOut({ scope: 'local' })
+      if (home === '/login') { setError(t.errors.permission); return }
+      // 3) Sign in to that portal only. The portal and the POS keep separate logins, so the
+      //    other one stays signed in as it was.
+      const target = clientFor(home)!
+      const { error: targetError } = await target.auth.signInWithPassword({ email: email.trim(), password })
+      if (targetError) { setError(t.errors.login); return }
       await offerToSaveLogin()
-      if (home === '/pos') window.location.assign('/pos')
-      else navigate('/admin')
+      window.location.assign(home)
     } catch {
       setError(t.errors.login)
     } finally {
@@ -2665,7 +2671,7 @@ function AdminPage({
     if (!access) return
     if (!hasPortalAccess(access)) {
       if (hasPosAccess(access)) window.location.replace('/pos')
-      else void supabase?.auth.signOut().then(() => navigate('/login'))
+      else void supabase?.auth.signOut({ scope: 'local' }).then(() => navigate('/login'))
     }
   }, [access])
   const [, setCatalogVersion] = useState(0)
@@ -3726,7 +3732,7 @@ export default function App() {
 
   const onAuth = useCallback(async () => {
     if (isAuthenticated) {
-      await supabase?.auth.signOut() // the explicit Logout
+      await supabase?.auth.signOut({ scope: 'local' }) // the explicit Logout
       navigate('/')
       return
     }

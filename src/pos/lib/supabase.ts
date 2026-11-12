@@ -7,6 +7,6 @@ export const supabase = posSupabase as SupabaseClient
 
 /** Sign out and return to the shared portal login (full reload swaps stylesheets). */
 export async function signOutToLogin() {
-  await supabase?.auth.signOut()
+  await supabase?.auth.signOut({ scope: "local" })
   window.location.assign("/login")
 }
