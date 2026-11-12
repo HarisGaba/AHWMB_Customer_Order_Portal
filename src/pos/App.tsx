@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { useTheme } from "next-themes"
-import { BarChart3Icon, BookUserIcon, BoxesIcon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, SunIcon, TagIcon, UserPlusIcon, UsersIcon, ListPlusIcon } from "lucide-react"
+import { BarChart3Icon, BookUserIcon, BoxesIcon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, SunIcon, TagIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -35,7 +35,7 @@ import { can, hasPosDataAccess, type Access, type Permission } from "../lib/acce
 const SummaryPage = lazy(() => import("@/pages/summary-page").then((m) => ({ default: m.SummaryPage })))
 
 // Admin System pages (reports & management, moved here from the order portal); loaded on demand.
-const sys = (name: "StockReportPage" | "CustomerReportPage" | "AddCustomerPage" | "CatalogPage" | "UsersPage") =>
+const sys = (name: "StockReportPage" | "CustomerReportPage") =>
   lazy(() => import("@/pages/system-pages").then((m) => ({ default: m[name] })))
 
 const anyOf = (...perms: Permission[]) => (a: Access | null) => perms.some((p) => can(a, p))
@@ -46,9 +46,6 @@ const ALL_NAV = [
   { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary") },
   { id: "stock", label: "Stock Report", icon: BoxesIcon, page: sys("StockReportPage"), allow: anyOf("stock_report", "stock_transfer") },
   { id: "customers", label: "Customer Report", icon: BookUserIcon, page: sys("CustomerReportPage"), allow: anyOf("customer_report") },
-  { id: "add-customer", label: "Add Customer", icon: UserPlusIcon, page: sys("AddCustomerPage"), allow: anyOf("add_customer") },
-  { id: "catalog", label: "Order Catalog", icon: ListPlusIcon, page: sys("CatalogPage"), allow: anyOf("products") },
-  { id: "users", label: "Users", icon: UsersIcon, page: sys("UsersPage"), allow: (a: Access | null) => !!a?.admin },
 ] as const
 
 type PageId = (typeof ALL_NAV)[number]["id"]

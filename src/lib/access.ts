@@ -11,7 +11,7 @@ export const PERMISSIONS = [
   { key: 'stock_report', label: 'Stock Report', area: 'System' },
   { key: 'stock_transfer', label: 'Stock Transfer', area: 'System' },
   { key: 'customer_report', label: 'Customer Ledger', area: 'System' },
-  { key: 'add_customer', label: 'Add Customer', area: 'System' },
+  { key: 'add_customer', label: 'Add Customer', area: 'Portal' },
   { key: 'products', label: 'Add Products (Order Catalog)', area: 'Portal' },
   { key: 'pos_billing', label: 'POS Billing', area: 'POS' },
   { key: 'pos_items', label: 'POS Items & Rates', area: 'POS' },

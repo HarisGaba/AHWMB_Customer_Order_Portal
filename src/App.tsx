@@ -2657,8 +2657,8 @@ function AdminPage({
   const [deleting, setDeleting] = useState(false)
   const [adminView, setAdminView] = useState<AdminView>('home')
   // Which admin views this user may open (the database enforces the same rules).
-  // Stock, Customer Report and Add Customer live in the POS / Admin System (/pos).
-  const MOVED: AdminView[] = ['stock-report', 'customer-report', 'add-customer']
+  // Stock Report and Customer Report live in the POS / Admin System (/pos).
+  const MOVED: AdminView[] = ['stock-report', 'customer-report']
   const allowed = (view: AdminView) => view === 'home' || (view === 'users' ? !!access?.admin : !MOVED.includes(view) && ADMIN_VIEW_PERMS[view as Exclude<AdminView, 'home' | 'users'>].some(perm => can(access, perm)))
   // Permissions can change live (admin edits this user): leave the panel if nothing is left.
   useEffect(() => {
@@ -2986,6 +2986,7 @@ function AdminPage({
       { view: 'reports', label: isRtl ? 'روزانہ رپورٹ' : 'Daily Report' },
       { view: 'purchase-report', label: isRtl ? 'خریداری رپورٹ' : 'Purchase Report' },
       { view: 'products', label: isRtl ? 'مصنوعات شامل کریں' : 'Add Products' },
+      { view: 'add-customer', label: isRtl ? 'گاہک شامل کریں' : 'Add Customer' },
     ]
     // Stock, customers, catalog and users live in the POS / Admin System (/pos).
     return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />{can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}<ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1>
@@ -3022,7 +3023,9 @@ function AdminPage({
         </div>
 
         {/* Orders, Daily Reports, and Create Order views */}
-        {adminView === 'users'
+        {adminView === 'add-customer'
+          ? <AdminAddCustomer language={language} />
+          : adminView === 'users'
           ? <UsersAdmin />
           : adminView === 'products'
           ? <AdminProducts onChanged={() => setCatalogVersion(value => value + 1)} />
