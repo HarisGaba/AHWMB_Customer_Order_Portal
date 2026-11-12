@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, ArrowRight, Check, History, Pencil, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { printDocument } from '../lib/print'
 
 const LOCATIONS = ['Site Area Godown', 'Jodia Bazaar Godown', 'Shop'] as const
 type Location = (typeof LOCATIONS)[number]
-// Stock transfers happen only between godowns (either direction). The Shop is never a transfer
-// source or destination. The source is always the godown being viewed.
+// Allowed transfers: Site Area -> Jodia Bazaar; Jodia Bazaar -> Site Area or Shop.
+// The Shop is never a source. The source is always the godown being viewed.
 const GODOWNS: Location[] = ['Site Area Godown', 'Jodia Bazaar Godown']
 const isGodown = (l: Location) => GODOWNS.includes(l)
-const transferTargets = (from: Location) => (isGodown(from) ? GODOWNS.filter(g => g !== from) : [])
+const TRANSFER_TARGETS: Record<Location, Location[]> = { 'Site Area Godown': ['Jodia Bazaar Godown'], 'Jodia Bazaar Godown': ['Site Area Godown', 'Shop'], Shop: [] }
+const transferTargets = (from: Location) => TRANSFER_TARGETS[from].filter(to => to !== from)
 const LOCATION_LABEL: Record<Location, string> = { 'Site Area Godown': 'Site Area Godown', 'Jodia Bazaar Godown': 'Jodia Bazaar Godown', Shop: 'Shop' }
 // Older browser-only data used these names.
 const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Jodia Bazaar Godown', 'Godam Site': 'Site Area Godown' }
@@ -43,7 +45,9 @@ function useLiveTable(tables: string[], onChange: () => void) {
     let channel = supabase.channel(`live-${key}-${crypto.randomUUID()}`)
     for (const table of key.split(',')) channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, refresh)
     channel.subscribe()
-    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    // Catch up after the phone wakes / tab returns, at most every 30 s (realtime covers the rest).
+    let last = Date.now()
+    const onVisible = () => { if (document.visibilityState === 'visible' && Date.now() - last > 30_000) { last = Date.now(); refresh() } }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('online', refresh)
     return () => {
@@ -248,7 +252,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
     return ''
   })
   const total = lines.reduce((s, l) => s + num(l.quantity), 0)
-  const validRoute = isGodown(from) && isGodown(target) && from !== target
+  const validRoute = transferTargets(from).includes(target)
   const canConfirm = validRoute && !busy && lines.length > 0 && problems.every(p => !p)
 
   const confirm = async () => {
@@ -446,11 +450,18 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
     const source = LOCATION_LABEL[t.from_location] ?? t.from_location
     onConfirm({
       title: 'Are you sure you want to delete this transfer?',
-      detail: `The stock still in ${LOCATION_LABEL[t.to_location] ?? t.to_location} will be moved back to ${source}: ${t.lines.map(l => `${l.item} ${kg(Number(l.quantity))}`).join(', ')}.`,
+      detail: `The stock still in ${LOCATION_LABEL[t.to_location] ?? t.to_location} will be moved back to ${source}: ${t.lines.map(l => `${l.item} ${kg(Number(l.quantity))}`).join(', ')}. If some of it is no longer there (sold or adjusted), the record is still deleted.`,
       onConfirm: async () => {
         setError('')
         const { data, error: rpcError } = await supabase!.rpc('delete_transfer', { p_id: t.id })
-        if (rpcError) throw rpcError
+        if (rpcError) {
+          // Never let missing stock block clean-up: force-delete the history record itself.
+          // (Stock that is no longer at the destination simply isn't moved back.)
+          const { error: forceError } = await supabase!.from('stock_transfers').delete().eq('id', t.id)
+          if (forceError) throw forceError
+          onChanged(`✓ Transfer record force-deleted. Stock was not moved back (${rpcError.message}).`)
+          return
+        }
         // The record is always removed; report anything that could not be moved back.
         const result = (data || {}) as { returned?: { item: string; quantity: number }[]; not_returned?: { item: string; quantity: number }[] }
         const returned = (result.returned || []).reduce((a, l) => a + Number(l.quantity), 0)
@@ -493,7 +504,7 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
 }
 
 /** Prints a standalone document (only it reaches paper: no buttons, menus or headers). Works on phones too. */
-const printHtml = (html: string, filename?: string) => printDocument(html, null, { filename })
+const printHtml = (html: string, filename?: string, format?: 'a4' | 'a5') => printDocument(html, null, { filename, format })
 
 /** Month-end stock audit sheet for one godown: Item, Weight, Quantity (kg), Bags, with totals. */
 function printStockReport(location: Location, rows: StockRow[]) {
@@ -508,34 +519,34 @@ function printStockReport(location: Location, rows: StockRow[]) {
     : '<tr><td colspan="5" class="empty">No stock recorded</td></tr>'
   printHtml(`<!doctype html><html><head><meta charset="utf-8"><title>Stock Report — ${escapeHtml(LOCATION_LABEL[location])}</title><style>
     /* margin 0 removes the browser's own URL/date header and footer; .sheet adds the page margin. */
-    @page { size: A4 portrait; margin: 0; }
+    @page { size: A5 portrait; margin: 0; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body { margin: 0; color: #000; font: 600 13px/1.45 Arial, Helvetica, sans-serif; }
-    .sheet { margin: 12mm; border: 2px solid #000; padding: 9mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-    .head { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #000; padding-bottom: 5mm; margin-bottom: 5mm; }
-    .head img { width: 17mm; height: 17mm; border-radius: 50%; filter: grayscale(1) contrast(1.4); }
-    h1 { margin: 0; font-size: 23px; letter-spacing: 1px; }
-    .sub { margin: 2px 0 0; font-size: 12.5px; }
-    .meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 5mm; font-size: 14px; }
+    body { margin: 0; color: #000; font: 600 10.5px/1.35 Arial, Helvetica, sans-serif; }
+    .sheet { margin: 7mm; border: 1.5px solid #000; padding: 5mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .head { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #000; padding-bottom: 3mm; margin-bottom: 3mm; }
+    .head img { width: 12mm; height: 12mm; border-radius: 50%; filter: grayscale(1) contrast(1.4); }
+    h1 { margin: 0; font-size: 17px; letter-spacing: 1px; }
+    .sub { margin: 1px 0 0; font-size: 10px; }
+    .meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 3mm; font-size: 11px; }
     table { width: 100%; border-collapse: collapse; }
     thead { display: table-header-group; }
     tr { break-inside: avoid; }
-    th, td { border: 1px solid #000; padding: 6px 9px; text-align: left; }
-    th { background: #000; color: #fff; font-size: 12.5px; text-transform: uppercase; letter-spacing: .4px; }
-    td.n { width: 11mm; text-align: center; } .r { text-align: right; font-variant-numeric: tabular-nums; }
+    table { table-layout: fixed; } th, td { border: 1px solid #000; padding: 3px 5px; text-align: left; word-break: break-word; }
+    th { background: #000; color: #fff; font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; }
+    th:nth-child(1), td.n { width: 7mm; text-align: center; } th:nth-child(3) { width: 21mm; } th:nth-child(4) { width: 25mm; } th:nth-child(5) { width: 13mm; } .r { text-align: right; font-variant-numeric: tabular-nums; }
     td.empty { text-align: center; padding: 14px; }
-    tr.total td { background: #eee; font-size: 15px; border-top: 2px solid #000; }
-    .sign { display: flex; justify-content: space-between; gap: 20mm; margin-top: 18mm; break-inside: avoid; }
-    .sign div { flex: 1; border-top: 1.5px solid #000; padding-top: 2mm; text-align: center; font-size: 12.5px; }
+    tr.total td { background: #eee; font-size: 12px; border-top: 2px solid #000; }
+    .sign { display: flex; justify-content: space-between; gap: 12mm; margin-top: 12mm; break-inside: avoid; }
+    .sign div { flex: 1; border-top: 1.5px solid #000; padding-top: 1.5mm; text-align: center; font-size: 10px; }
   </style></head><body><div class="sheet">
     <div class="head"><img src="${window.location.origin}/logo.png" alt=""><div><h1>STOCK REPORT</h1><p class="sub">AHWMB · Jodia Bazaar, Karachi</p></div></div>
     <div class="meta"><span>Location: <b>${escapeHtml(LOCATION_LABEL[location])}</b></span><span>Date: <b>${escapeHtml(now.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' }))}</b>, ${escapeHtml(now.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }))}</span></div>
     <table>
-      <thead><tr><th>#</th><th>Item Name</th><th class="r">Weight (kg / bag)</th><th class="r">Total Quantity (kg)</th><th class="r">Bags</th></tr></thead>
+      <thead><tr><th>#</th><th>Item Name</th><th class="r">Weight (kg/bag)</th><th class="r">Total Qty (kg)</th><th class="r">Bags</th></tr></thead>
       <tbody>${body}${rows.length ? `<tr class="total"><td></td><td>Total (${rows.length} item${rows.length === 1 ? '' : 's'})</td><td></td><td class="r">${kg(totalKg)}</td><td class="r">${totalBags || '—'}</td></tr>` : ''}</tbody>
     </table>
     <div class="sign"><div>Checked by</div><div>Approved by</div></div>
-  </div></body></html>`, `stock-report-${location}-${new Date().toISOString().slice(0, 10)}.pdf`)
+  </div></body></html>`, `stock-report-${location}-${new Date().toISOString().slice(0, 10)}.pdf`, 'a5')
 }
 
 type ConfirmRequest = { title: string; detail?: string; confirmLabel?: string; onConfirm: () => Promise<void> }
@@ -593,27 +604,35 @@ function ItemPicker({ value, onChange, options, placeholder = 'Select or type it
   const place = useCallback(() => {
     const rect = inputRef.current?.getBoundingClientRect()
     if (!rect) return
-    const below = window.innerHeight - rect.bottom - 12
+    const viewH = window.visualViewport?.height ?? window.innerHeight
+    const below = viewH - rect.bottom - 12
     const above = rect.top - 12
     const showAbove = below < 220 && above > below
-    setBox({ left: rect.left, width: Math.max(rect.width, 240), top: showAbove ? rect.top - 4 : rect.bottom + 4, maxHeight: Math.min(320, showAbove ? above : below), above: showAbove })
+    const width = Math.min(Math.max(rect.width, 240), window.innerWidth - 16)
+    setBox({ left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), width, top: showAbove ? rect.top - 4 : rect.bottom + 4, maxHeight: Math.min(320, showAbove ? above : below), above: showAbove })
   }, [])
 
   useEffect(() => {
     if (!open) return
     place()
     const onMove = () => place()
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: PointerEvent) => {
       const target = e.target as Node
       if (!inputRef.current?.contains(target) && !listRef.current?.contains(target)) setOpen(false)
     }
+    // Phones: the on-screen keyboard resizes/scrolls the visual viewport; follow it.
+    const vv = window.visualViewport
     window.addEventListener('scroll', onMove, true)
     window.addEventListener('resize', onMove)
-    document.addEventListener('mousedown', onDown)
+    vv?.addEventListener('resize', onMove)
+    vv?.addEventListener('scroll', onMove)
+    document.addEventListener('pointerdown', onDown)
     return () => {
       window.removeEventListener('scroll', onMove, true)
       window.removeEventListener('resize', onMove)
-      document.removeEventListener('mousedown', onDown)
+      vv?.removeEventListener('resize', onMove)
+      vv?.removeEventListener('scroll', onMove)
+      document.removeEventListener('pointerdown', onDown)
     }
   }, [open, place])
 
@@ -633,14 +652,14 @@ function ItemPicker({ value, onChange, options, placeholder = 'Select or type it
         else if (e.key === 'Escape' || e.key === 'Tab') setOpen(false)
       }}
       role="combobox" aria-expanded={open} aria-autocomplete="list" aria-label="Item" autoComplete="off" />
-    {open && box && <ul ref={listRef} className="item-picker-list" role="listbox"
-      style={{ left: box.left, width: box.width, maxHeight: box.maxHeight, ...(box.above ? { bottom: window.innerHeight - box.top } : { top: box.top }) }}>
+    {open && box && createPortal(<ul ref={listRef} className="item-picker-list" role="listbox"
+      style={{ left: box.left, width: box.width, maxHeight: box.maxHeight, ...(box.above ? { bottom: (window.visualViewport?.height ?? window.innerHeight) - box.top } : { top: box.top }) }}>
       {filtered.length === 0 && <li className="item-picker-empty">No item matches “{text.trim()}”</li>}
       {filtered.map((o, i) => <li key={o.item} role="option" aria-selected={o.item === value} data-active={i === active}
         className={`item-picker-option${i === active ? ' is-active' : ''}${o.item === value ? ' is-selected' : ''}`}
-        onMouseEnter={() => setActive(i)} onMouseDown={e => { e.preventDefault(); choose(o.item) }}>
+        onMouseEnter={() => setActive(i)} onMouseDown={e => e.preventDefault()} onClick={() => choose(o.item)}>
         <span>{o.item}</span>{o.hint && <small>{o.hint}</small>}
       </li>)}
-    </ul>}
+    </ul>, document.body)}
   </div>
 }

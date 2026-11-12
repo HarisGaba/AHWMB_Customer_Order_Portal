@@ -16,7 +16,7 @@ export type PrintOptions = {
   /** File name for the PDF made on phones. */
   filename?: string
   /** 'a4' (default) splits into A4 pages; 'receipt' makes one long 80 mm page. */
-  format?: 'a4' | 'receipt'
+  format?: 'a4' | 'a5' | 'receipt'
 }
 
 /** Kept for callers that pre-open a tab; phones now use the in-app preview, so nothing is opened. */
@@ -56,9 +56,9 @@ function printInHiddenFrame(html: string) {
 }
 
 /** Draws the document into a PDF file (A4 pages, or one 80 mm receipt page). */
-async function htmlToPdf(html: string, format: 'a4' | 'receipt'): Promise<Blob> {
+async function htmlToPdf(html: string, format: 'a4' | 'a5' | 'receipt'): Promise<Blob> {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
-  const cssWidth = format === 'receipt' ? 302 : 794 // 80 mm / 210 mm at 96 dpi
+  const cssWidth = format === 'receipt' ? 302 : format === 'a5' ? 559 : 794 // 80 / 148 / 210 mm at 96 dpi
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
   frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${cssWidth}px;height:1200px;border:0;visibility:hidden`
@@ -78,8 +78,8 @@ async function htmlToPdf(html: string, format: 'a4' | 'receipt'): Promise<Blob> 
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, w, h)
       return pdf.output('blob')
     }
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true })
-    const pageW = 210, pageH = 297
+    const pdf = new jsPDF({ unit: 'mm', format, orientation: 'portrait', compress: true })
+    const [pageW, pageH] = format === 'a5' ? [148, 210] : [210, 297]
     const slicePx = Math.floor(canvas.width * pageH / pageW) // canvas pixels per A4 page
     for (let y = 0, page = 0; y < canvas.height; y += slicePx, page++) {
       const part = document.createElement('canvas')

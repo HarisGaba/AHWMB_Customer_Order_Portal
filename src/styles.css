@@ -3119,3 +3119,13 @@ body { font-size:18px; }
 .item-picker-option.is-active { background:#e8f4ec; }
 .item-picker-option.is-selected { color:#0d6b40; box-shadow:inset 3px 0 0 #0d6b40; }
 .item-picker-empty { padding:12px; color:#5b7266; }
+
+/* Item picker + transfer cards on phones: list never shifted, no overlapping text. */
+.item-picker-list { touch-action:pan-y; -webkit-overflow-scrolling:touch; }
+.item-picker-option { min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+@media (max-width: 760px) {
+  .transfer-table tr { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .transfer-table td[data-label="Item"], .transfer-table td[data-label="Available"], .transfer-table td[data-label="Remove"] { grid-column:1 / -1; }
+  .transfer-available { white-space:normal; overflow-wrap:anywhere; }
+  .transfer-table .report-cell-input, .item-picker-input { font-size:16px; } /* 16px stops iOS zooming the page on focus */
+}

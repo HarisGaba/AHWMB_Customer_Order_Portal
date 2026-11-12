@@ -139,7 +139,6 @@ function checkRateLimit(phone: string): boolean {
 
 const formatMoney = (value: number) => `Rs. ${Math.round(value || 0).toLocaleString('en-PK')}`
 /** Can the signed-in user open the admin panel (main admin, or staff with any portal page)? */
-const isCurrentAdmin = async () => hasPortalAccess(await fetchAccess(supabase))
 
 const readableError = (error: unknown): string => {
   if (error instanceof Error) return error.message
@@ -2674,12 +2673,15 @@ function AdminPage({
 
   const refresh = useCallback(async () => {
     if (!supabase) { setLoading(false); return }
+    // The session is stored on the device and refreshed automatically: only a real
+    // sign-out (no session) sends the user to the login page.
     const { data: session } = await supabase.auth.getSession()
-    if (!session.session || !(await isCurrentAdmin())) {
+    if (!session.session) {
       setAuthorized(false); setLoading(false); navigate('/login'); return
     }
     setAuthorized(true)
-    if (!can(await fetchAccess(supabase), 'orders')) { setOrders([]); setLoading(false); return }
+    const currentAccess = await fetchAccess(supabase).catch(() => null) // null = network error: still try to load
+    if (currentAccess && !can(currentAccess, 'orders')) { setOrders([]); setLoading(false); return }
     const { data, error } = await supabase
       .from('orders')
       .select('*')
@@ -2696,7 +2698,20 @@ function AdminPage({
   useEffect(() => {
     void refresh()
     const channel = supabase?.channel('orders-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => { void refresh() })
+      // Apply each change directly instead of re-downloading every order.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
+        if (payload.eventType === 'DELETE') {
+          const id = (payload.old as { id?: string }).id
+          setOrders(current => current.filter(o => o.id !== id))
+          return
+        }
+        const row = payload.new as OrderRecord
+        const next = { ...row, items: safeItems(row.items) }
+        setOrders(current => {
+          const exists = current.some(o => o.id === next.id)
+          return exists ? current.map(o => (o.id === next.id ? next : o)) : [next, ...current]
+        })
+      })
       .subscribe()
     return () => { if (channel) void supabase?.removeChannel(channel) }
   }, [refresh])

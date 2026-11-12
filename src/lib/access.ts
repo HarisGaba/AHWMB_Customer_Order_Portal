@@ -41,8 +41,16 @@ export async function fetchAccess(client: SupabaseClient | null): Promise<Access
   if (!client) return NO_ACCESS
   const { data: session } = await client.auth.getSession()
   if (!session.session) return NO_ACCESS
-  const { data, error } = await client.rpc('my_access')
-  if (error || !data) return NO_ACCESS
+  // A network hiccup (phone waking up, weak signal) must never look like "no access",
+  // or the user gets signed out. Retry, then throw so callers keep what they had.
+  let result = await client.rpc('my_access')
+  for (let attempt = 1; result.error && attempt < 3; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 700 * attempt))
+    result = await client.rpc('my_access')
+  }
+  const { data, error } = result
+  if (error) throw error
+  if (!data) return NO_ACCESS
   return {
     admin: data.admin === true,
     active: data.active === true,
@@ -63,9 +71,17 @@ export function useLiveAccess(client: SupabaseClient | null) {
     if (!client) { setAccess(NO_ACCESS); return }
     let cancelled = false
     let channel: ReturnType<SupabaseClient['channel']> | null = null
+    let busy = false
     const refresh = async () => {
-      const next = await fetchAccess(client)
-      if (!cancelled) setAccess(next)
+      if (busy) return // one check at a time
+      busy = true
+      try {
+        const next = await fetchAccess(client)
+        if (!cancelled) setAccess(next)
+      } catch {
+        // Temporary error: keep the current access (stay signed in); retry on next focus.
+        if (!cancelled) setAccess(prev => prev ?? null)
+      } finally { busy = false }
     }
     const watch = (userId: string | undefined) => {
       if (channel) void client.removeChannel(channel)
@@ -87,7 +103,13 @@ export function useLiveAccess(client: SupabaseClient | null) {
       watch(session?.user?.id)
       void refresh()
     })
-    const onVisible = () => { if (document.visibilityState === 'visible') void refresh() }
+    // Re-check when the tab comes back, at most once a minute.
+    let lastCheck = Date.now()
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 60_000) return
+      lastCheck = Date.now()
+      void refresh()
+    }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
