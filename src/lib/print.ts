@@ -17,6 +17,8 @@ export type PrintOptions = {
   filename?: string
   /** 'a4' (default) splits into A4 pages; 'receipt' makes one long 80 mm page. */
   format?: 'a4' | 'a5' | 'receipt'
+  /** Builds a proper PDF for Share / Save (instead of a picture of the page). */
+  pdf?: () => Promise<Blob>
 }
 
 /** Kept for callers that pre-open a tab; phones now use the in-app preview, so nothing is opened. */
@@ -141,7 +143,7 @@ const PREVIEW_CSS = `
 `
 
 /** Phone view: the document full-screen in the app, with Share / Save PDF, Print and Close. */
-function showMobilePreview(html: string, { filename, format = 'a4' }: PrintOptions) {
+function showMobilePreview(html: string, { filename, format = 'a4', pdf: buildPdf }: PrintOptions) {
   // Default file name from the document's <title>, e.g. "Invoice ORD-12" -> invoice-ord-12.pdf
   const title = /<title>([^<]*)<\/title>/i.exec(html)?.[1] ?? 'ahwmb-document'
   filename ||= `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ahwmb-document'}.pdf`
@@ -178,7 +180,7 @@ function showMobilePreview(html: string, { filename, format = 'a4' }: PrintOptio
   // The file is made now, so the tap on Share opens the share sheet straight away
   // (phones only allow sharing directly after a tap).
   let pdf: Blob | null = null
-  htmlToPdf(html, format)
+  ;(buildPdf ? buildPdf() : htmlToPdf(html, format))
     .then(blob => { pdf = blob; share.disabled = false; share.textContent = '📤 Share / Save PDF' })
     .catch(() => { share.textContent = 'PDF unavailable — use Print' })
   share.onclick = () => { if (pdf) void shareOrDownload(pdf, filename) }

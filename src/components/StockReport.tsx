@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, ArrowRight, Check, History, Pencil, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { printDocument } from '../lib/print'
+import { isMobileDevice, printDocument } from '../lib/print'
 
 const LOCATIONS = ['Site Area Godown', 'Jodia Bazaar Godown', 'Shop'] as const
 type Location = (typeof LOCATIONS)[number]
@@ -508,11 +508,23 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
 }
 
 /** Prints a standalone document (only it reaches paper: no buttons, menus or headers). Works on phones too. */
-const printHtml = (html: string, filename?: string, format?: 'a4' | 'a5') => printDocument(html, null, { filename, format })
+const printHtml = (html: string, filename?: string, format?: 'a4' | 'a5', pdf?: () => Promise<Blob>) => printDocument(html, null, { filename, format, pdf })
 
 /** Month-end stock audit sheet for one godown: Item, Weight, Quantity (kg), Bags, with totals. */
 function printStockReport(location: Location, rows: StockRow[]) {
   const now = new Date()
+  // Computer: open the premium PDF in a new tab (the browser's PDF viewer has Print and Download).
+  if (!isMobileDevice()) {
+    const tab = window.open('', '_blank') // opened at the click so it isn't blocked
+    if (tab) {
+      tab.document.write('<!doctype html><title>Stock Report</title><p style="font:16px Arial;padding:24px">Preparing the Stock Report PDF…</p>')
+      void import('../lib/stockPdf')
+        .then(m => m.buildStockReportPdf(LOCATION_LABEL[location], rows.map(r => ({ item: r.item, weight: num(r.weight) || null, quantity: num(r.quantity), bags: bagsFor(num(r.quantity), num(r.weight) || null) })), now))
+        .then(blob => { tab.location.href = URL.createObjectURL(blob) })
+        .catch(() => { tab.close() })
+      return
+    }
+  }
   const totalKg = rows.reduce((a, r) => a + num(r.quantity), 0)
   const totalBags = rows.reduce((a, r) => a + (bagsFor(num(r.quantity), num(r.weight) || null) ?? 0), 0)
   const body = rows.length
@@ -550,7 +562,7 @@ function printStockReport(location: Location, rows: StockRow[]) {
       <tbody>${body}${rows.length ? `<tr class="total"><td></td><td>Total (${rows.length} item${rows.length === 1 ? '' : 's'})</td><td></td><td class="r">${kgPrint(totalKg)}</td><td class="r">${totalBags || '—'}</td></tr>` : ''}</tbody>
     </table>
     <div class="sign"><div>Checked by</div><div>Approved by</div></div>
-  </div></body></html>`, `stock-report-${location}-${new Date().toISOString().slice(0, 10)}.pdf`, 'a5')
+  </div></body></html>`, `stock-report-${location}-${new Date().toISOString().slice(0, 10)}.pdf`, 'a5', () => import('../lib/stockPdf').then(m => m.buildStockReportPdf(LOCATION_LABEL[location], rows.map(r => ({ item: r.item, weight: num(r.weight) || null, quantity: num(r.quantity), bags: bagsFor(num(r.quantity), num(r.weight) || null) })), now)))
 }
 
 type ConfirmRequest = { title: string; detail?: string; confirmLabel?: string; onConfirm: () => Promise<void> }
