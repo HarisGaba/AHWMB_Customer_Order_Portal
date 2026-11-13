@@ -370,14 +370,18 @@ function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void;
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 const escapeHtml = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+/** Item name for print/PDF: the whole name (brackets included), Urdu kept as one right-to-left run in a proper Urdu font. */
+const nameHtml = (v: string) => `<span class="nm">${escapeHtml(v.trim()).replace(/[\u0600-\u06ff](?:[\u0600-\u06ff\u200c\u200d \d.,،-]*[\u0600-\u06ff])?/g, run => `<span class="ur" dir="rtl" lang="ur">${run}</span>`)}</span>`
+/** Quantity for print/PDF: plain digits and "kg" kept together on one line. */
+const kgPrint = (n: number) => `${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}&nbsp;kg`
 
 /** Printable transfer slip (gate pass), printed through a hidden same-origin frame. */
 function printTransfer(t: Transfer) {
-  const rows = t.lines.map((l, i) => `<tr><td class="n">${i + 1}</td><td>${escapeHtml(l.item)}</td><td class="r">${kg(Number(l.quantity))}</td><td class="r">${l.bags ?? '—'}</td></tr>`).join('')
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Stock Transfer — ${escapeHtml(when(t.created_at))}</title><style>
+  const rows = t.lines.map((l, i) => `<tr><td class="n">${i + 1}</td><td>${nameHtml(l.item)}</td><td class="r">${kgPrint(Number(l.quantity))}</td><td class="r">${l.bags ?? '—'}</td></tr>`).join('')
+  const html = `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@700&display=block"><title>Stock Transfer — ${escapeHtml(when(t.created_at))}</title><style>
     @page { size: A4 portrait; margin: 0; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body { margin: 0; color: #000; font: 600 14px/1.5 Arial, Helvetica, sans-serif; }
+    body { margin: 0; color: #000; font: 600 14px/1.5 Arial, Helvetica, "Noto Naskh Arabic", sans-serif; } .nm { overflow-wrap: anywhere; } .ur { font-family: "Noto Naskh Arabic", "Segoe UI", Tahoma, sans-serif; font-weight: 700; direction: rtl; unicode-bidi: isolate; } .r { white-space: nowrap; }
     .sheet { margin: 14mm; border: 2px solid #000; padding: 10mm; }
     .head { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #000; padding-bottom: 6mm; margin-bottom: 6mm; }
     .head img { width: 18mm; height: 18mm; border-radius: 50%; filter: grayscale(1) contrast(1.4); }
@@ -399,7 +403,7 @@ function printTransfer(t: Transfer) {
     <div class="meta">Date: <b>${escapeHtml(when(t.created_at))}</b>${t.edited_at ? ` &nbsp;·&nbsp; Edited: ${escapeHtml(when(t.edited_at))}` : ''} &nbsp;·&nbsp; Ref: <b>${t.id.slice(0, 8).toUpperCase()}</b></div>
     <table><thead><tr><th>#</th><th>Item</th><th class="r">Quantity</th><th class="r">Bags</th></tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr><td></td><td>Total</td><td class="r">${kg(Number(t.total_quantity))}</td><td class="r">${t.lines.reduce((a, l) => a + (Number(l.bags) || 0), 0) || '—'}</td></tr></tfoot></table>
+      <tfoot><tr><td></td><td>Total</td><td class="r">${kgPrint(Number(t.total_quantity))}</td><td class="r">${t.lines.reduce((a, l) => a + (Number(l.bags) || 0), 0) || '—'}</td></tr></tfoot></table>
     <div class="sign"><div>Sent by</div><div>Received by</div></div>
   </div></body></html>`
   printHtml(html, `stock-transfer-${t.created_at.slice(0, 10)}.pdf`)
@@ -514,14 +518,14 @@ function printStockReport(location: Location, rows: StockRow[]) {
   const body = rows.length
     ? rows.map((r, i) => {
       const bags = bagsFor(num(r.quantity), num(r.weight) || null)
-      return `<tr><td class="n">${i + 1}</td><td>${escapeHtml(r.item)}</td><td class="r">${r.weight ? `${escapeHtml(r.weight)} kg` : '—'}</td><td class="r">${kg(num(r.quantity))}</td><td class="r">${bags ?? '—'}</td></tr>`
+      return `<tr><td class="n">${i + 1}</td><td>${nameHtml(r.item)}</td><td class="r">${r.weight ? kgPrint(num(r.weight)) : '-'}</td><td class="r">${kgPrint(num(r.quantity))}</td><td class="r">${bags ?? '—'}</td></tr>`
     }).join('')
     : '<tr><td colspan="5" class="empty">No stock recorded</td></tr>'
-  printHtml(`<!doctype html><html><head><meta charset="utf-8"><title>Stock Report — ${escapeHtml(LOCATION_LABEL[location])}</title><style>
+  printHtml(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@700&display=block"><title>Stock Report — ${escapeHtml(LOCATION_LABEL[location])}</title><style>
     /* margin 0 removes the browser's own URL/date header and footer; .sheet adds the page margin. */
     @page { size: A5 portrait; margin: 0; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body { margin: 0; color: #000; font: 600 10.5px/1.35 Arial, Helvetica, sans-serif; }
+    body { margin: 0; color: #000; font: 600 10.5px/1.35 Arial, Helvetica, "Noto Naskh Arabic", sans-serif; } .nm { overflow-wrap: anywhere; } .ur { font-family: "Noto Naskh Arabic", "Segoe UI", Tahoma, sans-serif; font-weight: 700; direction: rtl; unicode-bidi: isolate; } .r { white-space: nowrap; }
     .sheet { margin: 7mm; border: 1.5px solid #000; padding: 5mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
     .head { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #000; padding-bottom: 3mm; margin-bottom: 3mm; }
     .head img { width: 12mm; height: 12mm; border-radius: 50%; filter: grayscale(1) contrast(1.4); }
@@ -543,7 +547,7 @@ function printStockReport(location: Location, rows: StockRow[]) {
     <div class="meta"><span>Location: <b>${escapeHtml(LOCATION_LABEL[location])}</b></span><span>Date: <b>${escapeHtml(now.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' }))}</b>, ${escapeHtml(now.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }))}</span></div>
     <table>
       <thead><tr><th>#</th><th>Item Name</th><th class="r">Weight (kg/bag)</th><th class="r">Total Qty (kg)</th><th class="r">Bags</th></tr></thead>
-      <tbody>${body}${rows.length ? `<tr class="total"><td></td><td>Total (${rows.length} item${rows.length === 1 ? '' : 's'})</td><td></td><td class="r">${kg(totalKg)}</td><td class="r">${totalBags || '—'}</td></tr>` : ''}</tbody>
+      <tbody>${body}${rows.length ? `<tr class="total"><td></td><td>Total (${rows.length} item${rows.length === 1 ? '' : 's'})</td><td></td><td class="r">${kgPrint(totalKg)}</td><td class="r">${totalBags || '—'}</td></tr>` : ''}</tbody>
     </table>
     <div class="sign"><div>Checked by</div><div>Approved by</div></div>
   </div></body></html>`, `stock-report-${location}-${new Date().toISOString().slice(0, 10)}.pdf`, 'a5')

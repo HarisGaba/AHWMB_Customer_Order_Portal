@@ -71,7 +71,13 @@ async function htmlToPdf(html: string, format: 'a4' | 'a5' | 'receipt'): Promise
     await frameReady(doc)
     const height = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight)
     frame.style.height = `${height}px`
-    const canvas = await html2canvas(doc.documentElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true, width: cssWidth, height, windowWidth: cssWidth, windowHeight: height, logging: false })
+    const SCALE = 3 // sharp text in the PDF
+    // Safe places to start a new page: the top of each table row / block, never mid-row.
+    const breaks = [...doc.querySelectorAll('tr, .sign, .head, .meta, .route, h1, h2, p')]
+      .map(el => Math.round(el.getBoundingClientRect().top * SCALE))
+      .filter(y => y > 0)
+      .sort((a, b) => a - b)
+    const canvas = await html2canvas(doc.documentElement, { scale: SCALE, backgroundColor: '#ffffff', useCORS: true, width: cssWidth, height, windowWidth: cssWidth, windowHeight: height, logging: false })
     if (format === 'receipt') {
       const w = 80, h = canvas.height * w / canvas.width
       const pdf = new jsPDF({ unit: 'mm', format: [w, h], orientation: 'portrait', compress: true })
@@ -80,16 +86,27 @@ async function htmlToPdf(html: string, format: 'a4' | 'a5' | 'receipt'): Promise
     }
     const pdf = new jsPDF({ unit: 'mm', format, orientation: 'portrait', compress: true })
     const [pageW, pageH] = format === 'a5' ? [148, 210] : [210, 297]
-    const slicePx = Math.floor(canvas.width * pageH / pageW) // canvas pixels per A4 page
-    for (let y = 0, page = 0; y < canvas.height; y += slicePx, page++) {
+    const pxPerMm = canvas.width / pageW
+    const pagePx = Math.floor(pageH * pxPerMm) // canvas pixels per page
+    const topPad = Math.round(8 * pxPerMm) // pages after the first get an 8 mm top margin
+    for (let y = 0, page = 0; y < canvas.height - 2; page++) {
+      const room = pagePx - (page ? topPad : 0)
+      let end = Math.min(y + room, canvas.height)
+      if (end < canvas.height) {
+        // Cut at the last row that still fits completely on this page.
+        const safe = breaks.filter(b => b > y + room * 0.3 && b <= end).pop()
+        if (safe) end = safe
+      }
+      const sliceH = end - y
       const part = document.createElement('canvas')
       part.width = canvas.width
-      part.height = Math.min(slicePx, canvas.height - y)
+      part.height = sliceH
       const ctx = part.getContext('2d')!
       ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, part.width, part.height)
-      ctx.drawImage(canvas, 0, y, part.width, part.height, 0, 0, part.width, part.height)
+      ctx.drawImage(canvas, 0, y, part.width, sliceH, 0, 0, part.width, sliceH)
       if (page) pdf.addPage()
-      pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageW, part.height * pageW / part.width)
+      pdf.addImage(part.toDataURL('image/jpeg', 0.95), 'JPEG', 0, page ? 8 : 0, pageW, sliceH / pxPerMm)
+      y = end
     }
     return pdf.output('blob')
   } finally {
