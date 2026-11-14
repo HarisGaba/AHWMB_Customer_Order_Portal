@@ -60,8 +60,23 @@ export const clearPosFromPortal = () => { try { sessionStorage.removeItem(TAB_LO
 // The login page always starts clean, so another account's login is never ignored.
 if (typeof window !== 'undefined' && window.location.pathname === '/login') clearPosFromPortal()
 
-const chosen = tabLogin()
-export const supabase = chosen ? (chosen === 'pos' ? posClient() : portalClient()) : isPosContext() ? posClient() : portalClient()
+/**
+ * Several tabs at once (portal in one, POS in another): every tab reads the logins saved in
+ * localStorage, so a tab opened straight at /pos or /admin uses that area's own login, or, when
+ * only the other area is signed in on this device, that login instead of asking again.
+ */
+const hasSaved = (key: string) => { try { const v = localStorage.getItem(key); return !!v && v !== 'null' } catch { return false } }
+const portalKey = () => { try { return Object.keys(localStorage).find(k => /^sb-.*-auth-token$/.test(k)) ?? '' } catch { return '' } }
+function pickLogin(): TabLogin {
+  const chosen = tabLogin()
+  if (chosen) return chosen
+  const want: TabLogin = isPosContext() ? 'pos' : 'portal'
+  if (typeof window === 'undefined' || window.location.pathname === '/login') return want
+  const has = (t: TabLogin) => hasSaved(t === 'pos' ? POS_STORAGE_KEY : portalKey())
+  if (!has(want) && has(want === 'pos' ? 'portal' : 'pos')) return want === 'pos' ? 'portal' : 'pos'
+  return want
+}
+export const supabase = pickLogin() === 'pos' ? posClient() : portalClient()
 
 /** A throw-away client (nothing saved) to check an account before choosing which portal to sign in to. */
 export const checkClient = (): SupabaseClient | null =>

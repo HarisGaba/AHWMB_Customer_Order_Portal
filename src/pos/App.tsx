@@ -40,16 +40,17 @@ const sys = (name: "DailyReportPage" | "StockReportPage" | "CustomerReportPage" 
   lazy(() => import("@/pages/system-pages").then((m) => ({ default: m[name] })))
 
 const anyOf = (...perms: Permission[]) => (a: Access | null) => perms.some((p) => can(a, p))
-// Menu order as requested (all eight shown).
+// Menu order as requested. Point of Sale, Rate Changing, Item Addition and Total Summary are hidden
+// for now (set hidden: false to bring one back).
 const ALL_NAV = [
-  { id: "daily", label: "Daily Report", icon: NotebookPenIcon, page: sys("DailyReportPage"), allow: anyOf("daily_report"), unused: false },
-  { id: "stock", label: "Stock Report", icon: BoxesIcon, page: sys("StockReportPage"), allow: anyOf("stock_report", "stock_transfer"), unused: false },
-  { id: "customers", label: "Customer Report", icon: BookUserIcon, page: sys("CustomerReportPage"), allow: anyOf("customer_report"), unused: false },
-  { id: "purchase", label: "Purchase Report", icon: ReceiptTextIcon, page: sys("PurchaseReportPage"), allow: anyOf("purchase_report"), unused: false },
-  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, allow: anyOf("pos_billing"), unused: false },
-  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), unused: false },
-  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), unused: false },
-  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary"), unused: false },
+  { id: "daily", label: "Daily Report", icon: NotebookPenIcon, page: sys("DailyReportPage"), allow: anyOf("daily_report"), unused: false, hidden: false },
+  { id: "stock", label: "Stock Report", icon: BoxesIcon, page: sys("StockReportPage"), allow: anyOf("stock_report", "stock_transfer"), unused: false, hidden: false },
+  { id: "customers", label: "Customer Report", icon: BookUserIcon, page: sys("CustomerReportPage"), allow: anyOf("customer_report"), unused: false, hidden: false },
+  { id: "purchase", label: "Purchase Report", icon: ReceiptTextIcon, page: sys("PurchaseReportPage"), allow: anyOf("purchase_report"), unused: false, hidden: false },
+  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, allow: anyOf("pos_billing"), unused: false, hidden: true },
+  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), unused: false, hidden: true },
+  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), unused: false, hidden: true },
+  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary"), unused: false, hidden: true },
 ] as const
 
 type PageId = (typeof ALL_NAV)[number]["id"]
@@ -57,7 +58,7 @@ type PageId = (typeof ALL_NAV)[number]["id"]
 export default function App() {
   const access = usePosAccess()
   // Only the pages this user was given appear in the menu (the database enforces the same rules).
-  const NAV = useMemo(() => ALL_NAV.filter((n) => n.allow(access)), [access])
+  const NAV = useMemo(() => ALL_NAV.filter((n) => !n.hidden && n.allow(access)), [access])
   const MAIN = useMemo(() => NAV.filter((n) => !n.unused), [NAV])
   const UNUSED = useMemo(() => NAV.filter((n) => n.unused), [NAV])
   const [showUnused, setShowUnused] = useState(false)

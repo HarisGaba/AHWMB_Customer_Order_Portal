@@ -5,7 +5,7 @@ import {
   MapPin, MessageCircle, Navigation, PackageCheck, Phone, Plus,
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
-import { checkClient, clearPosFromPortal, clientFor, isSwitchedTab, openPosFromPortal, supabase } from './lib/supabase'
+import { checkClient, clearPosFromPortal, clientFor, openPosFromPortal, supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
@@ -2710,7 +2710,7 @@ function AdminPage({
   // Permissions can change live (admin edits this user): leave the panel if nothing is left.
   useEffect(() => {
     if (!access) return
-    if (adminEmail.toLowerCase() === 'ahwmb1965@gmail.com') { if (!isSwitchedTab()) window.location.replace('/pos'); return }
+    if (adminEmail.toLowerCase() === 'ahwmb1965@gmail.com') return // may keep the portal open in its own tab
     if (adminEmail.toLowerCase() === 'ahmedyounus1978@gmail.com') return // the portal is his home
     if (!hasPortalAccess(access)) {
       if (hasPosAccess(access)) window.location.replace('/pos')
