@@ -40,7 +40,17 @@ export const posClient = () => (pos === undefined ? (pos = make(POS_STORAGE_KEY)
 /** The client for the login that belongs to this page. */
 export const clientFor = (target: '/admin' | '/pos') => (target === '/pos' ? posClient() : portalClient())
 
-export const supabase = isPosContext() ? posClient() : portalClient()
+/**
+ * "Go to POS" from the Customer Order Portal: this browser tab then uses the portal login in
+ * the POS too (same session, no second login). Set per tab, so a separate POS login (e.g.
+ * ahwmb1965) in another tab is not affected.
+ */
+const VIA_PORTAL = 'ahwmb-pos-via-portal'
+export const posUsesPortalLogin = () => { try { return sessionStorage.getItem(VIA_PORTAL) === '1' } catch { return false } }
+export const openPosFromPortal = () => { try { sessionStorage.setItem(VIA_PORTAL, '1') } catch { /* unavailable */ } window.location.assign('/pos') }
+export const clearPosFromPortal = () => { try { sessionStorage.removeItem(VIA_PORTAL) } catch { /* unavailable */ } }
+
+export const supabase = isPosContext() && !posUsesPortalLogin() ? posClient() : portalClient()
 
 /** A throw-away client (nothing saved) to check an account before choosing which portal to sign in to. */
 export const checkClient = (): SupabaseClient | null =>

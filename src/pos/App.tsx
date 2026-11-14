@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { useTheme } from "next-themes"
-import { BarChart3Icon, BookUserIcon, BoxesIcon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, SunIcon, TagIcon, NotebookPenIcon, ReceiptTextIcon, UsersIcon, ChevronRightIcon } from "lucide-react"
+import { BarChart3Icon, BookUserIcon, BoxesIcon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, SunIcon, TagIcon, NotebookPenIcon, ReceiptTextIcon, ChevronRightIcon, LayoutDashboardIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +25,7 @@ import { SHOP } from "@/lib/config"
 import { useClock, useToday } from "@/hooks/use-today"
 import { fmt, useStore } from "@/lib/store"
 import { signOutToLogin } from "@/lib/supabase"
+import { posUsesPortalLogin } from "../lib/supabase"
 import { AddItemPage } from "@/pages/add-item-page"
 import { PosPage } from "@/pages/pos-page"
 import { RatesPage } from "@/pages/rates-page"
@@ -35,21 +36,20 @@ import { can, hasPosDataAccess, type Access, type Permission } from "../lib/acce
 const SummaryPage = lazy(() => import("@/pages/summary-page").then((m) => ({ default: m.SummaryPage })))
 
 // Admin System pages (reports & management, moved here from the order portal); loaded on demand.
-const sys = (name: "DailyReportPage" | "StockReportPage" | "CustomerReportPage" | "PurchaseReportPage" | "UsersPage") =>
+const sys = (name: "DailyReportPage" | "StockReportPage" | "CustomerReportPage" | "PurchaseReportPage") =>
   lazy(() => import("@/pages/system-pages").then((m) => ({ default: m[name] })))
 
 const anyOf = (...perms: Permission[]) => (a: Access | null) => perms.some((p) => can(a, p))
-// Menu order as requested. "unused" pages sit in a closed "Not in use" group at the bottom.
+// Menu order as requested (all eight shown).
 const ALL_NAV = [
   { id: "daily", label: "Daily Report", icon: NotebookPenIcon, page: sys("DailyReportPage"), allow: anyOf("daily_report"), unused: false },
   { id: "stock", label: "Stock Report", icon: BoxesIcon, page: sys("StockReportPage"), allow: anyOf("stock_report", "stock_transfer"), unused: false },
   { id: "customers", label: "Customer Report", icon: BookUserIcon, page: sys("CustomerReportPage"), allow: anyOf("customer_report"), unused: false },
   { id: "purchase", label: "Purchase Report", icon: ReceiptTextIcon, page: sys("PurchaseReportPage"), allow: anyOf("purchase_report"), unused: false },
   { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, allow: anyOf("pos_billing"), unused: false },
-  { id: "users", label: "Users", icon: UsersIcon, page: sys("UsersPage"), allow: (a: Access | null) => !!a?.admin, unused: false },
-  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), unused: true },
-  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), unused: true },
-  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary"), unused: true },
+  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), unused: false },
+  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), unused: false },
+  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary"), unused: false },
 ] as const
 
 type PageId = (typeof ALL_NAV)[number]["id"]
@@ -148,7 +148,7 @@ export default function App() {
         </SidebarContent>
         <SidebarFooter>
           {hasPosDataAccess(access) && <TodayCard />}
-          {access?.admin && <a href="/admin" className="rounded-lg px-3 py-2 text-center text-xs font-semibold text-sidebar-foreground/70 ring-1 ring-sidebar-border hover:bg-sidebar-accent group-data-[collapsible=icon]:hidden">← Customer Order Portal</a>}
+
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
@@ -159,6 +159,12 @@ export default function App() {
           <Separator orientation="vertical" className="mx-1 h-4!" />
           <span className="flex items-center gap-2 text-sm font-semibold"><current.icon className="size-4 text-primary" />{current.label}</span>
           <div className="ml-auto flex items-center gap-2">
+            {/* Only when this tab came from the Customer Order Portal ("Go to POS"). */}
+            {posUsesPortalLogin() && (
+              <a href="/admin" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary hover:bg-primary/20">
+                <LayoutDashboardIcon className="size-4" /> Admin Panel
+              </a>
+            )}
             <Clock />
             <Button variant="ghost" size="icon-sm" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (F1)" onClick={() => setHelpOpen(true)}>
               <KeyboardIcon />

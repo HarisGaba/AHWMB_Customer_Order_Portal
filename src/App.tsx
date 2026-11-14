@@ -5,7 +5,7 @@ import {
   MapPin, MessageCircle, Navigation, PackageCheck, Phone, Plus,
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
-import { checkClient, clientFor, supabase } from './lib/supabase'
+import { checkClient, clientFor, openPosFromPortal, supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
@@ -2709,6 +2709,7 @@ function AdminPage({
   // Permissions can change live (admin edits this user): leave the panel if nothing is left.
   useEffect(() => {
     if (!access) return
+    if (adminEmail.toLowerCase() === 'ahwmb1965@gmail.com') { window.location.replace('/pos'); return }
     if (!hasPortalAccess(access)) {
       if (hasPosAccess(access)) window.location.replace('/pos')
       else void supabase?.auth.signOut({ scope: 'local' }).then(() => navigate('/login'))
@@ -3037,8 +3038,10 @@ function AdminPage({
       {access && !access.admin && access.name && <p className="panel-sub">{isRtl ? 'خوش آمدید' : 'Welcome'}, {access.name}</p>}
       {tiles.filter(tile => allowed(tile.view)).map(tile => <button key={tile.view} type="button" className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={() => setAdminView(tile.view)}>{tile.label}</button>)}
       {access?.admin && <><button type="button" className="admin-home-btn admin-home-btn--users" onClick={() => setAdminView('users')}>{isRtl ? 'صارفین' : 'Users'}</button>
+
       <p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
 </>}
+      {adminEmail.toLowerCase() === 'ahmedyounus1978@gmail.com' && <button type="button" className="admin-home-btn admin-home-btn--primary" onClick={openPosFromPortal}>{isRtl ? 'POS پر جائیں' : 'Go to POS'}</button>}
 
     </section></div></main>
   }
