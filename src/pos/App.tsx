@@ -25,7 +25,7 @@ import { SHOP } from "@/lib/config"
 import { useClock, useToday } from "@/hooks/use-today"
 import { fmt, useStore } from "@/lib/store"
 import { signOutToLogin, supabase as posDb } from "@/lib/supabase"
-import { posUsesPortalLogin } from "../lib/supabase"
+import { openPortalFromPos } from "../lib/supabase"
 import { AddItemPage } from "@/pages/add-item-page"
 import { PosPage } from "@/pages/pos-page"
 import { RatesPage } from "@/pages/rates-page"
@@ -65,7 +65,7 @@ export default function App() {
   // The main admin (ahwmb1965) never sees it.
   const [userEmail, setUserEmail] = useState("")
   useEffect(() => { void posDb?.auth.getSession().then(({ data }) => setUserEmail((data.session?.user.email || "").toLowerCase())) }, [])
-  const showAdminPanel = userEmail !== "ahwmb1965@gmail.com" && (posUsesPortalLogin() || userEmail === "ahmedyounus1978@gmail.com")
+  const showAdminPanel = userEmail === "ahwmb1965@gmail.com" || userEmail === "ahmedyounus1978@gmail.com"
   const [page, setPage] = useState<PageId>(() => (MAIN[0] ?? NAV[0])?.id ?? "pos")
   // AuthGate only lets users with at least one POS page in, so NAV is never empty.
   const current = (NAV.find((n) => n.id === page) ?? NAV[0])!
@@ -164,9 +164,9 @@ export default function App() {
           <Separator orientation="vertical" className="mx-1 h-4!" />
           <span className="flex items-center gap-2 text-sm font-semibold"><current.icon className="size-4 text-primary" />{current.label}</span>
           <div className="ml-auto flex items-center gap-2">
-            {/* Only when this tab came from the Customer Order Portal ("Go to POS"). */}
+            {/* Both owner accounts can switch to the Customer Order Portal with the same login. */}
             {showAdminPanel && (
-              <a href="/admin" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary hover:bg-primary/20">
+              <a href="/admin" onClick={(e) => { e.preventDefault(); openPortalFromPos() }} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary hover:bg-primary/20">
                 <LayoutDashboardIcon className="size-4" /> Admin Panel
               </a>
             )}

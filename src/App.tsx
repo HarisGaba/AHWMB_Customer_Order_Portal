@@ -5,7 +5,7 @@ import {
   MapPin, MessageCircle, Navigation, PackageCheck, Phone, Plus,
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
-import { checkClient, clearPosFromPortal, clientFor, openPosFromPortal, supabase } from './lib/supabase'
+import { checkClient, clearPosFromPortal, clientFor, isSwitchedTab, openPosFromPortal, supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
@@ -2710,7 +2710,7 @@ function AdminPage({
   // Permissions can change live (admin edits this user): leave the panel if nothing is left.
   useEffect(() => {
     if (!access) return
-    if (adminEmail.toLowerCase() === 'ahwmb1965@gmail.com') { window.location.replace('/pos'); return }
+    if (adminEmail.toLowerCase() === 'ahwmb1965@gmail.com') { if (!isSwitchedTab()) window.location.replace('/pos'); return }
     if (adminEmail.toLowerCase() === 'ahmedyounus1978@gmail.com') return // the portal is his home
     if (!hasPortalAccess(access)) {
       if (hasPosAccess(access)) window.location.replace('/pos')
@@ -3043,7 +3043,7 @@ function AdminPage({
 
       <p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
 </>}
-      {adminEmail.toLowerCase() === 'ahmedyounus1978@gmail.com' && <button type="button" className="admin-home-btn admin-home-btn--primary" onClick={openPosFromPortal}>{isRtl ? 'POS پر جائیں' : 'Go to POS'}</button>}
+      {['ahmedyounus1978@gmail.com', 'ahwmb1965@gmail.com'].includes(adminEmail.toLowerCase()) && <button type="button" className="admin-home-btn admin-home-btn--primary" onClick={openPosFromPortal}>{isRtl ? 'POS پر جائیں' : 'Go to POS'}</button>}
 
     </section></div></main>
   }
@@ -3775,7 +3775,7 @@ export default function App() {
 
   const onAuth = useCallback(async () => {
     if (isAuthenticated) {
-      await supabase?.auth.signOut({ scope: 'local' }) // the explicit Logout
+      await supabase?.auth.signOut({ scope: 'local' }); clearPosFromPortal() // the explicit Logout
       navigate('/')
       return
     }

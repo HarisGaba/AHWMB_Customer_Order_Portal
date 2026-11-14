@@ -41,20 +41,27 @@ export const posClient = () => (pos === undefined ? (pos = make(POS_STORAGE_KEY)
 export const clientFor = (target: '/admin' | '/pos') => (target === '/pos' ? posClient() : portalClient())
 
 /**
- * "Go to POS" from the Customer Order Portal: this browser tab then uses the portal login in
- * the POS too (same session, no second login). Set per tab, so a separate POS login (e.g.
- * ahwmb1965) in another tab is not affected.
+ * Switching between the Customer Order Portal and the POS ("Go to POS" / "Admin Panel") keeps
+ * the login you already have: this browser tab remembers which login it is using and both areas
+ * use it, so no second login and no blank data. Set per tab, so a separate login in another tab
+ * is not affected. Cleared on the login page and on sign-out.
  */
-const VIA_PORTAL = 'ahwmb-pos-via-portal'
-export const posUsesPortalLogin = () => { try { return sessionStorage.getItem(VIA_PORTAL) === '1' } catch { return false } }
-export const openPosFromPortal = () => { try { sessionStorage.setItem(VIA_PORTAL, '1') } catch { /* unavailable */ } window.location.assign('/pos') }
-export const clearPosFromPortal = () => { try { sessionStorage.removeItem(VIA_PORTAL) } catch { /* unavailable */ } }
+const TAB_LOGIN = 'ahwmb-tab-login'
+type TabLogin = 'portal' | 'pos'
+const tabLogin = (): TabLogin | null => { try { const v = sessionStorage.getItem(TAB_LOGIN); return v === 'portal' || v === 'pos' ? v : null } catch { return null } }
+const setTabLogin = (v: TabLogin) => { try { if (!tabLogin()) sessionStorage.setItem(TAB_LOGIN, v) } catch { /* unavailable */ } }
+/** True when this tab switched in from the other area (so it shares that login). */
+export const isSwitchedTab = () => tabLogin() !== null
+export const posUsesPortalLogin = () => tabLogin() === 'portal'
+export const openPosFromPortal = () => { setTabLogin('portal'); window.location.assign('/pos') }
+export const openPortalFromPos = () => { setTabLogin(isPosContext() && !posUsesPortalLogin() ? 'pos' : 'portal'); window.location.assign('/admin') }
+export const clearPosFromPortal = () => { try { sessionStorage.removeItem(TAB_LOGIN); sessionStorage.removeItem('ahwmb-pos-via-portal') } catch { /* unavailable */ } }
 
-// The login page always starts clean: a "Go to POS" marker left in this tab must never make
-// another account's POS login (e.g. ahwmb1965) be ignored.
+// The login page always starts clean, so another account's login is never ignored.
 if (typeof window !== 'undefined' && window.location.pathname === '/login') clearPosFromPortal()
 
-export const supabase = isPosContext() && !posUsesPortalLogin() ? posClient() : portalClient()
+const chosen = tabLogin()
+export const supabase = chosen ? (chosen === 'pos' ? posClient() : portalClient()) : isPosContext() ? posClient() : portalClient()
 
 /** A throw-away client (nothing saved) to check an account before choosing which portal to sign in to. */
 export const checkClient = (): SupabaseClient | null =>
