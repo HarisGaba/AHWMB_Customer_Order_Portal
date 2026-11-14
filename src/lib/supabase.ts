@@ -50,6 +50,10 @@ export const posUsesPortalLogin = () => { try { return sessionStorage.getItem(VI
 export const openPosFromPortal = () => { try { sessionStorage.setItem(VIA_PORTAL, '1') } catch { /* unavailable */ } window.location.assign('/pos') }
 export const clearPosFromPortal = () => { try { sessionStorage.removeItem(VIA_PORTAL) } catch { /* unavailable */ } }
 
+// The login page always starts clean: a "Go to POS" marker left in this tab must never make
+// another account's POS login (e.g. ahwmb1965) be ignored.
+if (typeof window !== 'undefined' && window.location.pathname === '/login') clearPosFromPortal()
+
 export const supabase = isPosContext() && !posUsesPortalLogin() ? posClient() : portalClient()
 
 /** A throw-away client (nothing saved) to check an account before choosing which portal to sign in to. */

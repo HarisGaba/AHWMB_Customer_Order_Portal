@@ -5,7 +5,7 @@ import {
   MapPin, MessageCircle, Navigation, PackageCheck, Phone, Plus,
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
-import { checkClient, clientFor, openPosFromPortal, supabase } from './lib/supabase'
+import { checkClient, clearPosFromPortal, clientFor, openPosFromPortal, supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
@@ -1841,6 +1841,7 @@ function LoginPage({
       const { error: targetError } = await target.auth.signInWithPassword({ email: email.trim(), password })
       if (targetError) { setError(t.errors.login); return }
       await offerToSaveLogin()
+      clearPosFromPortal() // a fresh login always uses that portal's own login
       window.location.assign(home)
     } catch {
       setError(t.errors.login)
