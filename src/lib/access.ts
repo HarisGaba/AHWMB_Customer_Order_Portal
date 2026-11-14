@@ -54,16 +54,21 @@ const POS_EMAILS = ['ahwmb1965@gmail.com']
 export const homePathFor = (access: Access | null | undefined, next?: string | null, email = '') => {
   const e = email.trim().toLowerCase()
   // Fixed homes by account: ahmedyounus1978 -> Customer Order Portal; ahwmb1965 -> POS.
-  if (PORTAL_EMAILS.includes(e) && hasPortalAccess(access)) return '/admin'
-  if (POS_EMAILS.includes(e) && hasPosAccess(access)) return '/pos'
+  if (PORTAL_EMAILS.includes(e)) return '/admin' // always, whatever else is ticked
+  if (POS_EMAILS.includes(e)) return '/pos'
   if (next === '/pos' && hasPosAccess(access)) return '/pos'
   return hasPortalAccess(access) ? '/admin' : hasPosAccess(access) ? '/pos' : '/login'
 }
+
+const OWNER_EMAILS = ['ahwmb1965@gmail.com', 'ahmedyounus1978@gmail.com']
 
 export async function fetchAccess(client: SupabaseClient | null): Promise<Access> {
   if (!client) return NO_ACCESS
   const { data: session } = await client.auth.getSession()
   if (!session.session) return NO_ACCESS
+  // Both owner accounts are main admins (database: is_ahwmb_admin, migration 20261114_ahmed_admin).
+  const email = (session.session.user.email || '').toLowerCase()
+  if (OWNER_EMAILS.includes(email)) return { admin: true, active: true, name: 'Admin', permissions: [] }
   // A network hiccup (phone waking up, weak signal) must never look like "no access",
   // or the user gets signed out. Retry, then throw so callers keep what they had.
   let result = await client.rpc('my_access')

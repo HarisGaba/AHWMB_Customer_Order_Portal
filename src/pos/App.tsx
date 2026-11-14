@@ -24,7 +24,7 @@ import { ShortcutsDialog } from "@/components/shortcuts-dialog"
 import { SHOP } from "@/lib/config"
 import { useClock, useToday } from "@/hooks/use-today"
 import { fmt, useStore } from "@/lib/store"
-import { signOutToLogin } from "@/lib/supabase"
+import { signOutToLogin, supabase as posDb } from "@/lib/supabase"
 import { posUsesPortalLogin } from "../lib/supabase"
 import { AddItemPage } from "@/pages/add-item-page"
 import { PosPage } from "@/pages/pos-page"
@@ -61,6 +61,11 @@ export default function App() {
   const MAIN = useMemo(() => NAV.filter((n) => !n.unused), [NAV])
   const UNUSED = useMemo(() => NAV.filter((n) => n.unused), [NAV])
   const [showUnused, setShowUnused] = useState(false)
+  // Ahmed's home is the Customer Order Portal: in the POS he always gets the "Admin Panel" button.
+  // The main admin (ahwmb1965) never sees it.
+  const [userEmail, setUserEmail] = useState("")
+  useEffect(() => { void posDb?.auth.getSession().then(({ data }) => setUserEmail((data.session?.user.email || "").toLowerCase())) }, [])
+  const showAdminPanel = userEmail !== "ahwmb1965@gmail.com" && (posUsesPortalLogin() || userEmail === "ahmedyounus1978@gmail.com")
   const [page, setPage] = useState<PageId>(() => (MAIN[0] ?? NAV[0])?.id ?? "pos")
   // AuthGate only lets users with at least one POS page in, so NAV is never empty.
   const current = (NAV.find((n) => n.id === page) ?? NAV[0])!
@@ -160,7 +165,7 @@ export default function App() {
           <span className="flex items-center gap-2 text-sm font-semibold"><current.icon className="size-4 text-primary" />{current.label}</span>
           <div className="ml-auto flex items-center gap-2">
             {/* Only when this tab came from the Customer Order Portal ("Go to POS"). */}
-            {posUsesPortalLogin() && (
+            {showAdminPanel && (
               <a href="/admin" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary hover:bg-primary/20">
                 <LayoutDashboardIcon className="size-4" /> Admin Panel
               </a>

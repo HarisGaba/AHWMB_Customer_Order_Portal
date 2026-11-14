@@ -2710,6 +2710,7 @@ function AdminPage({
   useEffect(() => {
     if (!access) return
     if (adminEmail.toLowerCase() === 'ahwmb1965@gmail.com') { window.location.replace('/pos'); return }
+    if (adminEmail.toLowerCase() === 'ahmedyounus1978@gmail.com') return // the portal is his home
     if (!hasPortalAccess(access)) {
       if (hasPosAccess(access)) window.location.replace('/pos')
       else void supabase?.auth.signOut({ scope: 'local' }).then(() => navigate('/login'))
