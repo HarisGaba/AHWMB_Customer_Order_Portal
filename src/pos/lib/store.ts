@@ -135,6 +135,7 @@ async function setArchived(id: string, archivedAt: string | null) {
 let channel: RealtimeChannel | null = null
 let subscribedOnce = false
 let watching = false
+let generation = 0
 
 async function fetchAll() {
   const [itemsRes, saleRows] = await Promise.all([supabase.from("items").select("*").order("name"), fetchAllSales(cutoffDay())])
@@ -149,8 +150,10 @@ let resyncing = false
 async function resync() {
   if (state.status !== "ready" || resyncing) return
   resyncing = true
+  const started = generation
   try {
-    setState(await fetchAll())
+    const data = await fetchAll()
+    if (started === generation) setState(data)
   } catch {
     // Still offline; the next reconnect/visibility event will retry.
   } finally {
@@ -173,12 +176,16 @@ function watchConnection() {
 export const actions = {
   /** Load everything for the signed-in user and start live sync. */
   async load() {
+    const started = ++generation
     setState({ status: "loading", error: null })
     try {
-      setState({ ...(await fetchAll()), status: "ready" })
+      const data = await fetchAll()
+      if (started !== generation) return
+      setState({ ...data, status: "ready" })
       actions.listen()
       watchConnection()
     } catch (e) {
+      if (started !== generation) return
       setState({ status: "error", error: e instanceof Error ? e.message : String(e) })
     }
   },
@@ -211,6 +218,7 @@ export const actions = {
   },
 
   reset() {
+    generation++ // Ignore requests that belonged to a previous session.
     if (channel) supabase.removeChannel(channel)
     channel = null
     subscribedOnce = false

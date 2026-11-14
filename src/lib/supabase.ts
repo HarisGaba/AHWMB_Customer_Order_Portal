@@ -40,43 +40,11 @@ export const posClient = () => (pos === undefined ? (pos = make(POS_STORAGE_KEY)
 /** The client for the login that belongs to this page. */
 export const clientFor = (target: '/admin' | '/pos') => (target === '/pos' ? posClient() : portalClient())
 
-/**
- * Switching between the Customer Order Portal and the POS ("Go to POS" / "Admin Panel") keeps
- * the login you already have: this browser tab remembers which login it is using and both areas
- * use it, so no second login and no blank data. Set per tab, so a separate login in another tab
- * is not affected. Cleared on the login page and on sign-out.
- */
-const TAB_LOGIN = 'ahwmb-tab-login'
-type TabLogin = 'portal' | 'pos'
-const tabLogin = (): TabLogin | null => { try { const v = sessionStorage.getItem(TAB_LOGIN); return v === 'portal' || v === 'pos' ? v : null } catch { return null } }
-const setTabLogin = (v: TabLogin) => { try { if (!tabLogin()) sessionStorage.setItem(TAB_LOGIN, v) } catch { /* unavailable */ } }
-/** True when this tab switched in from the other area (so it shares that login). */
-export const isSwitchedTab = () => tabLogin() !== null
-export const posUsesPortalLogin = () => tabLogin() === 'portal'
-export const openPosFromPortal = () => { setTabLogin('portal'); window.location.assign('/pos') }
-export const openPortalFromPos = () => { setTabLogin(isPosContext() && !posUsesPortalLogin() ? 'pos' : 'portal'); window.location.assign('/admin') }
-export const clearPosFromPortal = () => { try { sessionStorage.removeItem(TAB_LOGIN); sessionStorage.removeItem('ahwmb-pos-via-portal') } catch { /* unavailable */ } }
-
-// The login page always starts clean, so another account's login is never ignored.
-if (typeof window !== 'undefined' && window.location.pathname === '/login') clearPosFromPortal()
-
-/**
- * Several tabs at once (portal in one, POS in another): every tab reads the logins saved in
- * localStorage, so a tab opened straight at /pos or /admin uses that area's own login, or, when
- * only the other area is signed in on this device, that login instead of asking again.
- */
-const hasSaved = (key: string) => { try { const v = localStorage.getItem(key); return !!v && v !== 'null' } catch { return false } }
-const portalKey = () => { try { return Object.keys(localStorage).find(k => /^sb-.*-auth-token$/.test(k)) ?? '' } catch { return '' } }
-function pickLogin(): TabLogin {
-  const chosen = tabLogin()
-  if (chosen) return chosen
-  const want: TabLogin = isPosContext() ? 'pos' : 'portal'
-  if (typeof window === 'undefined' || window.location.pathname === '/login') return want
-  const has = (t: TabLogin) => hasSaved(t === 'pos' ? POS_STORAGE_KEY : portalKey())
-  if (!has(want) && has(want === 'pos' ? 'portal' : 'pos')) return want === 'pos' ? 'portal' : 'pos'
-  return want
-}
-export const supabase = pickLogin() === 'pos' ? posClient() : portalClient()
+// Navigation never borrows or copies another portal's refresh token. In particular,
+// cloned tabs may carry old sessionStorage markers; those must not select an identity.
+export const openPosFromPortal = () => window.location.assign('/pos')
+export const openPortalFromPos = () => window.location.assign('/admin')
+export const supabase = isPosContext() ? posClient() : portalClient()
 
 /** A throw-away client (nothing saved) to check an account before choosing which portal to sign in to. */
 export const checkClient = (): SupabaseClient | null =>

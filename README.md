@@ -46,10 +46,19 @@ Save & Print downloads the PDF and launches print preview through a hidden ifram
 
 ## POS system (`/pos`)
 
-The shop's Point of Sale lives in [`src/pos/`](src/pos/) (React + Tailwind + shadcn/ui) and is served at `/pos`.
+The Point of Sale lives in `src/pos/` and loads its own React/Tailwind bundle at `/pos`. Billing opens by default for users with `pos_billing` access. Point of Sale, Rate Changing, Item Addition and Total Summary remain visible according to page permissions; switching modules preserves the in-progress cart.
 
-- **One login page** (`/login`). `ahwmb1965@gmail.com` opens the order-portal admin panel. `ahmedyounus1978@gmail.com` (or any email in `VITE_POS_EMAILS`, comma-separated) opens the POS.
-- **One database, separated by RLS.** The POS uses the portal's Supabase project. Its `items` and `sales` tables are readable/writable only by the POS user (`public.is_ahwmb_pos_user()`); portal tables only by the portal admin (`public.is_ahwmb_admin()`).
-- **Separate styles.** `/pos` loads only the POS bundle and its Tailwind stylesheet, and every other route loads only the portal and `styles.css`. Moving between them is a full page load, so the two never mix.
-- POS database setup: [`supabase/migrations/20261102_pos_tables.sql`](supabase/migrations/20261102_pos_tables.sql). The POS user must exist in Authentication → Users of the portal project.
-- Portal migration [`supabase/migrations/20261101_pos_split_admin.sql`](supabase/migrations/20261101_pos_split_admin.sql) makes `ahwmb1965@gmail.com` the only portal admin.
+- `/` is the customer order form; `/admin` is the customer-order administration panel; `/pos` includes billing and operational reports.
+- Both portals use the same Supabase project, with database RLS and `has_perm()` enforcing page access. Apply migrations in order when provisioning a new database; do not re-run the base schema over an existing deployment.
+- `/admin` and `/` retain the original Supabase localStorage session key. `/pos` uses `ahwmb-pos-auth`. Existing saved sessions are preserved. Navigation never copies refresh tokens or borrows the other portal's identity.
+- Use `/login?next=/admin` or `/login?next=/pos` to sign into a specific portal. A portal without its own session requires one sign-in, even if the other portal is signed in. Both can then stay open concurrently, including under different accounts. Switching buttons open the destination's own session.
+- Explicit logout affects tabs sharing that portal session; it leaves the other portal's session intact. Refresh and permissions remain synchronized within each portal. Old `ahwmb-tab-login` sessionStorage markers are ignored.
+- Generic `/login` preserves the existing account defaults: Ahmed opens `/admin`, and ahwmb1965 opens `/pos`. An explicit permitted `next` destination takes precedence.
+
+### Data preservation
+
+No database cleanup is performed on startup, navigation, or deployment. `sales` supplies billing history and Total Summary. Rate Changing and Item Addition show the live `items` catalog, not separate activity logs. The repository has no separate rate-change/item-addition log tables or test-record flag.
+
+The old `supabase/manual/reset_pos_all.sql` and `reset_pos_sales.sql` scripts are disabled and raise an error without changing data. Never clear the catalog to reset these views. Any future test cleanup requires confirmed sale UUIDs and a verified backup. This repair intentionally preserves all existing sales, stock, customers, orders, rates, and local business storage.
+
+Validation: `pnpm test`, `pnpm exec tsc --noEmit -p tsconfig.app.json`, and `pnpm build`. Session tests use the installed Supabase SDK with shared in-memory storage and a mocked network; they do not connect to production.

@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 
 // The POS shares the order portal's Supabase project. POS tables are locked to the
-// POS user by RLS (public.is_ahwmb_pos_user), so portal admins cannot see them.
+// page permissions by RLS (public.is_ahwmb_pos_user and public.has_perm).
 export const isPosConfigured = Boolean(supabase)
 export const posSupabase = supabase
 

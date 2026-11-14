@@ -5,7 +5,7 @@ import {
   MapPin, MessageCircle, Navigation, PackageCheck, Phone, Plus,
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
-import { checkClient, clearPosFromPortal, clientFor, openPosFromPortal, supabase } from './lib/supabase'
+import { checkClient, clientFor, openPosFromPortal, supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
@@ -449,6 +449,11 @@ const usePath = () => {
 }
 
 const navigate = (path: string) => {
+  // The auth client is selected when the bundle loads. Login needs a fresh route context.
+  if (path.startsWith('/login')) {
+    window.location.assign(path === '/login' ? '/login?next=/admin' : path)
+    return
+  }
   window.history.pushState({}, '', path)
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
@@ -900,7 +905,7 @@ async function drawInvoice(
     doc.rect(M, M, PW - M*2, PH - M*2)
     doc.setLineWidth(0.3)
     doc.rect(M+2, M+2, PW-M*2-4, PH-M*2-4)
-    doc.setFillColor(0)
+    doc.setFillColor('#000000')
     const corners: [number,number][] = [[M+2,M+2],[PW-M-2,M+2],[M+2,PH-M-2],[PW-M-2,PH-M-2]]
     corners.forEach(([cx2, cy]) => {
       const sx = cx2 === M+2 ? 1 : -1, sy = cy === M+2 ? 1 : -1
@@ -943,7 +948,7 @@ async function drawInvoice(
   const HDR_H = 10
 
   const drawItemsHeader = (y: number): number => {
-    doc.setFillColor(0); doc.setDrawColor(0); doc.setLineWidth(0.4)
+    doc.setFillColor('#000000'); doc.setDrawColor(0); doc.setLineWidth(0.4)
     doc.rect(TL, y, TW, HDR_H, 'FD')
     for (let i = 1; i < 5; i++) doc.line(CX[i], y, CX[i], y+HDR_H)
     doc.setFont('times','bold'); doc.setFontSize(7.5); doc.setTextColor(255)
@@ -996,7 +1001,7 @@ async function drawInvoice(
   if (curY + 5 + FH + FRH + 28 > PH - M) { doc.addPage(); drawFrame(); curY = M+16 }
   const fY = curY + 5
 
-  doc.setFillColor(0); doc.setDrawColor(0); doc.setLineWidth(0.4)
+  doc.setFillColor('#000000'); doc.setDrawColor(0); doc.setLineWidth(0.4)
   doc.rect(TL, fY, TW, FH, 'FD')
   doc.setFont('times','bold'); doc.setFontSize(6.2); doc.setTextColor(255)
   const fHdrs = ['TOTAL AMOUNT','BALANCE','TOTAL BALANCE','DEPOSIT','REMAINING BALANCE']
@@ -1806,7 +1811,7 @@ function LoginPage({
         if (target !== supabase && !(await target?.auth.getSession())?.data.session) { if (!cancelled) setChecking(false); return }
         if (home === '/pos') { window.location.replace('/pos'); return }
         window.location.replace('/admin'); return
-      } catch { if (!cancelled) { navigate('/admin'); return } } // offline: the session is still valid
+      } catch { if (!cancelled) setChecking(false) } // Keep the session on transient errors.
       if (!cancelled) setChecking(false)
     })()
     return () => { cancelled = true }
@@ -1841,7 +1846,6 @@ function LoginPage({
       const { error: targetError } = await target.auth.signInWithPassword({ email: email.trim(), password })
       if (targetError) { setError(t.errors.login); return }
       await offerToSaveLogin()
-      clearPosFromPortal() // a fresh login always uses that portal's own login
       window.location.assign(home)
     } catch {
       setError(t.errors.login)
@@ -2714,7 +2718,7 @@ function AdminPage({
     if (adminEmail.toLowerCase() === 'ahmedyounus1978@gmail.com') return // the portal is his home
     if (!hasPortalAccess(access)) {
       if (hasPosAccess(access)) window.location.replace('/pos')
-      else void supabase?.auth.signOut({ scope: 'local' }).then(() => navigate('/login'))
+      else navigate('/login')
     }
   }, [access])
   const [, setCatalogVersion] = useState(0)
@@ -3775,8 +3779,8 @@ export default function App() {
 
   const onAuth = useCallback(async () => {
     if (isAuthenticated) {
-      await supabase?.auth.signOut({ scope: 'local' }); clearPosFromPortal() // the explicit Logout
-      navigate('/')
+      await supabase?.auth.signOut({ scope: 'local' })
+      window.location.assign('/')
       return
     }
     const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } }

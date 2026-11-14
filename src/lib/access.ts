@@ -52,11 +52,12 @@ const PORTAL_EMAILS = ['ahmedyounus1978@gmail.com']
 /** Accounts that always open the POS / Admin System after login. */
 const POS_EMAILS = ['ahwmb1965@gmail.com']
 export const homePathFor = (access: Access | null | undefined, next?: string | null, email = '') => {
+  if (next === '/pos') return hasPosAccess(access) ? '/pos' : '/login'
+  if (next === '/admin') return hasPortalAccess(access) ? '/admin' : '/login'
   const e = email.trim().toLowerCase()
   // Fixed homes by account: ahmedyounus1978 -> Customer Order Portal; ahwmb1965 -> POS.
-  if (PORTAL_EMAILS.includes(e)) return '/admin' // always, whatever else is ticked
-  if (POS_EMAILS.includes(e)) return '/pos'
-  if (next === '/pos' && hasPosAccess(access)) return '/pos'
+  if (PORTAL_EMAILS.includes(e) && hasPortalAccess(access)) return '/admin'
+  if (POS_EMAILS.includes(e) && hasPosAccess(access)) return '/pos'
   return hasPortalAccess(access) ? '/admin' : hasPosAccess(access) ? '/pos' : '/login'
 }
 
@@ -100,17 +101,32 @@ export function useLiveAccess(client: SupabaseClient | null) {
     let cancelled = false
     let channel: ReturnType<SupabaseClient['channel']> | null = null
     let busy = false
+    let revision = 0
+    let pending = false
+    let timer: ReturnType<typeof setTimeout> | undefined
     const refresh = async () => {
-      if (busy) return // one check at a time
+      if (cancelled) return
+      if (busy) { pending = true; return }
       busy = true
+      const started = revision
       try {
         const next = await fetchAccess(client)
-        if (!cancelled) setAccess(next)
+        if (!cancelled && started === revision) setAccess(next)
       } catch {
         // Temporary error: keep the current access (stay signed in); retry on next focus.
         if (!cancelled) setAccess(prev => prev ?? null)
-      } finally { busy = false }
+      } finally {
+        busy = false
+        if (!cancelled && pending) { pending = false; scheduleRefresh() }
+      }
     }
+    // Auth events can run while Supabase holds its session lock. Do not call
+    // getSession/RPC from inside the callback, and do not lose an event mid-refresh.
+    const scheduleRefresh = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => { void refresh() }, 0)
+    }
+    let userId: string | undefined
     const watch = (userId: string | undefined) => {
       if (channel) void client.removeChannel(channel)
       channel = null
@@ -120,16 +136,19 @@ export function useLiveAccess(client: SupabaseClient | null) {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'app_users', filter: `user_id=eq.${userId}` }, () => void refresh())
         .subscribe()
     }
-    void client.auth.getSession().then(({ data }) => {
-      setEmail(data.session?.user?.email || '')
-      watch(data.session?.user?.id)
-      void refresh()
-    })
     const { data: listener } = client.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return
       if (event === 'TOKEN_REFRESHED') return
+      revision++
       setEmail(session?.user?.email || '')
-      watch(session?.user?.id)
-      void refresh()
+      const nextId = session?.user?.id
+      if (nextId !== userId) {
+        userId = nextId
+        setAccess(session ? null : NO_ACCESS)
+        watch(nextId)
+      }
+      if (!session) setAccess(NO_ACCESS)
+      scheduleRefresh()
     })
     // Re-check when the tab comes back, at most once a minute.
     let lastCheck = Date.now()
@@ -141,6 +160,7 @@ export function useLiveAccess(client: SupabaseClient | null) {
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
+      clearTimeout(timer)
       listener.subscription.unsubscribe()
       document.removeEventListener('visibilitychange', onVisible)
       if (channel) void client.removeChannel(channel)

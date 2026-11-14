@@ -83,7 +83,7 @@ function NotConfigured() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><DatabaseIcon className="size-4" /> Database not connected</CardTitle>
           <CardDescription>
-            Set <code className="font-mono">VITE_POS_SUPABASE_URL</code> and <code className="font-mono">VITE_POS_SUPABASE_ANON_KEY</code> in
+            Set <code className="font-mono">VITE_SUPABASE_URL</code> and <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> in
             <code className="font-mono"> .env.local</code> (local) or in Vercel → Settings → Environment Variables, then rebuild.
           </CardDescription>
         </CardHeader>
