@@ -5,7 +5,8 @@
  */
 import "../portal-embed.css"
 import { StockReport } from "../../components/StockReport"
-import { CustomerReport } from "../../App"
+import { CustomerReport, DailyReports, PurchaseReport } from "../../App"
+import { UsersAdmin } from "../../components/UsersAdmin"
 import { can } from "../../lib/access"
 import { usePosAccess } from "@/components/auth-gate"
 
@@ -16,3 +17,6 @@ export function StockReportPage() {
   return <Embed><StockReport canEdit={can(access, "stock_report")} canTransfer={can(access, "stock_transfer")} /></Embed>
 }
 export const CustomerReportPage = () => <Embed><CustomerReport /></Embed>
+export const DailyReportPage = () => <Embed><DailyReports language="en" onBack={() => undefined} /></Embed>
+export const PurchaseReportPage = () => <Embed><PurchaseReport /></Embed>
+export const UsersPage = () => <Embed><UsersAdmin /></Embed>

@@ -1,18 +1,17 @@
 import { useEffect, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { isPosEmail } from './posSupabase'
 
 // Page permissions. Keys must match the has_perm() checks in the database
 // (supabase/migrations/20261107_user_permissions.sql) and the manage-users function.
 export const PERMISSIONS = [
   { key: 'orders', label: 'Orders (New & View)', area: 'Portal' },
-  { key: 'daily_report', label: 'Daily Report (Expenses)', area: 'Portal' },
-  { key: 'purchase_report', label: 'Purchase Report', area: 'Portal' },
+  { key: 'products', label: 'Add Products (Order Catalog)', area: 'Portal' },
+  { key: 'add_customer', label: 'Add Customer', area: 'Portal' },
+  { key: 'daily_report', label: 'Daily Report (Expenses)', area: 'System' },
   { key: 'stock_report', label: 'Stock Report', area: 'System' },
   { key: 'stock_transfer', label: 'Stock Transfer', area: 'System' },
   { key: 'customer_report', label: 'Customer Ledger', area: 'System' },
-  { key: 'add_customer', label: 'Add Customer', area: 'Portal' },
-  { key: 'products', label: 'Add Products (Order Catalog)', area: 'Portal' },
+  { key: 'purchase_report', label: 'Purchase Report', area: 'System' },
   { key: 'pos_billing', label: 'POS Billing', area: 'POS' },
   { key: 'pos_items', label: 'POS Items & Rates', area: 'POS' },
   { key: 'pos_summary', label: 'POS Total Summary (Financial Totals)', area: 'POS' },
@@ -38,8 +37,8 @@ export const NO_ACCESS: Access = { admin: false, active: false, name: '', permis
 // The main admin may open every page, including POS billing in /pos (the database allows it too).
 export const can = (access: Access | null | undefined, perm: Permission) =>
   !!access && (access.admin || (access.active && access.permissions.includes(perm)))
-/** Can open the Customer Order Portal (/admin). System pages count too: the portal home links to them. */
-export const hasPortalAccess = (access: Access | null | undefined) => !!access && (access.admin || [...PORTAL_PERMISSIONS, ...SYSTEM_PERMISSIONS].some(p => can(access, p)))
+/** Can open the Customer Order Portal (/admin): orders, products, customers. */
+export const hasPortalAccess = (access: Access | null | undefined) => !!access && (access.admin || PORTAL_PERMISSIONS.some(p => can(access, p)))
 /** Can open the POS / Admin System at all (POS pages, system pages or Users). */
 export const hasPosAccess = (access: Access | null | undefined) => !!access && (access.admin || [...POS_PERMISSIONS, ...SYSTEM_PERMISSIONS].some(p => can(access, p)))
 /** Has POS billing data pages (sales/items), which need the POS data loaded. */
@@ -49,12 +48,14 @@ export const hasPosDataAccess = (access: Access | null | undefined) => POS_PERMI
  * the POS only when they came from the POS (next = '/pos') or have nothing but POS billing.
  */
 /** Accounts that always open the Customer Order Portal after login. */
-const PORTAL_EMAILS = ['ahwmb1965@gmail.com']
+const PORTAL_EMAILS = ['ahmedyounus1978@gmail.com']
+/** Accounts that always open the POS / Admin System after login. */
+const POS_EMAILS = ['ahwmb1965@gmail.com']
 export const homePathFor = (access: Access | null | undefined, next?: string | null, email = '') => {
   const e = email.trim().toLowerCase()
-  // Fixed homes by account: ahwmb1965 -> portal; POS accounts (ahmedyounus1978) -> POS.
+  // Fixed homes by account: ahmedyounus1978 -> Customer Order Portal; ahwmb1965 -> POS.
   if (PORTAL_EMAILS.includes(e) && hasPortalAccess(access)) return '/admin'
-  if (isPosEmail(e) && hasPosAccess(access)) return '/pos'
+  if (POS_EMAILS.includes(e) && hasPosAccess(access)) return '/pos'
   if (next === '/pos' && hasPosAccess(access)) return '/pos'
   return hasPortalAccess(access) ? '/admin' : hasPosAccess(access) ? '/pos' : '/login'
 }

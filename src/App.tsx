@@ -1939,6 +1939,25 @@ const reportDayLabel = (date: string) => new Intl.DateTimeFormat('en-GB', { week
 
 const reportAmount = (value: string | number) => Math.round(Number(value) || 0).toLocaleString('en-PK')
 
+/** Text with Urdu, drawn by the browser (proper joining, English first) for the ledger PDF. */
+function ledgerTextImage(text: string) {
+  const px = 44
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')!
+  const font = `700 ${px}px "Times New Roman", "Noto Naskh Arabic", serif`
+  ctx.font = font
+  const rtl = !/[A-Za-z]/.test(text)
+  canvas.width = Math.ceil(ctx.measureText(text).width) + 8
+  canvas.height = Math.ceil(px * 1.7)
+  ctx.font = font
+  ctx.fillStyle = '#000'
+  ctx.direction = rtl ? 'rtl' : 'ltr'
+  ctx.textAlign = rtl ? 'right' : 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, rtl ? canvas.width - 4 : 4, canvas.height / 2)
+  return { data: canvas.toDataURL('image/png'), ratio: canvas.width / canvas.height }
+}
+
 async function buildExpenseLedgerPdf(date: string, rows: ExpenseRow[]) {
   const { jsPDF, autoTable } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
@@ -1978,10 +1997,26 @@ async function buildExpenseLedgerPdf(date: string, rows: ExpenseRow[]) {
       doc.setFontSize(11)
       doc.text(`Date: ${reportDateLabel(date)}    Day: ${reportDayLabel(date)}`, 105, 33, { align: 'center' })
     },
+    didParseCell: (data) => {
+      // jsPDF's built-in fonts have no Urdu letters: those titles are drawn as an image instead.
+      if (data.section === 'body' && data.column.index === 1 && /[^\t\n\r -~—]/.test(String(data.cell.raw ?? ''))) {
+        (data.cell as unknown as { urduText?: string }).urduText = String(data.cell.raw)
+        data.cell.text = ['']
+        data.cell.styles.minCellHeight = 12
+      }
+    },
     didDrawCell: (data) => {
       // Track the Y position after the last body row on the final page
       if (data.section === 'body') {
         tableEndY = data.cell.y + data.cell.height
+      }
+      const urduText = (data.cell as unknown as { urduText?: string }).urduText
+      if (data.section === 'body' && urduText) {
+        const img = ledgerTextImage(urduText)
+        const h = 6, w = Math.min(h * img.ratio, data.cell.width - 6)
+        const drawH = w / img.ratio
+        const rtl = !/[A-Za-z]/.test(urduText)
+        doc.addImage(img.data, 'PNG', rtl ? data.cell.x + data.cell.width - w - 3 : data.cell.x + 3, data.cell.y + (data.cell.height - drawH) / 2, w, drawH)
       }
     },
   })
@@ -2137,7 +2172,7 @@ function LedgerCalendar({
   )
 }
 
-function DailyReports({ language, onBack }: { language: Language; onBack: () => void }) {
+export function DailyReports({ language, onBack }: { language: Language; onBack: () => void }) {
   const isRtl = language === 'ur'
   const [date, setDate] = useState(() => todayDate())
   const [rows, setRows] = useState<ExpenseRow[]>([{ id: crypto.randomUUID(), expense_title: '', amount: '', saved: false }])
@@ -2586,8 +2621,13 @@ export function AdminAddCustomer({ language }: { language: Language }) {
     </form></section>
 }
 
-function PurchaseReport() {
-  const [rows, setRows] = useState([{ id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }])
+export function PurchaseReport() {
+  // Saved on this device so entries survive closing the app (they were lost on reload before).
+  const [rows, setRows] = useState<{ id: string; party: string; area: string; item: string; amount: string; date: string }[]>(() => {
+    try { const saved = JSON.parse(localStorage.getItem('ahwmb-purchase-report') || 'null'); if (Array.isArray(saved) && saved.length) return saved } catch { /* storage unavailable */ }
+    return [{ id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }]
+  })
+  useEffect(() => { try { localStorage.setItem('ahwmb-purchase-report', JSON.stringify(rows)) } catch { /* storage unavailable */ } }, [rows])
   const update = (id: string, key: 'party' | 'area' | 'item' | 'amount' | 'date', value: string) => setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row))
   return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Purchase Report</h2><p className="panel-sub">Record supplier purchases, deposits, and payment dates.</p></div><button type="button" className="btn-submit report-add" onClick={() => setRows(current => [...current, { id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }])}><Plus size={17} /> Add Purchase</button></div><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Party Name</th><th>Area</th><th>Item</th><th>Amount / Deposit</th><th>Date</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td data-label="Party Name"><input className="report-cell-input" value={row.party} onChange={e => update(row.id, 'party', e.target.value)} placeholder="Supplier" /></td><td data-label="Area"><input className="report-cell-input" value={row.area} onChange={e => update(row.id, 'area', e.target.value)} placeholder="Area" /></td><td data-label="Item"><input className="report-cell-input" value={row.item} onChange={e => update(row.id, 'item', e.target.value)} placeholder="Item" /></td><td data-label="Amount / Deposit"><input className="report-cell-input" type="number" value={row.amount} onChange={e => update(row.id, 'amount', e.target.value)} placeholder="Rs." /></td><td data-label="Date"><input className="report-cell-input" type="date" value={row.date} onChange={e => update(row.id, 'date', e.target.value)} /></td></tr>)}</tbody></table></div></section>
 }
@@ -2663,8 +2703,8 @@ function AdminPage({
   const [deleting, setDeleting] = useState(false)
   const [adminView, setAdminView] = useState<AdminView>('home')
   // Which admin views this user may open (the database enforces the same rules).
-  // Stock Report and Customer Report live in the POS / Admin System (/pos).
-  const MOVED: AdminView[] = ['stock-report', 'customer-report']
+  // Daily, Stock, Customer and Purchase reports live in the POS / Admin System (/pos).
+  const MOVED: AdminView[] = ['reports', 'stock-report', 'customer-report', 'purchase-report']
   const allowed = (view: AdminView) => view === 'home' || (view === 'users' ? !!access?.admin : !MOVED.includes(view) && ADMIN_VIEW_PERMS[view as Exclude<AdminView, 'home' | 'users'>].some(perm => can(access, perm)))
   // Permissions can change live (admin edits this user): leave the panel if nothing is left.
   useEffect(() => {
@@ -2989,8 +3029,6 @@ function AdminPage({
     const tiles: { view: AdminView; label: string; primary?: boolean }[] = [
       { view: 'newOrder', label: isRtl ? 'نیا آرڈر' : 'New Order', primary: true },
       { view: 'orders', label: isRtl ? 'آرڈرز دیکھیں' : 'View Order' },
-      { view: 'reports', label: isRtl ? 'روزانہ رپورٹ' : 'Daily Report' },
-      { view: 'purchase-report', label: isRtl ? 'خریداری رپورٹ' : 'Purchase Report' },
       { view: 'products', label: isRtl ? 'مصنوعات شامل کریں' : 'Add Products' },
       { view: 'add-customer', label: isRtl ? 'گاہک شامل کریں' : 'Add Customer' },
     ]
