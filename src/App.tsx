@@ -2190,7 +2190,7 @@ function LedgerCalendar({
   )
 }
 
-export function DailyReports({ language, onBack }: { language: Language; onBack: () => void }) {
+export function DailyReports({ language, onBack, showOrdersButton = true }: { language: Language; onBack: () => void; showOrdersButton?: boolean }) {
   const isRtl = language === 'ur'
   const [date, setDate] = useState(() => todayDate())
   const [rows, setRows] = useState<ExpenseRow[]>([{ id: crypto.randomUUID(), expense_title: '', amount: '', saved: false }])
@@ -2379,7 +2379,7 @@ export function DailyReports({ language, onBack }: { language: Language; onBack:
           <h2 className="admin-heading">{isRtl ? 'دکان روزانہ اخراجات لیجر' : 'Dukan Daily Expense Ledger'}</h2>
           <p className="panel-sub">{isRtl ? 'روزانہ دکان کے اخراجات، بلز، اور ادائیگیاں ریکارڈ کریں' : 'Record daily shop expenses, bills, staff kharchi & vendor payments.'}</p>
         </div>
-        <button type="button" className="btn-secondary" onClick={onBack}><ReceiptText size={16} /> {isRtl ? 'آرڈرز' : 'Orders'}</button>
+        {showOrdersButton && <button type="button" className="btn-secondary" onClick={onBack}><ReceiptText size={16} /> {isRtl ? 'آرڈرز' : 'Orders'}</button>}
       </div>
 
       {/* Summary bar */}

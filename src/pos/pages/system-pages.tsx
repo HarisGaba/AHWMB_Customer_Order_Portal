@@ -18,7 +18,7 @@ export function StockReportPage() {
   return <Embed><StockReport canEdit={can(access, "stock_report")} canTransfer={can(access, "stock_transfer")} /></Embed>
 }
 export const CustomerReportPage = () => <Embed><CustomerReport /></Embed>
-export const DailyReportPage = () => <Embed><DailyReports language="en" onBack={() => undefined} /></Embed>
+export const DailyReportPage = () => <Embed><DailyReports language="en" onBack={() => undefined} showOrdersButton={false} /></Embed>
 export const PurchaseReportPage = () => <Embed><PurchaseReport /></Embed>
 export const UsersPage = () => <Embed><UsersAdmin /></Embed>
 
