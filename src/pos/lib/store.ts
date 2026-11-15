@@ -116,12 +116,13 @@ async function fetchAllSales(since: string) {
       .from("sales")
       .select("*")
       .gte("day", since)
-      .is("reversed_at", null)
       .order("day")
       .order("customer_no")
       .range(from, from + page - 1)
     if (error) throw error
-    rows.push(...(data as SaleRow[]))
+    // Older deployments do not have reversed_at yet. SELECT * works with both
+    // schemas; filter after fetching, but paginate by the raw page length.
+    rows.push(...(data as SaleRow[]).filter(row => !row.reversed_at))
     if (data.length < page) return rows
   }
 }
@@ -197,7 +198,8 @@ export const actions = {
       watchConnection()
     } catch (e) {
       if (started !== generation) return
-      setState({ status: "error", error: e instanceof Error ? e.message : String(e) })
+      const message = e && typeof e === "object" && "message" in e && typeof e.message === "string" ? e.message : "Unable to load POS data. Please check your connection and retry."
+      setState({ status: "error", error: message })
     }
   },
 

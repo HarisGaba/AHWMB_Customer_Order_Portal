@@ -11,6 +11,7 @@ import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAc
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
 import { validOrderQuantity, validCustomerUnit } from './lib/orderValidation'
 import { ConnectionStatus } from './components/ConnectionStatus'
+import { searchOrders } from './lib/searchOrders'
 import { ActivityLog } from './components/ActivityLog'
 import { PurchaseReport } from './components/PurchaseReport'
 export { PurchaseReport } from './components/PurchaseReport'
@@ -1094,10 +1095,10 @@ async function notifyNewOrder(order: {
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 function PortalHeader({
-  language, setLanguage, onAdmin, isAuthenticated, adminEmail,
+  language, setLanguage, onAdmin, isAuthenticated, adminEmail, showConnection = true,
 }: {
   language: Language; setLanguage: (v: Language) => void
-  onAdmin: () => void; isAuthenticated: boolean; adminEmail?: string
+  onAdmin: () => void; isAuthenticated: boolean; adminEmail?: string; showConnection?: boolean
 }) {
   const t = copy[language]
 
@@ -1131,7 +1132,7 @@ function PortalHeader({
         </button>
       </div>
     </header>
-    <ConnectionStatus ur={language === 'ur'} />
+    {showConnection && <ConnectionStatus ur={language === 'ur'} />}
     <InstallBanner language={language} />
     </>
   )
@@ -1197,6 +1198,7 @@ function CustomerPage({
   const [successRef, setSuccessRef] = useState('')
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>({ isOpen: false, title: '', message: '', confirmLabel: '', cancelLabel: 'Cancel', isDangerous: false, onConfirm: () => undefined })
   const [cartOpen, setCartOpen] = useState(false)
+  const [cartPrompt, setCartPrompt] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [expandedCategories] = useState<Set<string>>(() => new Set(runtimeCatalog.map(product => product.category)))
@@ -1261,7 +1263,7 @@ function CustomerPage({
     if (!filledRows.length || filledRows.some(r => !r.itemName.trim() || !validOrderQuantity(r.quantityValue) || !validCustomerUnit(r.unitType))) next.items = isRtl ? 'ہر شے کا نام، مثبت مقدار اور اکائی منتخب کریں۔' : 'Enter an item name, positive quantity and unit for every item.'
     setErrors(next)
     if (Object.keys(next).length) return
-    setCartOpen(true)
+    setCartPrompt(true)
   }
 
   const updateRow = (id: string, field: keyof Pick<OrderRow, 'itemName' | 'quantityValue' | 'unitType'>, value: string) => {
@@ -1374,18 +1376,12 @@ function CustomerPage({
 
   return (
     <main className={`app-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}>
-      <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />
+      <PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} showConnection={false} />
       <ToastContainer toasts={toasts} dismiss={dismiss} />
 
       {draft.hasDraft && <div className="draft-restore-banner"><strong>{isRtl ? '📝 آپ کا ایک نامکمل آرڈر محفوظ ہے۔' : '📝 You have an unsaved order from earlier.'}</strong><div className="draft-actions"><button type="button" className="draft-continue" onClick={() => { const saved = draft.restoreDraft(); if (saved) { setName(saved.name); setPhone(saved.phone); setAddress(saved.address); setLocationLink(saved.locationLink); setNotes(saved.notes); setRows(saved.rows as OrderRow[]); setLanguage(saved.language) } draft.setHasDraft(false) }}>{isRtl ? 'آرڈر جاری رکھیں' : 'Continue Order'}</button><button type="button" className="draft-fresh" onClick={() => draft.clearDraft()}>{isRtl ? 'نیا آرڈر شروع کریں' : 'Start Fresh'}</button></div></div>}
 
       <div className={`page-wrap ${showStickyTotal ? 'page-wrap--sticky-total' : ''}`}>
-        <nav className="order-steps" aria-label={isRtl ? 'آرڈر کے مراحل' : 'Order steps'}>
-          <a href="#customer-details"><b>1</b>{isRtl ? 'آپ کی معلومات' : 'Customer details'}</a>
-          <a href="#order-items"><b>2</b>{isRtl ? 'سامان منتخب کریں' : 'Choose items'}</a>
-          <button type="button" onClick={addToCart}><b>3</b>{isRtl ? 'جائزہ اور ارسال' : 'Review & submit'}</button>
-        </nav>
-        <p className="pricing-notice">{isRtl ? 'قیمتوں اور ترسیل کی تصدیق دکاندار کرے گا۔' : 'Prices and delivery are confirmed by the shopkeeper after you submit your order.'}</p>
         <section className="image-hero" aria-label="AHWMB premium products">
           <picture>
             <source media="(min-width: 768px)" srcSet="/images/ahwmb-hero-desktop.png" />
@@ -1763,13 +1759,15 @@ function CustomerPage({
       </div>
 
 
-      {cartOpen && <aside className="cart-drawer" aria-label={isRtl ? 'آرڈر کا جائزہ' : 'Review your order'} dir={isRtl ? 'rtl' : 'ltr'}>
-        <div className="cart-drawer-head"><div><p className="admin-eyebrow">AHWMB</p><h2>{isRtl ? 'آرڈر کا جائزہ' : 'Review your order'}</h2></div><button type="button" className="icon-btn" onClick={() => setCartOpen(false)} aria-label={isRtl ? 'بند کریں' : 'Close review'}><X size={22} /></button></div>
-        <div className="cart-drawer-body"><div className="review-details"><strong>{name}</strong><span>{phone}</span><p>{address}</p>{locationLink && <p>{isRtl ? 'مقام شامل ہے' : 'Delivery location attached'}</p>}{notes.trim() && <p><strong>{t.notes}:</strong> {notes}</p>}</div>
-        {filledRows.map(row => <div className="cart-item" key={row.id}><strong>{row.itemName}</strong><span>{row.quantityValue} {unitLabel(row.unitType, language)}</span></div>)}
-        <p className="pricing-notice">{isRtl ? 'قیمت کی تصدیق کے بعد آپ سے رابطہ کیا جائے گا۔' : 'No payment is collected here. We will contact you to confirm prices.'}</p>
-        {Object.entries(errors).map(([field, error]) => error && <p key={field} role="alert" className="field-error">{error}</p>)}</div>
-        <div className="cart-drawer-foot"><button type="button" className="btn-secondary" onClick={() => setCartOpen(false)}>{isRtl ? 'آرڈر میں ترمیم' : 'Edit order'}</button><button type="button" className="btn-submit" onClick={() => void submit()} disabled={saving || !filledRows.length}>{saving ? t.submitting : t.submit}</button></div>
+      {cartPrompt && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-box cart-prompt"><div className="modal-check"><ShoppingBag size={32} /></div><h2 className="modal-title">Check Your Items in the Cart</h2><p className="modal-hint">Review quantities and details before placing your order.</p><div className="modal-actions"><button className="btn-modal-close" type="button" onClick={() => setCartPrompt(false)}>Continue Shopping</button><button className="btn-submit cart-prompt-btn" type="button" onClick={() => { setCartPrompt(false); setCartOpen(true) }}>Open Cart</button></div></div></div>}
+
+      {cartOpen && <aside className="cart-drawer" aria-label="Shopping cart">
+        <div className="cart-drawer-head"><div><p className="admin-eyebrow">AHWMB</p><h2>Shopping Cart</h2></div><button type="button" className="icon-btn" onClick={() => setCartOpen(false)} aria-label="Close cart"><X size={22} /></button></div>
+        <div className="cart-drawer-body">
+          {filledRows.length === 0 ? <p className="account-empty">Your cart is empty.</p> : filledRows.map(row => <div className="cart-item" key={row.id}><div><strong>{row.itemName}</strong><div className="cart-item-controls"><input type="number" min="0" step="any" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} aria-label={`Quantity for ${row.itemName}`} /><select value={row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value as UnitType)} aria-label={`Unit for ${row.itemName}`}><option value="NONE" disabled>Select Unit</option>{UNIT_OPTIONS.filter(option => option.value !== 'NONE').map(option => <option key={option.value} value={option.value}>{option.en}</option>)}</select></div></div><button type="button" className="cart-remove" aria-label={`Remove ${row.itemName}`} onClick={() => setRows(current => current.filter(item => item.id !== row.id))}><Trash2 size={17} /></button></div>)}
+          {Object.entries(errors).map(([field, error]) => error && <p key={field} role="alert" className="field-error">{error}</p>)}
+        </div>
+        <div className="cart-drawer-foot"><button type="button" className="btn-secondary" onClick={() => { setCartOpen(false); document.getElementById('customer-details')?.scrollIntoView({ behavior: 'smooth' }) }}>Continue Shopping</button><button type="button" className="btn-submit" onClick={() => void submit()} disabled={saving || filledRows.length === 0}>{saving ? 'Submitting…' : 'Place Order'}</button></div>
       </aside>}
 
 
@@ -2771,7 +2769,7 @@ function AdminPage({
     const currentAccess = await fetchAccess(supabase).catch(() => null) // null = network error: still try to load
     if (currentAccess && !can(currentAccess, 'orders')) { setOrders([]); setLoading(false); return }
     const sequence = ++querySequence.current
-    const { data, error } = await supabase.rpc('search_orders', { p_search: orderSearch.trim(), p_status: filter, p_from: dateFrom || null, p_to: dateTo || null, p_page: orderPage })
+    const { data, error } = await searchOrders(supabase, { p_search: orderSearch.trim(), p_status: filter, p_from: dateFrom || null, p_to: dateTo || null, p_page: orderPage })
     if (sequence !== querySequence.current) return
     if (error) { addToast(error.message, 'error'); setLoading(false); return }
     setOrders((data.rows || []).map((row: OrderRecord) => ({ ...row, items: safeItems(row.items) })))
@@ -3043,7 +3041,6 @@ function AdminPage({
     // Stock, customers, catalog and users live in the POS / Admin System (/pos).
     return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />{can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}<ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1>
       {access && !access.admin && access.name && <p className="panel-sub">{isRtl ? 'خوش آمدید' : 'Welcome'}, {access.name}</p>}
-      {can(access, 'orders') && <div className="dashboard-stats">{(['pending','urgent','completed'] as const).map(status => <button key={status} className={`dashboard-stat dashboard-stat--${status}`} onClick={() => { setFilter(status); setAdminView('orders') }}><span>{status === 'pending' ? t.pending : status === 'completed' ? t.completed : isRtl ? 'فوری' : 'Urgent'}</span><strong>{orderCounts[status]}</strong><small>{isRtl ? 'آرڈرز دیکھیں' : 'View orders'}</small></button>)}</div>}
       {tiles.filter(tile => allowed(tile.view)).map(tile => <button key={tile.view} type="button" className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={() => setAdminView(tile.view)}>{tile.label}</button>)}
       {access?.admin && <><button type="button" className="admin-home-btn admin-home-btn--users" onClick={() => setAdminView('users')}>{isRtl ? 'صارفین' : 'Users'}</button>
 
