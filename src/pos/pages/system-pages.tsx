@@ -1,3 +1,4 @@
+import { ActivityLog } from "../../components/ActivityLog"
 /**
  * Admin System pages inside the POS: Stock Report and Customer Report. They reuse the portal's own components (same data, same
  * database tables and browser storage), styled by a copy of the portal stylesheet that
@@ -20,3 +21,5 @@ export const CustomerReportPage = () => <Embed><CustomerReport /></Embed>
 export const DailyReportPage = () => <Embed><DailyReports language="en" onBack={() => undefined} /></Embed>
 export const PurchaseReportPage = () => <Embed><PurchaseReport /></Embed>
 export const UsersPage = () => <Embed><UsersAdmin /></Embed>
+
+export const ActivityPage = () => <Embed><ActivityLog /></Embed>

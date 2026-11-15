@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { usePosEmail } from "@/components/auth-gate"
 import { toast } from "sonner"
 import {
   BanknoteIcon,
@@ -36,8 +37,26 @@ const EnterKbd = ({ inverted }: { inverted?: boolean }) => (
 )
 
 export function PosPage({ active = true }: { active?: boolean }) {
-  const [cart, setCart] = useState<SaleLine[]>([])
-  const [customer, setCustomer] = useState("")
+  const email = usePosEmail()
+  const draftKey = `ahwmb-pos-cart-v2:${email}`
+  const [recovered] = useState(() => {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(draftKey) || 'null')
+      if (value && Array.isArray(value.cart) && value.cart.every((l: SaleLine) => typeof l.name === 'string' && Number.isFinite(l.qty) && l.qty > 0 && Number.isFinite(l.rate) && l.rate >= 0)) return value as { cart: SaleLine[]; customer: string; requestId: string }
+    } catch { /* invalid draft: leave stored copy untouched */ }
+    return null
+  })
+  const [cart, setCart] = useState<SaleLine[]>(recovered?.cart || [])
+  const [customer, setCustomer] = useState(recovered?.customer || "")
+  const requestId = useRef(recovered?.requestId || crypto.randomUUID())
+  const [draftMessage, setDraftMessage] = useState(recovered?.cart.length ? "Unfinished bill recovered from this tab." : "")
+  const currentDraft = useRef({ cart, customer, requestId: requestId.current })
+  currentDraft.current = { cart, customer, requestId: requestId.current }
+  useEffect(() => {
+    const save = () => { try { sessionStorage.setItem(draftKey, JSON.stringify(currentDraft.current)) } catch { setDraftMessage("Draft could not be saved on this device. Keep this page open.") } }
+    save(); window.addEventListener('pagehide', save)
+    return () => window.removeEventListener('pagehide', save)
+  }, [cart, customer, draftKey])
   // Suggest customers from earlier bills.
   const allSales = useStore((s) => s.sales)
   const knownCustomers = useMemo(
@@ -75,7 +94,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
   function addLine() {
     const q = parseFloat(qty)
     if (!picked) return focusSearch()
-    if (!(q > 0)) return toast.error("Enter a valid quantity")
+    if (!Number.isFinite(q) || !(q > 0) || q > 1000000) return toast.error("Enter a valid quantity")
     setCart((c) => {
       const i = c.findIndex((l) => l.itemId === picked.id)
       if (i === -1) return [...c, { itemId: picked.id, name: picked.name, nameUr: picked.nameUr, rate: picked.rate, qty: q, weight: picked.unitWeight }]
@@ -102,7 +121,9 @@ export function PosPage({ active = true }: { active?: boolean }) {
     saving.current = true
     setBusy(true)
     try {
-      const sale = await actions.recordSale(cart, method, customer)
+      const sale = await actions.recordSale(cart, method, customer, requestId.current)
+      requestId.current = crypto.randomUUID()
+      setDraftMessage("Sale saved. Ready for the next customer.")
       setLastSale(sale)
       setPrinted(false)
       setCart([])
@@ -190,6 +211,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
         </div>
       </PageHeader>
 
+      {draftMessage && <p role="status" className="rounded-xl border bg-muted/40 px-4 py-2 text-sm">{draftMessage}</p>}
       <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(300px,400px)_1fr]">
         <ItemCommand
           inputRef={searchRef}

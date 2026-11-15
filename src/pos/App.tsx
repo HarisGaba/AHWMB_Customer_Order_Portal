@@ -1,3 +1,5 @@
+import { useUrlView } from "../hooks/useUrlView"
+import { ConnectionStatus } from "../components/ConnectionStatus"
 import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { useTheme } from "next-themes"
@@ -36,20 +38,21 @@ import { can, hasPosDataAccess, type Access, type Permission } from "../lib/acce
 const SummaryPage = lazy(() => import("@/pages/summary-page").then((m) => ({ default: m.SummaryPage })))
 
 // Admin System pages (reports & management, moved here from the order portal); loaded on demand.
-const sys = (name: "DailyReportPage" | "StockReportPage" | "CustomerReportPage" | "PurchaseReportPage") =>
+const sys = (name: "DailyReportPage" | "StockReportPage" | "CustomerReportPage" | "PurchaseReportPage" | "ActivityPage") =>
   lazy(() => import("@/pages/system-pages").then((m) => ({ default: m[name] })))
 
 const anyOf = (...perms: Permission[]) => (a: Access | null) => perms.some((p) => can(a, p))
-// Billing and its supporting pages stay available, subject only to page permissions.
+// Set future to false when a module is ready to join the main sidebar menu.
 const ALL_NAV = [
-  { id: "daily", label: "Daily Report", icon: NotebookPenIcon, page: sys("DailyReportPage"), allow: anyOf("daily_report"), unused: false, hidden: false },
-  { id: "stock", label: "Stock Report", icon: BoxesIcon, page: sys("StockReportPage"), allow: anyOf("stock_report", "stock_transfer"), unused: false, hidden: false },
-  { id: "customers", label: "Customer Report", icon: BookUserIcon, page: sys("CustomerReportPage"), allow: anyOf("customer_report"), unused: false, hidden: false },
-  { id: "purchase", label: "Purchase Report", icon: ReceiptTextIcon, page: sys("PurchaseReportPage"), allow: anyOf("purchase_report"), unused: false, hidden: false },
-  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, allow: anyOf("pos_billing"), unused: false, hidden: false },
-  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), unused: false, hidden: false },
-  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), unused: false, hidden: false },
-  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary"), unused: false, hidden: false },
+  { id: "daily", label: "Daily Report", icon: NotebookPenIcon, page: sys("DailyReportPage"), allow: anyOf("daily_report"), future: false, hidden: false },
+  { id: "stock", label: "Stock Report", icon: BoxesIcon, page: sys("StockReportPage"), allow: anyOf("stock_report", "stock_transfer"), future: false, hidden: false },
+  { id: "customers", label: "Customer Report", icon: BookUserIcon, page: sys("CustomerReportPage"), allow: anyOf("customer_report"), future: false, hidden: false },
+  { id: "purchase", label: "Purchase Report", icon: ReceiptTextIcon, page: sys("PurchaseReportPage"), allow: anyOf("purchase_report"), future: false, hidden: false },
+  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, allow: anyOf("pos_billing"), future: true, hidden: false },
+  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), future: true, hidden: false },
+  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), future: true, hidden: false },
+  { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary"), future: true, hidden: false },
+  { id: "activity", label: "Activity History", icon: ReceiptTextIcon, page: sys("ActivityPage"), allow: anyOf("orders", "stock_report", "purchase_report", "customer_report", "pos_summary"), future: false, hidden: false },
 ] as const
 
 type PageId = (typeof ALL_NAV)[number]["id"]
@@ -58,15 +61,15 @@ export default function App() {
   const access = usePosAccess()
   // Only the pages this user was given appear in the menu (the database enforces the same rules).
   const NAV = useMemo(() => ALL_NAV.filter((n) => !n.hidden && n.allow(access)), [access])
-  const MAIN = useMemo(() => NAV.filter((n) => !n.unused), [NAV])
-  const UNUSED = useMemo(() => NAV.filter((n) => n.unused), [NAV])
-  const [showUnused, setShowUnused] = useState(false)
+  const MAIN = useMemo(() => NAV.filter((n) => !n.future), [NAV])
+  const FUTURE = useMemo(() => NAV.filter((n) => n.future), [NAV])
+  const [showFuture, setShowFuture] = useState(false)
   // Ahmed's home is the Customer Order Portal: in the POS he always gets the "Admin Panel" button.
   // The main admin (ahwmb1965) never sees it.
   const [userEmail, setUserEmail] = useState("")
   useEffect(() => { void posDb?.auth.getSession().then(({ data }) => setUserEmail((data.session?.user.email || "").toLowerCase())) }, [])
   const showAdminPanel = userEmail === "ahwmb1965@gmail.com" || userEmail === "ahmedyounus1978@gmail.com"
-  const [page, setPage] = useState<PageId>(() => can(access, "pos_billing") ? "pos" : (MAIN[0] ?? NAV[0])?.id ?? "pos")
+  const [page, setPage] = useUrlView<PageId>(NAV.map(n => n.id), (MAIN[0] ?? NAV[0])?.id ?? "pos")
   // AuthGate only lets users with at least one POS page in, so NAV is never empty.
   const current = (NAV.find((n) => n.id === page) ?? NAV[0])!
   // If a page is taken away while it is open, move to the first page still allowed.
@@ -84,15 +87,16 @@ export default function App() {
         e.preventDefault()
         setHelpOpen(true)
       } else if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
-        const target = MAIN[Number(e.key) - 1]
+        const target = NAV[Number(e.key) - 1]
         if (!target) return
         e.preventDefault()
+        if (target.future) setShowFuture(true)
         setPage(target.id)
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [MAIN])
+  }, [NAV])
 
   return (
     <SidebarProvider>
@@ -122,27 +126,28 @@ export default function App() {
                     <SidebarMenuButton isActive={page === n.id} tooltip={n.label} onClick={() => setPage(n.id)} className="h-11 rounded-xl font-medium text-sidebar-foreground/80 transition-colors hover:text-sidebar-accent-foreground data-active:bg-sidebar-primary data-active:font-semibold data-active:text-sidebar-primary-foreground data-active:shadow-md data-active:hover:bg-sidebar-primary data-active:hover:text-sidebar-primary-foreground">
                       <n.icon />
                       <span>{n.label}</span>
-                      <span className="ml-auto rounded-md bg-black/15 px-1.5 py-0.5 font-mono text-[10px] opacity-70">Alt+{i + 1}</span>
+                      <span className="ml-auto rounded-md bg-black/15 px-1.5 py-0.5 font-mono text-[10px] opacity-70">Alt+{NAV.indexOf(n) + 1}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-          {UNUSED.length > 0 && (
-            <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-              {/* Pages not in use right now: kept, but closed away. */}
-              <button type="button" onClick={() => setShowUnused((v) => !v)} aria-expanded={showUnused}
-                className="flex items-center gap-1.5 px-2 py-1 text-left text-[11px] font-semibold tracking-wider text-sidebar-foreground/45 uppercase hover:text-sidebar-foreground/70">
-                <ChevronRightIcon className={`size-3.5 transition-transform ${showUnused ? "rotate-90" : ""}`} /> Not in use ({UNUSED.length})
+          {FUTURE.length > 0 && (
+            <SidebarGroup>
+              {/* Future modules remain fully usable inside this collapsed group. */}
+              <button type="button" onClick={() => setShowFuture((v) => !v)} aria-label="In Future" title="In Future" aria-expanded={showFuture} aria-controls="future-modules"
+                className="flex h-11 items-center gap-2 rounded-xl px-2 text-left text-sm font-semibold text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                <ChevronRightIcon className={`size-3.5 shrink-0 transition-transform ${showFuture ? "rotate-90" : ""}`} /> <span className="group-data-[collapsible=icon]:hidden">In Future</span>
               </button>
-              {showUnused && (
-                <SidebarMenu>
-                  {UNUSED.map((n) => (
+              {showFuture && (
+                <SidebarMenu id="future-modules" className="mt-1 border-l border-sidebar-border pl-3 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:pl-0">
+                  {FUTURE.map((n) => (
                     <SidebarMenuItem key={n.id}>
-                      <SidebarMenuButton isActive={page === n.id} onClick={() => setPage(n.id)} className="h-9 rounded-xl text-sidebar-foreground/60">
+                      <SidebarMenuButton tooltip={n.label} isActive={page === n.id} onClick={() => setPage(n.id)} className="h-10 rounded-xl text-sidebar-foreground/80 data-active:bg-sidebar-primary data-active:text-sidebar-primary-foreground">
                         <n.icon />
                         <span>{n.label}</span>
+                        <span className="ml-auto font-mono text-[10px] opacity-70">Alt+{NAV.indexOf(n) + 1}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
@@ -170,6 +175,7 @@ export default function App() {
                 <LayoutDashboardIcon className="size-4" /> Admin Panel
               </a>
             )}
+            <ConnectionStatus />
             <Clock />
             <Button variant="ghost" size="icon-sm" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (F1)" onClick={() => setHelpOpen(true)}>
               <KeyboardIcon />

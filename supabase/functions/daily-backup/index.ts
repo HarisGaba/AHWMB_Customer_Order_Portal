@@ -27,7 +27,7 @@ const TO_EMAIL = 'ahwmb1965@gmail.com'
 // Business data only (push_subscriptions are device keys and are recreated automatically).
 const TABLES = [
   'orders', 'order_items', 'customers', 'customer_ledger', 'products', 'daily_expenses',
-  'stock_items', 'stock_transfers', 'items', 'sales',
+  'stock_items', 'stock_transfers', 'items', 'sales', 'purchases', 'activity_log',
 ]
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
@@ -56,7 +56,7 @@ async function buildBackup() {
   for (const table of TABLES) {
     const rows: unknown[] = []
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await db.from(table).select('*').range(from, from + 999)
+      const { data, error } = await db.from(table).select('*').order('id').range(from, from + 999)
       if (error) throw new Error(`${table}: ${error.message}`)
       rows.push(...(data || []))
       if (!data || data.length < 1000) break

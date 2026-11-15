@@ -64,18 +64,20 @@ export function SummaryPage() {
   const selected = sales.find((s) => s.id === selectedId) ?? sales[sales.length - 1] ?? null
   const [toDelete, setToDelete] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [reversalKind, setReversalKind] = useState<"void" | "refund">("refund")
+  const [reversalReason, setReversalReason] = useState("")
 
   async function confirmDelete() {
     const sale = toDelete
-    if (!sale || deleting) return
+    if (!sale || deleting || reversalReason.trim().length < 3) return
     setDeleting(true)
     try {
-      await actions.deleteSale(sale.id)
-      toast.success(`Deleted sale of ${fmt(sale.total)}`, { description: sale.customerName || `Customer ${sale.customerNo}` })
+      await actions.reverseSale(sale.id, reversalKind, reversalReason)
+      toast.success(`Reversed sale of ${fmt(sale.total)}`, { description: sale.customerName || `Customer ${sale.customerNo}` })
       setSelectedId(null)
       setToDelete(null)
     } catch (e) {
-      toast.error("Sale not deleted", { description: e instanceof Error ? e.message : String(e) })
+      toast.error("Sale not reversed", { description: e instanceof Error ? e.message : String(e) })
     } finally {
       setDeleting(false)
     }
@@ -383,8 +385,8 @@ export function SummaryPage() {
                 <Button variant="outline" size="sm" onClick={() => printReceipt(selected)}>
                   <PrinterIcon /> Print receipt
                 </Button>
-                <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setToDelete(selected)}>
-                  <Trash2Icon /> Delete sale
+                <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => { setReversalReason(""); setToDelete(selected) }}>
+                  <Trash2Icon /> Void / refund sale
                 </Button>
               </CardAction>
             )}
@@ -480,16 +482,18 @@ export function SummaryPage() {
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && !deleting && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this sale?</AlertDialogTitle>
+            <AlertDialogTitle>Void or refund this sale?</AlertDialogTitle>
             <AlertDialogDescription>
               {toDelete && `${toDelete.customerName || `Customer ${toDelete.customerNo}`} · ${fmt(toDelete.total)} · ${format(new Date(toDelete.createdAt), "d MMM yyyy, h:mm a")}. `}
-              Use this when goods are returned and the money is given back. The sale is removed from all totals and can’t be undone.
+              Choose Refund after returning money, or Void for an incorrect bill. The original receipt and reason remain in activity history; active sales totals exclude the reversed bill. Stock and customer ledger are not automatically adjusted.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <label className="grid gap-2 text-sm">Action<select className="rounded-md border p-2" value={reversalKind} onChange={e => setReversalKind(e.target.value as "void" | "refund")}><option value="refund">Refund — money returned</option><option value="void">Void — incorrect bill</option></select></label>
+          <label className="grid gap-2 text-sm">Reason<Input value={reversalReason} onChange={e => setReversalReason(e.target.value)} placeholder="Explain why this bill is being reversed" /></label>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" disabled={deleting} onClick={(e) => { e.preventDefault(); void confirmDelete() }}>
-              {deleting ? "Deleting…" : "Delete sale"}
+            <AlertDialogAction variant="destructive" disabled={deleting || reversalReason.trim().length < 3} onClick={(e) => { e.preventDefault(); void confirmDelete() }}>
+              {deleting ? "Deleting…" : "Void / refund sale"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

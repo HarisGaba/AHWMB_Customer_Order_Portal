@@ -8,6 +8,8 @@ import { hasPortalAccess, hasPosAccess, hasPosDataAccess, NO_ACCESS, useLiveAcce
 import { signOutToLogin, supabase, supabaseConfigured } from "@/lib/supabase"
 
 /** The signed-in user's page permissions, for the POS menu and page guards. */
+const PosEmailContext = createContext("")
+export const usePosEmail = () => useContext(PosEmailContext)
 const PosAccessContext = createContext<Access>(NO_ACCESS)
 export const usePosAccess = () => useContext(PosAccessContext)
 
@@ -48,7 +50,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       </Centered>
     )
   if (status !== "ready") return <AppSkeleton />
-  return <PosAccessContext.Provider value={access}>{children}</PosAccessContext.Provider>
+  return <PosEmailContext.Provider key={email} value={email}><PosAccessContext.Provider value={access}>{children}</PosAccessContext.Provider></PosEmailContext.Provider>
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

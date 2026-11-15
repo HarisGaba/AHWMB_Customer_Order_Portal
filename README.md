@@ -42,11 +42,11 @@ The supplied black-and-white invoice reference is now stored as `public/invoice-
 
 The Admin Panel's Total Balance, Deposit, and Remaining Balance fields use `Remaining Balance = Total Balance - Deposit`. Applying `supabase/schema.sql` adds the three persistence columns to `orders` and the save operation stores them.
 
-Save & Print downloads the PDF and launches print preview through a hidden iframe in the current window; it does not open a new tab or popup. After saving, Share PDF File uses `navigator.share` with only a PDF `File`. No admin URL, route, or internal link is placed in the shared payload.
+Save invoice, Print / download PDF, and Share PDF File are separate actions. Save commits the invoice atomically; printing and sharing require saved changes. Share uses `navigator.share` with only a PDF `File`, or downloads the file when native sharing is unavailable. No admin URL, route, or internal link is placed in the shared payload.
 
 ## POS system (`/pos`)
 
-The Point of Sale lives in `src/pos/` and loads its own React/Tailwind bundle at `/pos`. Billing opens by default for users with `pos_billing` access. Point of Sale, Rate Changing, Item Addition and Total Summary remain visible according to page permissions; switching modules preserves the in-progress cart.
+The Point of Sale lives in `src/pos/` and loads its own React/Tailwind bundle at `/pos`. The first permitted main report opens by default. Point of Sale, Rate Changing, Item Addition and Total Summary are grouped under the collapsed **In Future** sidebar dropdown, according to page permissions. They remain usable, and switching modules preserves the in-progress cart. Set a module’s `future` flag to `false` in `src/pos/App.tsx` to promote it into the main menu. Users with only future-module permissions can still open their first permitted page.
 
 - `/` is the customer order form; `/admin` is the customer-order administration panel; `/pos` includes billing and operational reports.
 - Both portals use the same Supabase project, with database RLS and `has_perm()` enforcing page access. Apply migrations in order when provisioning a new database; do not re-run the base schema over an existing deployment.
@@ -62,3 +62,7 @@ No database cleanup is performed on startup, navigation, or deployment. `sales` 
 The old `supabase/manual/reset_pos_all.sql` and `reset_pos_sales.sql` scripts are disabled and raise an error without changing data. Never clear the catalog to reset these views. Any future test cleanup requires confirmed sale UUIDs and a verified backup. This repair intentionally preserves all existing sales, stock, customers, orders, rates, and local business storage.
 
 Validation: `pnpm test`, `pnpm exec tsc --noEmit -p tsconfig.app.json`, and `pnpm build`. Session tests use the installed Supabase SDK with shared in-memory storage and a mocked network; they do not connect to production.
+
+### Reliability release setup
+
+See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the coordinated database migration, Turnstile secrets, Edge Function deployment, staging acceptance checks and current verification limits. This frontend requires that rollout before production activation. Purchases now use a database table with an explicit, non-destructive import of old browser records. New audit history records future changes; sale and transfer reversals retain their original records.

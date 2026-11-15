@@ -12,7 +12,7 @@ const SECTIONS: { title: string; rows: [React.ReactNode, string][] }[] = [
   {
     title: "Global",
     rows: [
-      [<KbdGroup><Kbd>Alt</Kbd>+<Kbd>1</Kbd>…<Kbd>8</Kbd></KbdGroup>, "Switch module (number shown in the menu)"],
+      [<KbdGroup><Kbd>Alt</Kbd>+<Kbd>1</Kbd>…<Kbd>9</Kbd></KbdGroup>, "Switch module (number shown in the menu)"],
       [<KbdGroup><Kbd>F1</Kbd> or <Kbd>?</Kbd></KbdGroup>, "Show this help"],
       [<Kbd>Esc</Kbd>, "Close dialog / go back"],
     ],

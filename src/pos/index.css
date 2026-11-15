@@ -150,3 +150,8 @@
 
 /* Installed iPhone app: keep the POS clear of the status bar / notch. */
 body { padding-top: env(safe-area-inset-top); }
+
+.connection-status { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted-foreground); }
+.connection-status.is-online > span { color:#258653; }
+.connection-status.is-offline { color:#a16b00; }
+@media(max-width:640px) { header .connection-status.is-online { display:none; } }

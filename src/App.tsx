@@ -9,6 +9,13 @@ import { checkClient, clientFor, openPosFromPortal, supabase } from './lib/supab
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
+import { validOrderQuantity, validCustomerUnit } from './lib/orderValidation'
+import { ConnectionStatus } from './components/ConnectionStatus'
+import { ActivityLog } from './components/ActivityLog'
+import { PurchaseReport } from './components/PurchaseReport'
+export { PurchaseReport } from './components/PurchaseReport'
+import { useUrlView } from './hooks/useUrlView'
+import { canLeaveScreen, useUnsavedChanges } from './hooks/useUnsavedChanges'
 import { useDraftOrder } from './hooks/useDraftOrder'
 import { requestTurnstileToken } from './lib/turnstile'
 import { InstallBanner } from './components/InstallBanner'
@@ -54,6 +61,8 @@ type OrderRecord = {
   customer_name: string
   customer_phone: string
   customer_address: string
+  notes?: string
+  version: number
   location_link?: string | null
   items: OrderItem[]
   status: 'pending' | 'completed'
@@ -124,14 +133,14 @@ const validPhone = (value: string) => /^923\d{9}$/.test(normalizePhone(value)) &
 const RATE_LIMIT_KEY = 'ahwmb_submit_times'
 const RATE_LIMIT_MAX = 5
 const RATE_LIMIT_WINDOW = 3600000
-function checkRateLimit(phone: string): boolean {
+function checkRateLimit(phone: string, record = false): boolean {
   try {
     const key = `${RATE_LIMIT_KEY}_${normalizePhone(phone)}`
     const parsed: unknown = JSON.parse(localStorage.getItem(key) || '[]')
     const now = Date.now()
     const recent = (Array.isArray(parsed) ? parsed : []).filter(t => typeof t === 'number' && Number.isFinite(t) && t <= now && now - t < RATE_LIMIT_WINDOW)
     if (recent.length >= RATE_LIMIT_MAX) return false
-    localStorage.setItem(key, JSON.stringify([...recent, now]))
+    if (record) localStorage.setItem(key, JSON.stringify([...recent, now]))
   } catch { /* Database rate limiting remains enforced when storage is unavailable. */ }
   return true
 }
@@ -169,7 +178,7 @@ const buildAdminWhatsAppLink = (order: OrderRecord) => {
   return `https://wa.me/?text=${encodeURIComponent(message)}`
 }
 
-const createOrderRef = () => `#AHWMB-${Date.now().toString(36).toUpperCase().slice(-4)}${Math.floor(10 + Math.random() * 90)}`
+const createOrderRef = () => `#AHWMB-${crypto.randomUUID()}`
 const parseQuantity = (value: string) => {
   const match = value.replace(',', '.').match(/\d+(?:\.\d+)?/)
   return match ? Number(match[0]) : 0
@@ -440,8 +449,16 @@ function useToasts() {
 // ─── Router ───────────────────────────────────────────────────────────────────
 const usePath = () => {
   const [path, setPath] = useState(window.location.pathname)
+  const previous = useRef(window.location.href)
   useEffect(() => {
-    const onPop = () => setPath(window.location.pathname)
+    const onPop = () => {
+      if (new URL(previous.current).pathname !== window.location.pathname && !canLeaveScreen()) {
+        window.history.pushState({}, '', previous.current)
+        return
+      }
+      previous.current = window.location.href
+      setPath(window.location.pathname)
+    }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
@@ -848,6 +865,7 @@ async function drawInvoice(
   _grandTotal: number,
   financials: InvoicePayload['financials'],
   filename: string,
+  download = true,
 ): Promise<Blob> {
   const { jsPDF } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5', compress: true })
@@ -1042,6 +1060,7 @@ async function drawInvoice(
   // Safari/Chromium races where save() can run before jsPDF has finished
   // serialising the document.
   const blob = doc.output('blob') as Blob
+  if (!download) return blob
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -1112,6 +1131,7 @@ function PortalHeader({
         </button>
       </div>
     </header>
+    <ConnectionStatus ur={language === 'ur'} />
     <InstallBanner language={language} />
     </>
   )
@@ -1132,7 +1152,8 @@ function SuccessModal({ reference, language, onClose }: {
         <p className="modal-label">{t.ref}</p>
         <strong className="modal-ref">{reference}</strong>
         <p className="modal-hint">{t.successHint}</p>
-        <p className="modal-hint">{language === 'ur' ? 'آپ کا آرڈر اسی دن پہنچا دیا جائے گا۔' : 'Your order will be delivered on the same day.'}</p>
+        <p className="modal-hint">{language === 'ur' ? 'دکاندار قیمت اور ترسیل کی تصدیق کے لیے آپ سے رابطہ کرے گا۔' : 'The shopkeeper will contact you to confirm prices and delivery.'}</p>
+        <a className="btn-secondary" href="tel:+923219229419">{language === 'ur' ? 'دکان سے رابطہ کریں' : 'Contact the shop'}</a>
         <div className="modal-actions">
           <button className="btn-modal-close" style={{ width: '100%', minHeight: 56 }} type="button" onClick={onClose}>OK</button>
         </div>
@@ -1172,10 +1193,10 @@ function CustomerPage({
   const [notes, setNotes] = useState('')
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
+  const orderRequest = useRef<{ fingerprint: string; reference: string } | null>(null)
   const [successRef, setSuccessRef] = useState('')
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>({ isOpen: false, title: '', message: '', confirmLabel: '', cancelLabel: 'Cancel', isDangerous: false, onConfirm: () => undefined })
   const [cartOpen, setCartOpen] = useState(false)
-  const [cartPrompt, setCartPrompt] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [expandedCategories] = useState<Set<string>>(() => new Set(runtimeCatalog.map(product => product.category)))
@@ -1183,8 +1204,6 @@ function CustomerPage({
   const [orderSearchOpen, setOrderSearchOpen] = useState(false)
   const [suggestionRowId, setSuggestionRowId] = useState<string | null>(null)
   const [showStickyTotal, setShowStickyTotal] = useState(false)
-  const [lastOrder, setLastOrder] = useState<OrderRecord | null>(null)
-  const [showRepeatBanner, setShowRepeatBanner] = useState(false)
   const draft = useDraftOrder({ name, phone, address, locationLink, notes, rows, language })
 
   const catalogMatches = useMemo(() => {
@@ -1233,39 +1252,16 @@ function CustomerPage({
   const grandTotal = useMemo(() => sumLineTotals(filledRows.map(row => ({ quantity_value: Number(row.quantityValue) || 0, unit_type: row.unitType, unit_price: 0, rate: 0, total: 0 }))), [filledRows])
   useEffect(() => { setShowStickyTotal(filledRows.length > 0) }, [filledRows])
 
-  const lookupPreviousOrder = async () => {
-    if (!supabase || !validPhone(phone)) return
-    const { data } = await supabase.rpc('previous_order', { p_phone: normalizePhone(phone) })
-    const previous = data as OrderRecord | null
-    if (previous) {
-      setLastOrder({ ...previous, items: safeItems(previous.items), status: 'completed' } as OrderRecord)
-      setShowRepeatBanner(true)
-    }
-  }
-
-  const handleRepeatOrder = () => {
-    if (!lastOrder) return
-    if (!address.trim()) setAddress(lastOrder.customer_address || '')
-    setRows(lastOrder.items.map(item => ({
-      id: crypto.randomUUID(),
-      itemName: item.name,
-      quantityValue: String(item.quantity_value),
-      unitType: item.unit_type,
-    })))
-    setShowRepeatBanner(false)
-    addToast(isRtl ? 'پچھلا آرڈر لوڈ ہو گیا! جائزہ لے کر جمع کریں۔' : 'Previous order loaded! Review and submit when ready.', 'success')
-    window.setTimeout(() => document.getElementById('order-items')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
-  }
 
   const addToCart = () => {
     const next: FormErrors = {}
     if (!name.trim()) next.name = t.errors.name
     if (!validPhone(phone)) next.phone = t.errors.phone
     if (!address.trim()) next.address = t.errors.address
-    if (!hasContent || filledRows.some(r => !r.itemName.trim() || !r.quantityValue.trim())) next.items = t.errors.items
+    if (!filledRows.length || filledRows.some(r => !r.itemName.trim() || !validOrderQuantity(r.quantityValue) || !validCustomerUnit(r.unitType))) next.items = isRtl ? 'ہر شے کا نام، مثبت مقدار اور اکائی منتخب کریں۔' : 'Enter an item name, positive quantity and unit for every item.'
     setErrors(next)
     if (Object.keys(next).length) return
-    setCartPrompt(true)
+    setCartOpen(true)
   }
 
   const updateRow = (id: string, field: keyof Pick<OrderRow, 'itemName' | 'quantityValue' | 'unitType'>, value: string) => {
@@ -1303,8 +1299,8 @@ function CustomerPage({
     if (!name.trim()) next.name = t.errors.name
     if (!validPhone(phone)) next.phone = t.errors.phone
     if (!address.trim()) next.address = t.errors.address
-    if (!hasContent || filledRows.some(r => !r.itemName.trim() || !r.quantityValue.trim()))
-      next.items = t.errors.items
+    if (!filledRows.length || filledRows.some(r => !r.itemName.trim() || !validOrderQuantity(r.quantityValue) || !validCustomerUnit(r.unitType)))
+      next.items = isRtl ? 'ہر شے کا نام، مثبت مقدار اور اکائی منتخب کریں۔' : 'Enter an item name, positive quantity and unit for every item.'
     setErrors(next)
     if (Object.keys(next).length) return
     if (!supabase) { addToast(t.errors.setup, 'error'); return }
@@ -1316,7 +1312,14 @@ function CustomerPage({
     }
 
     setSaving(true)
-    const orderRef = createOrderRef()
+    const fingerprint = JSON.stringify([name, phone, address, locationLink, notes, filledRows])
+    if (orderRequest.current?.fingerprint !== fingerprint) {
+      let recovered: { fingerprint?: string; reference?: string } | null = null
+      try { recovered = JSON.parse(sessionStorage.getItem('ahwmb-order-request') || 'null') } catch { /* use a new request */ }
+      orderRequest.current = { fingerprint, reference: recovered?.fingerprint === fingerprint && /^#AHWMB-[0-9a-f-]{36}$/i.test(recovered.reference || '') ? recovered.reference! : createOrderRef() }
+      try { sessionStorage.setItem('ahwmb-order-request', JSON.stringify(orderRequest.current)) } catch { /* in-memory retries remain protected */ }
+    }
+    const orderRef = orderRequest.current.reference
     const items: OrderItem[] = filledRows.map((row, index) => {
       const quantityValue = Number(row.quantityValue) || 0
       return {
@@ -1333,23 +1336,28 @@ function CustomerPage({
 
     try {
       const turnstileToken = await requestTurnstileToken()
-      // TODO: Validate turnstileToken in a Supabase Edge Function using
-      // POST https://challenges.cloudflare.com/turnstile/v0/siteverify
-      // and a server-only Cloudflare secret. Do not add cf_token to this RPC:
-      // its existing signature does not accept that parameter.
-      void turnstileToken
-      const { error } = await supabase.rpc('submit_order', {
-        p_order_ref: orderRef,
-        p_customer_name: name.trim(),
-        p_customer_phone: normalizePhone(phone),
-        p_customer_address: address.trim(),
-        p_location_link: locationLink.trim() || null,
-        p_items: items,
-      })
-
-      if (error) throw error
+      const { data, error } = await supabase.functions.invoke('submit-customer-order', { body: {
+        token: turnstileToken, p_order_ref: orderRef,
+        p_customer_name: name.trim(), p_customer_phone: normalizePhone(phone),
+        p_customer_address: address.trim(), p_location_link: locationLink.trim() || null,
+        p_items: items, p_notes: notes.trim(),
+      } })
+      if (data?.error) throw new Error(data.error)
+      if (error) {
+        const response = (error as { context?: Response }).context
+        if (response instanceof Response) {
+          const details = await response.json().catch(() => null)
+          if (details?.error) throw new Error(details.error)
+        }
+        throw error
+      }
+      if (!data?.id) throw new Error('The server did not confirm this order. Please retry.')
+      checkRateLimit(phone, true)
 
       void notifyNewOrder({ order_ref: orderRef, customer_name: name.trim(), customer_phone: normalizePhone(phone), customer_address: address.trim(), location_link: locationLink.trim() || null, items, grand_total: 0, created_at: new Date().toISOString() })
+      draft.clearDraft()
+      orderRequest.current = null
+      try { sessionStorage.removeItem('ahwmb-order-request') } catch { /* no local cache */ }
       setSuccessRef(orderRef)
       setCartOpen(false)
     } catch (err) {
@@ -1372,6 +1380,12 @@ function CustomerPage({
       {draft.hasDraft && <div className="draft-restore-banner"><strong>{isRtl ? '📝 آپ کا ایک نامکمل آرڈر محفوظ ہے۔' : '📝 You have an unsaved order from earlier.'}</strong><div className="draft-actions"><button type="button" className="draft-continue" onClick={() => { const saved = draft.restoreDraft(); if (saved) { setName(saved.name); setPhone(saved.phone); setAddress(saved.address); setLocationLink(saved.locationLink); setNotes(saved.notes); setRows(saved.rows as OrderRow[]); setLanguage(saved.language) } draft.setHasDraft(false) }}>{isRtl ? 'آرڈر جاری رکھیں' : 'Continue Order'}</button><button type="button" className="draft-fresh" onClick={() => draft.clearDraft()}>{isRtl ? 'نیا آرڈر شروع کریں' : 'Start Fresh'}</button></div></div>}
 
       <div className={`page-wrap ${showStickyTotal ? 'page-wrap--sticky-total' : ''}`}>
+        <nav className="order-steps" aria-label={isRtl ? 'آرڈر کے مراحل' : 'Order steps'}>
+          <a href="#customer-details"><b>1</b>{isRtl ? 'آپ کی معلومات' : 'Customer details'}</a>
+          <a href="#order-items"><b>2</b>{isRtl ? 'سامان منتخب کریں' : 'Choose items'}</a>
+          <button type="button" onClick={addToCart}><b>3</b>{isRtl ? 'جائزہ اور ارسال' : 'Review & submit'}</button>
+        </nav>
+        <p className="pricing-notice">{isRtl ? 'قیمتوں اور ترسیل کی تصدیق دکاندار کرے گا۔' : 'Prices and delivery are confirmed by the shopkeeper after you submit your order.'}</p>
         <section className="image-hero" aria-label="AHWMB premium products">
           <picture>
             <source media="(min-width: 768px)" srcSet="/images/ahwmb-hero-desktop.png" />
@@ -1420,7 +1434,6 @@ function CustomerPage({
                   dir="ltr"
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
-                  onBlur={() => void lookupPreviousOrder()}
                   placeholder={t.phonePh}
                   type="tel"
                   inputMode="tel"
@@ -1482,11 +1495,6 @@ function CustomerPage({
           </div>
         </section>
 
-        {showRepeatBanner && lastOrder && <section className="repeat-order-banner" aria-live="polite">
-          <div className="repeat-order-header"><span className="repeat-icon">👋</span><div><p className="repeat-welcome">{isRtl ? `واپسی پر خوش آمدید، ${lastOrder.customer_name}!` : `Welcome back, ${lastOrder.customer_name}!`}</p><p className="repeat-date">{isRtl ? 'آخری آرڈر' : 'Last order'}: {formatDateShort(lastOrder.created_at)} · {lastOrder.items.length} {isRtl ? 'اشیاء' : 'items'} · Rs.{lastOrder.grand_total.toLocaleString('en-PK')}</p></div></div>
-          <div className="repeat-items-preview">{lastOrder.items.slice(0, 3).map(item => <span className="repeat-item-chip" key={`${item.sr}-${item.name}`}>{item.name} — {item.quantity_value} {item.unit_type}</span>)}{lastOrder.items.length > 3 && <span className="repeat-item-more">+{lastOrder.items.length - 3} {isRtl ? 'مزید' : 'more'}</span>}</div>
-          <div className="repeat-actions"><button className="btn-repeat-order" onClick={handleRepeatOrder} type="button">🔄 {isRtl ? 'یہ آرڈر دہرائیں' : 'Repeat This Order'}</button><button className="btn-repeat-dismiss" onClick={() => setShowRepeatBanner(false)} type="button">{isRtl ? 'نیا آرڈر' : 'Start New'}</button></div>
-        </section>}
 
         {/* Items */}
         <section className="card items-card" id="order-items">
@@ -1620,7 +1628,7 @@ function CustomerPage({
           </div>
 
           <div className="order-card-list">
-            {rows.map((row, index) => <article className="order-card" key={`mobile-${row.id}`}><div className="order-card-row order-card-row--name"><span className="order-card-badge">{index + 1}</span><div className="item-typeahead"><input className="cell-input" value={row.itemName} onFocus={() => setSuggestionRowId(row.id)} onBlur={() => window.setTimeout(() => setSuggestionRowId(null), 150)} onChange={e => updateRow(row.id, 'itemName', e.target.value)} placeholder={t.itemPh} aria-label={`${t.item} ${index + 1}`} autoComplete="off" />{suggestionRowId === row.id && <ProductSuggestionMenu query={row.itemName} onSelect={value => { updateRow(row.id, 'itemName', value); setSuggestionRowId(null) }} />}</div></div><div className="order-card-row"><input className="cell-input" type="number" min="0" step="0.001" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} placeholder={t.quantityPh} aria-label={`${t.quantity} ${index + 1}`} /><select className="cell-select" value={row.unitType === 'NONE' ? '' : row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value || 'NONE')} aria-label={`${t.unit} ${index + 1}`}><option value="">Select Unit</option>{UNIT_OPTIONS.filter(option => option.value !== 'NONE' && option.value !== 'BAGS').map(option => <option key={option.value} value={option.value}>{option[language === 'ur' ? 'ur' : 'en']}</option>)}</select></div><button type="button" className="order-card-remove" onClick={() => setRows(current => current.length > 1 ? current.filter(item => item.id !== row.id) : [createRow()])}>🗑 Remove</button></article>)}
+            {rows.map((row, index) => <article className="order-card" key={`mobile-${row.id}`}><div className="order-card-row order-card-row--name"><span className="order-card-badge">{index + 1}</span><div className="item-typeahead"><input className="cell-input" value={row.itemName} onFocus={() => setSuggestionRowId(row.id)} onBlur={() => window.setTimeout(() => setSuggestionRowId(null), 150)} onChange={e => updateRow(row.id, 'itemName', e.target.value)} placeholder={t.itemPh} aria-label={`${t.item} ${index + 1}`} autoComplete="off" />{suggestionRowId === row.id && <ProductSuggestionMenu query={row.itemName} onSelect={value => { updateRow(row.id, 'itemName', value); setSuggestionRowId(null) }} />}</div></div><div className="order-card-row"><input className="cell-input" type="number" min="0" step="0.001" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} placeholder={t.quantityPh} aria-label={`${t.quantity} ${index + 1}`} /><select className="cell-select" value={row.unitType === 'NONE' ? '' : row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value || 'NONE')} aria-label={`${t.unit} ${index + 1}`}><option value="">Select Unit</option>{UNIT_OPTIONS.filter(option => option.value !== 'NONE' && option.value !== 'BAGS').map(option => <option key={option.value} value={option.value}>{option[language === 'ur' ? 'ur' : 'en']}</option>)}</select></div><button type="button" className="order-card-remove" onClick={() => setRows(current => current.length > 1 ? current.filter(item => item.id !== row.id) : [createRow()])}>{isRtl ? 'حذف کریں' : 'Remove'}</button></article>)}
           </div>
 
           <div className="table-help">
@@ -1754,9 +1762,16 @@ function CustomerPage({
         </footer>
       </div>
 
-      {cartPrompt && <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal-box cart-prompt"><div className="modal-check"><ShoppingBag size={32} /></div><h2 className="modal-title">Check Your Items in the Cart</h2><p className="modal-hint">Review quantities and details before placing your order.</p><div className="modal-actions"><button className="btn-modal-close" type="button" onClick={() => setCartPrompt(false)}>Continue Shopping</button><button className="btn-submit cart-prompt-btn" type="button" onClick={() => { setCartPrompt(false); setCartOpen(true) }}>Open Cart</button></div></div></div>}
 
-      {cartOpen && <aside className="cart-drawer" aria-label="Shopping cart"><div className="cart-drawer-head"><div><p className="admin-eyebrow">AHWMB</p><h2>Shopping Cart</h2></div><button type="button" className="icon-btn" onClick={() => setCartOpen(false)} aria-label="Close cart"><X size={22} /></button></div><div className="cart-drawer-body">{filledRows.length === 0 ? <p className="account-empty">Your cart is empty.</p> : filledRows.map(row => <div className="cart-item" key={row.id}><div><strong>{row.itemName}</strong><div className="cart-item-controls"><input type="number" min="0" value={row.quantityValue} onChange={e => updateRow(row.id, 'quantityValue', e.target.value)} aria-label={`Quantity for ${row.itemName}`} /><select value={row.unitType} onChange={e => updateRow(row.id, 'unitType', e.target.value as UnitType)} aria-label={`Unit for ${row.itemName}`}>{UNIT_OPTIONS.filter(option => option.value !== 'NONE' && option.value !== 'BAGS').map(option => <option key={option.value} value={option.value}>{option.en}</option>)}</select></div></div><button type="button" className="cart-remove" onClick={() => setRows(current => current.filter(item => item.id !== row.id))}><Trash2 size={17} /></button></div>)}</div><div className="cart-drawer-foot"><button type="button" className="btn-secondary" onClick={() => { setCartOpen(false); document.getElementById('customer-details')?.scrollIntoView({ behavior: 'smooth' }) }}>Continue Shopping</button><button type="button" className="btn-submit" onClick={() => void submit()} disabled={saving || filledRows.length === 0}>{saving ? 'Submitting…' : 'Place Order'}</button></div></aside>}
+      {cartOpen && <aside className="cart-drawer" aria-label={isRtl ? 'آرڈر کا جائزہ' : 'Review your order'} dir={isRtl ? 'rtl' : 'ltr'}>
+        <div className="cart-drawer-head"><div><p className="admin-eyebrow">AHWMB</p><h2>{isRtl ? 'آرڈر کا جائزہ' : 'Review your order'}</h2></div><button type="button" className="icon-btn" onClick={() => setCartOpen(false)} aria-label={isRtl ? 'بند کریں' : 'Close review'}><X size={22} /></button></div>
+        <div className="cart-drawer-body"><div className="review-details"><strong>{name}</strong><span>{phone}</span><p>{address}</p>{locationLink && <p>{isRtl ? 'مقام شامل ہے' : 'Delivery location attached'}</p>}{notes.trim() && <p><strong>{t.notes}:</strong> {notes}</p>}</div>
+        {filledRows.map(row => <div className="cart-item" key={row.id}><strong>{row.itemName}</strong><span>{row.quantityValue} {unitLabel(row.unitType, language)}</span></div>)}
+        <p className="pricing-notice">{isRtl ? 'قیمت کی تصدیق کے بعد آپ سے رابطہ کیا جائے گا۔' : 'No payment is collected here. We will contact you to confirm prices.'}</p>
+        {Object.entries(errors).map(([field, error]) => error && <p key={field} role="alert" className="field-error">{error}</p>)}</div>
+        <div className="cart-drawer-foot"><button type="button" className="btn-secondary" onClick={() => setCartOpen(false)}>{isRtl ? 'آرڈر میں ترمیم' : 'Edit order'}</button><button type="button" className="btn-submit" onClick={() => void submit()} disabled={saving || !filledRows.length}>{saving ? t.submitting : t.submit}</button></div>
+      </aside>}
+
 
       {successRef && (
         <SuccessModal
@@ -2626,18 +2641,6 @@ export function AdminAddCustomer({ language }: { language: Language }) {
     </form></section>
 }
 
-export function PurchaseReport() {
-  // Saved on this device so entries survive closing the app (they were lost on reload before).
-  const [rows, setRows] = useState<{ id: string; party: string; area: string; item: string; amount: string; date: string }[]>(() => {
-    try { const saved = JSON.parse(localStorage.getItem('ahwmb-purchase-report') || 'null'); if (Array.isArray(saved) && saved.length) return saved } catch { /* storage unavailable */ }
-    return [{ id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }]
-  })
-  useEffect(() => { try { localStorage.setItem('ahwmb-purchase-report', JSON.stringify(rows)) } catch { /* storage unavailable */ } }, [rows])
-  const update = (id: string, key: 'party' | 'area' | 'item' | 'amount' | 'date', value: string) => setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row))
-  return <section className="panel report-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Purchase Report</h2><p className="panel-sub">Record supplier purchases, deposits, and payment dates.</p></div><button type="button" className="btn-submit report-add" onClick={() => setRows(current => [...current, { id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: todayDate() }])}><Plus size={17} /> Add Purchase</button></div><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Party Name</th><th>Area</th><th>Item</th><th>Amount / Deposit</th><th>Date</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td data-label="Party Name"><input className="report-cell-input" value={row.party} onChange={e => update(row.id, 'party', e.target.value)} placeholder="Supplier" /></td><td data-label="Area"><input className="report-cell-input" value={row.area} onChange={e => update(row.id, 'area', e.target.value)} placeholder="Area" /></td><td data-label="Item"><input className="report-cell-input" value={row.item} onChange={e => update(row.id, 'item', e.target.value)} placeholder="Item" /></td><td data-label="Amount / Deposit"><input className="report-cell-input" type="number" value={row.amount} onChange={e => update(row.id, 'amount', e.target.value)} placeholder="Rs." /></td><td data-label="Date"><input className="report-cell-input" type="date" value={row.date} onChange={e => update(row.id, 'date', e.target.value)} /></td></tr>)}</tbody></table></div></section>
-}
-
-
 export function AdminProducts({ onChanged }: { onChanged: () => void }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState('EXTRA ITEMS')
@@ -2696,7 +2699,15 @@ function AdminPage({
   const [orders, setOrders] = useState<OrderRecord[]>([])
   const [selected, setSelected] = useState<OrderRecord | null>(null)
   const [pricedItems, setPricedItems] = useState<OrderItem[]>([])
-  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending')
+  const [filter, changeFilter] = useState<'all' | 'pending' | 'completed' | 'urgent'>('pending')
+  const [orderSearch, setOrderSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [orderPage, setOrderPage] = useState(0)
+  const [orderCount, setOrderCount] = useState(0)
+  const [orderCounts, setOrderCounts] = useState({ all: 0, pending: 0, urgent: 0, completed: 0 })
+  const querySequence = useRef(0)
+  const setFilter = (value: 'all' | 'pending' | 'completed' | 'urgent') => { changeFilter(value); setOrderPage(0) }
   const [adminTab, setAdminTab] = useState<'pending' | 'completed' | 'invoice'>('pending')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -2706,7 +2717,11 @@ function AdminPage({
   const [printPayload, setPrintPayload] = useState<InvoicePayload | null>(null)
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [adminView, setAdminView] = useState<AdminView>('home')
+  const [adminView, changeAdminView] = useUrlView<AdminView>(['home','orders','newOrder','add-customer','reports','customer-report','purchase-report','stock-report','products','users'], 'home')
+  const invoiceDirty = !!selected && JSON.stringify([pricedItems, balance, deposit]) !== JSON.stringify([safeItems(selected.items), Number(selected.balance) || 0, Number(selected.deposit) || 0])
+  const setAdminView = changeAdminView
+  useUnsavedChanges(adminView === 'orders' && invoiceDirty, 'Leave the invoice screen with unsaved changes? Your edits remain here while this panel stays open.')
+  useEffect(() => { setLastPdf(null) }, [pricedItems, balance, deposit])
   // Which admin views this user may open (the database enforces the same rules).
   // Daily, Stock, Customer and Purchase reports live in the POS / Admin System (/pos).
   const MOVED: AdminView[] = ['reports', 'stock-report', 'customer-report', 'purchase-report']
@@ -2755,41 +2770,23 @@ function AdminPage({
     setAuthorized(true)
     const currentAccess = await fetchAccess(supabase).catch(() => null) // null = network error: still try to load
     if (currentAccess && !can(currentAccess, 'orders')) { setOrders([]); setLoading(false); return }
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) {
-      addToast(error.message, 'error')
-      setLoading(false)
-      return
-    }
-    setOrders((data || []).map(row => ({ ...row, items: safeItems(row.items) })))
-    setLoading(false)
-  }, [])
+    const sequence = ++querySequence.current
+    const { data, error } = await supabase.rpc('search_orders', { p_search: orderSearch.trim(), p_status: filter, p_from: dateFrom || null, p_to: dateTo || null, p_page: orderPage })
+    if (sequence !== querySequence.current) return
+    if (error) { addToast(error.message, 'error'); setLoading(false); return }
+    setOrders((data.rows || []).map((row: OrderRecord) => ({ ...row, items: safeItems(row.items) })))
+    setOrderCount(data.total); setOrderCounts(data.counts); setLoading(false)
+  }, [orderSearch, filter, dateFrom, dateTo, orderPage])
 
   useEffect(() => {
-    void refresh()
+    const timer = setTimeout(() => void refresh(), 250)
     const channel = supabase?.channel('orders-live')
-      // Apply each change directly instead of re-downloading every order.
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
-        if (payload.eventType === 'DELETE') {
-          const id = (payload.old as { id?: string }).id
-          setOrders(current => current.filter(o => o.id !== id))
-          return
-        }
-        const row = payload.new as OrderRecord
-        const next = { ...row, items: safeItems(row.items) }
-        setOrders(current => {
-          const exists = current.some(o => o.id === next.id)
-          return exists ? current.map(o => (o.id === next.id ? next : o)) : [next, ...current]
-        })
-      })
-      .subscribe()
-    return () => { if (channel) void supabase?.removeChannel(channel) }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => void refresh()).subscribe()
+    return () => { clearTimeout(timer); querySequence.current++; if (channel) void supabase?.removeChannel(channel) }
   }, [refresh])
 
   const choose = (order: OrderRecord) => {
+    if (invoiceDirty && !window.confirm('Discard unsaved invoice changes and open this order?')) return
     setSelected(order)
     setPricedItems(safeItems(order.items))
     setBalance(Number(order.balance) || 0)
@@ -2884,7 +2881,7 @@ function AdminPage({
     if (!editCustomerOrder || !supabase) return
     setSavingCustomer(true)
     try {
-      const { error } = await supabase
+      const { data: updatedOrder, error } = await supabase
         .from('orders')
         .update({
           customer_name: editCustomerName.trim(),
@@ -2892,14 +2889,11 @@ function AdminPage({
           customer_address: editCustomerAddress.trim(),
         })
         .eq('id', editCustomerOrder.id)
+        .eq('version', editCustomerOrder.version)
+        .select('*')
+        .maybeSingle()
       if (error) throw error
-      // Update local state
-      const updatedOrder = {
-        ...editCustomerOrder,
-        customer_name: editCustomerName.trim(),
-        customer_phone: editCustomerPhone.trim(),
-        customer_address: editCustomerAddress.trim(),
-      }
+      if (!updatedOrder) throw new Error('This order changed in another tab. Reload before editing customer details.')
       setOrders(curr => curr.map(o => o.id === editCustomerOrder.id ? updatedOrder : o))
       if (selected?.id === editCustomerOrder.id) setSelected(updatedOrder)
       addToast('✓ Customer info updated successfully!', 'success')
@@ -2912,24 +2906,37 @@ function AdminPage({
   }
 
   const sharePdf = async () => {
-    if (!lastPdf) return
-    const file = new File([lastPdf.blob], lastPdf.name, { type: 'application/pdf' })
+    if (!selected || invoiceDirty) return
+    let pdf = lastPdf
+    if (!pdf) {
+      setSaving(true)
+      try {
+        const items = safeItems(selected.items)
+        const values = calculateFinancials(sumLineTotals(items), Number(selected.balance) || 0, Number(selected.deposit) || 0)
+        const name = invoiceFilename(selected.customer_name)
+        pdf = { blob: await drawInvoice(selected, items, values.totalAmount, values, name, false), name }
+        setLastPdf(pdf)
+      } catch (error) { addToast(readableError(error), 'error'); return }
+      finally { setSaving(false) }
+    }
+    const file = new File([pdf.blob], pdf.name, { type: 'application/pdf' })
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
       try {
         await navigator.share({ title: 'AHWMB Invoice', files: [file] })
       } catch (err) {
-        if ((err as DOMException)?.name !== 'AbortError') addToast('PDF sharing was not completed.', 'error')
+        if ((err as DOMException)?.name !== 'AbortError') addToast('PDF is ready. Tap Share PDF again to open sharing.', 'info')
       }
     } else {
+      downloadPdf(pdf.blob, pdf.name)
       addToast('The PDF file is downloaded. Attach that file to WhatsApp; no dashboard link is shared.', 'info')
     }
   }
 
-  const saveAndPrint = async () => {
+  const saveAndPrint = async (printAfter = false) => {
     if (!selected) return
     if (!supabase) { addToast(t.errors.setup, 'error'); return }
     // On phones the print page must open right at the tap (before the PDF is generated).
-    const printTab = openPrintTab()
+    const printTab = printAfter ? openPrintTab() : null
     setSaving(true)
 
     const items = pricedItems
@@ -2949,21 +2956,20 @@ function AdminPage({
     const nextOrder: OrderRecord = { ...selected, items, grand_total: finalTotalBalance, total_amount: finalTotalAmount, balance: finalBalance, total_balance: finalTotalBalance, deposit: finalDeposit, remaining_balance: finalRemaining, status: 'completed' }
 
     try {
-      const { data: updatedOrder, error: updateError } = await supabase
-        .from('orders')
-        .update({ items, grand_total: finalTotalBalance, total_amount: finalTotalAmount, balance: finalBalance, total_balance: finalTotalBalance, deposit: finalDeposit, remaining_balance: finalRemaining, status: 'completed' })
-        .eq('id', selected.id)
-        .select('id')
-        .maybeSingle()
+      const { data: updatedOrder, error: updateError } = await supabase.rpc('save_order_invoice', {
+        p_id: selected.id, p_version: selected.version, p_items: items, p_balance: finalBalance, p_deposit: finalDeposit,
+      })
       if (updateError) throw updateError
       if (!updatedOrder) throw new Error('The order was not updated. Refresh the order list and try again.')
 
+      nextOrder.version = updatedOrder.version
       setSelected(nextOrder)
       setPricedItems(items)
       setBalance(finalBalance)
       setDeposit(finalDeposit)
       setOrders(curr => curr.map(o => o.id === selected.id ? nextOrder : o))
 
+      if (!printAfter) { addToast(isRtl ? 'انوائس محفوظ ہو گئی۔' : 'Invoice saved.', 'success'); return }
       try {
         const pdfName = invoiceFilename(selected.customer_name)
         const blob = await drawInvoice(nextOrder, items, finalTotalAmount, {
@@ -2994,27 +3000,22 @@ function AdminPage({
     }
   }
 
-  const orderBadgePriority: Record<OrderBadge['color'], number> = { red: 0, gold: 1, yellow: 2, green: 3 }
-  const orderSummary = useMemo(() => {
-    const counts = { urgent: 0, pending: 0, completed: 0 }
-    orders.forEach(order => {
-      const badge = getOrderBadge(order)
-      if (badge.color === 'red') counts.urgent += 1
-      else if (badge.color === 'yellow' || badge.color === 'gold') counts.pending += 1
-      else counts.completed += 1
-    })
-    return counts
-  }, [orders])
+  const printSaved = async () => {
+    if (!selected || invoiceDirty) return
+    const items = safeItems(selected.items)
+    const values = calculateFinancials(sumLineTotals(items), Number(selected.balance) || 0, Number(selected.deposit) || 0)
+    const tab = openPrintTab(); setSaving(true)
+    try {
+      const filename = invoiceFilename(selected.customer_name)
+      const blob = await drawInvoice(selected, items, values.totalAmount, values, filename)
+      setLastPdf({ blob, name: filename })
+      printInvoiceHtml(buildInvoiceHtml({ order: selected, items, financials: values }), tab)
+    } catch (e) { tab?.close(); addToast(readableError(e), 'error') }
+    finally { setSaving(false) }
+  }
 
-  const shownOrders = useMemo(
-    () => orders
-      .filter(o => filter === 'all' || o.status === filter)
-      .sort((a, b) => {
-        const priorityDifference = orderBadgePriority[getOrderBadge(a).color] - orderBadgePriority[getOrderBadge(b).color]
-        return priorityDifference || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      }),
-    [orders, filter]
-  )
+  const orderSummary = orderCounts
+  const shownOrders = orders
 
   if (authorized === null || loading) {
     return (
@@ -3042,10 +3043,11 @@ function AdminPage({
     // Stock, customers, catalog and users live in the POS / Admin System (/pos).
     return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />{can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}<ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1>
       {access && !access.admin && access.name && <p className="panel-sub">{isRtl ? 'خوش آمدید' : 'Welcome'}, {access.name}</p>}
+      {can(access, 'orders') && <div className="dashboard-stats">{(['pending','urgent','completed'] as const).map(status => <button key={status} className={`dashboard-stat dashboard-stat--${status}`} onClick={() => { setFilter(status); setAdminView('orders') }}><span>{status === 'pending' ? t.pending : status === 'completed' ? t.completed : isRtl ? 'فوری' : 'Urgent'}</span><strong>{orderCounts[status]}</strong><small>{isRtl ? 'آرڈرز دیکھیں' : 'View orders'}</small></button>)}</div>}
       {tiles.filter(tile => allowed(tile.view)).map(tile => <button key={tile.view} type="button" className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={() => setAdminView(tile.view)}>{tile.label}</button>)}
       {access?.admin && <><button type="button" className="admin-home-btn admin-home-btn--users" onClick={() => setAdminView('users')}>{isRtl ? 'صارفین' : 'Users'}</button>
 
-      <p className="admin-backup-note">{isRtl ? 'روزانہ خودکار بیک اپ ahwmb1965@gmail.com پر ای میل ہوتا ہے۔' : 'A full backup is also emailed to ahwmb1965@gmail.com every night.'}</p>
+      <p className="admin-backup-note">{isRtl ? 'بڑی تبدیلیوں سے پہلے تصدیق شدہ بیک اپ محفوظ رکھیں۔' : 'Keep a verified backup before making major changes.'}</p>
 </>}
       {['ahmedyounus1978@gmail.com', 'ahwmb1965@gmail.com'].includes(adminEmail.toLowerCase()) && <button type="button" className="admin-home-btn admin-home-btn--primary" onClick={openPosFromPortal}>{isRtl ? 'POS پر جائیں' : 'Go to POS'}</button>}
 
@@ -3094,7 +3096,7 @@ function AdminPage({
             <div className="panel-head">
               <div>
                 <h3 className="panel-title">{t.orders}</h3>
-                <p className="panel-sub">{orders.length} {t.itemCount}</p>
+                <p className="panel-sub">{orderCount} {t.orders}</p>
               </div>
               <div className="filter-tabs">
                 {(['pending', 'completed', 'all'] as const).map(v => (
@@ -3106,17 +3108,19 @@ function AdminPage({
                   >
                     {t[v]}
                     <span className="filter-count">
-                      {v === 'all' ? orders.length : orders.filter(o => o.status === v).length}
+                      {orderCounts[v]}
                     </span>
                   </button>
                 ))}
               </div>
             </div>
 
+            <div className="order-search-bar"><label className="field"><span className="field-label">{isRtl ? 'آرڈر تلاش کریں' : 'Customer, phone or order reference'}</span><input className="field-input" value={orderSearch} onChange={e => { setOrderSearch(e.target.value); setOrderPage(0) }} placeholder={isRtl ? 'تلاش کریں…' : 'Search orders…'} /></label><label className="field"><span className="field-label">{isRtl ? 'تاریخ سے' : 'From'}</span><input className="field-input" type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setOrderPage(0) }} /></label><label className="field"><span className="field-label">{isRtl ? 'تاریخ تک' : 'To'}</span><input className="field-input" type="date" min={dateFrom} value={dateTo} onChange={e => { setDateTo(e.target.value); setOrderPage(0) }} /></label></div>
+            <div className="pagination"><button className="btn-secondary" disabled={!orderPage} onClick={() => setOrderPage(p=>p-1)}>{isRtl ? 'پچھلا' : 'Previous'}</button><span>{orderPage*25+ (orders.length ? 1 : 0)}–{orderPage*25+orders.length} / {orderCount}</span><button className="btn-secondary" disabled={(orderPage+1)*25>=orderCount} onClick={() => setOrderPage(p=>p+1)}>{isRtl ? 'اگلا' : 'Next'}</button></div>
             <div className="order-status-summary" aria-label="Order status summary">
-              <span className="order-summary-pill order-summary-pill--red">{orderSummary.urgent} {isRtl ? 'فوری' : 'Urgent'} 🔴</span>
-              <span className="order-summary-pill order-summary-pill--yellow">{orderSummary.pending} {isRtl ? 'زیر التوا' : 'Pending'} ⏳</span>
-              <span className="order-summary-pill order-summary-pill--green">{orderSummary.completed} {isRtl ? 'مکمل' : 'Completed'} ✅</span>
+              <button type="button" onClick={() => setFilter('urgent')} className="order-summary-pill order-summary-pill--red">{orderSummary.urgent} {isRtl ? 'فوری' : 'Urgent'} 🔴</button>
+              <button type="button" onClick={() => setFilter('pending')} className="order-summary-pill order-summary-pill--yellow">{orderSummary.pending} {isRtl ? 'زیر التوا' : 'Pending'} ⏳</button>
+              <button type="button" onClick={() => setFilter('completed')} className="order-summary-pill order-summary-pill--green">{orderSummary.completed} {isRtl ? 'مکمل' : 'Completed'} ✅</button>
             </div>
 
             {loading ? (
@@ -3272,7 +3276,7 @@ function AdminPage({
 
           {/* Editor panel */}
           <section className="panel editor-panel">
-            <button type="button" className="mobile-orders-back btn-secondary" onClick={() => setSelected(null)}>← {isRtl ? 'آرڈرز پر واپس' : 'Back to orders'}</button>
+            <button type="button" className="mobile-orders-back btn-secondary" onClick={() => { if (!invoiceDirty || window.confirm('Discard unsaved invoice changes?')) setSelected(null) }}>← {isRtl ? 'آرڈرز پر واپس' : 'Back to orders'}</button>
             {!selected ? (
               <div className="empty-state editor-empty">
                 <PackageCheck size={48} />
@@ -3289,6 +3293,7 @@ function AdminPage({
                       <span><Phone size={13} /> {selected.customer_phone}</span>
                     </div>
                     <p className="editor-address"><MapPin size={13} /> {selected.customer_address}</p>
+                    {selected.notes && <div className="notice-card"><strong>{t.notes}</strong><p>{selected.notes}</p></div>}
                     {selected.location_link && (
                       <div className="editor-location">
                         <a href={selected.location_link} target="_blank" rel="noreferrer">
@@ -3457,14 +3462,17 @@ function AdminPage({
                   >
                     {saving
                       ? <><RefreshCw size={20} className="spin" /> {t.saving}</>
-                      : <><FileDown size={20} /> {t.savePrint}</>
+                      : <><Check size={20} /> {isRtl ? 'انوائس محفوظ کریں' : 'Save invoice'}</>
                     }
                   </button>
-                  {lastPdf && (
-                    <button className="btn-share-pdf" type="button" onClick={() => void sharePdf()}>
+                  <p role="status" className="save-status">{invoiceDirty ? (isRtl ? 'تبدیلیاں ابھی محفوظ نہیں ہوئیں' : 'Unsaved changes') : (isRtl ? 'محفوظ شدہ انوائس' : 'Saved invoice')}</p>
+                  <button className="btn-secondary" type="button" disabled={saving || invoiceDirty} onClick={() => void printSaved()}>{isRtl ? 'پرنٹ / PDF' : 'Print / download PDF'}</button>
+                  {(
+                    <button className="btn-share-pdf" type="button" disabled={saving || invoiceDirty} onClick={() => void sharePdf()}>
                       <Send size={18} /> {t.sharePdf}
                     </button>
                   )}
+                  <ActivityLog entity="orders" recordId={selected.id} revision={selected.version} />
                 </div>
               </>
             )}
@@ -3548,7 +3556,7 @@ function AdminCreateOrder({
     })
 
     const phoneNorm = phone.trim() ? normalizePhone(phone) : '0000000000'
-    const addressVal = address.trim() + (notes.trim() ? `\nNotes: ${notes.trim()}` : '')
+    const addressVal = address.trim()
 
     try {
       const { data: orderId, error: rpcError } = await supabase.rpc('submit_order', {
@@ -3556,18 +3564,11 @@ function AdminCreateOrder({
         p_customer_name: name.trim(),
         p_customer_phone: phoneNorm,
         p_customer_address: addressVal,
+        p_notes: notes.trim(),
         p_location_link: null,
         p_items: items,
       })
       if (rpcError) throw rpcError
-
-      // Update financials to reflect rates entered by admin
-      if (orderId) {
-        await supabase
-          .from('orders')
-          .update({ grand_total: grandTotal, total_amount: grandTotal })
-          .eq('id', orderId)
-      }
 
       addToast(`✓ Order ${orderRef} created successfully!`, 'success')
       setTimeout(() => onSuccess(), 700)

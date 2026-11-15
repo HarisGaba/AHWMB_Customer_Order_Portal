@@ -12,7 +12,7 @@ function setup() {
   let subscriptions = 0
   const db = {
     from: table => {
-      const chain = { select: () => chain, gte: () => chain, order: () => table === 'items' ? items : chain, range: async () => ({ data: [], error: null }) }
+      const chain = { select: () => chain, gte: () => chain, is: () => chain, order: () => chain, range: () => table === 'items' ? items : Promise.resolve({ data: [], error: null }) }
       return chain
     },
     channel: () => {

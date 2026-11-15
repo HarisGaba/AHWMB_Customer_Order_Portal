@@ -37,6 +37,7 @@ type SaleRow = {
   payment: PaymentMethod
   customer_name?: string | null
   created_at: string
+  reversed_at?: string | null
 }
 
 const toItem = (r: ItemRow): Item => ({
@@ -115,6 +116,7 @@ async function fetchAllSales(since: string) {
       .from("sales")
       .select("*")
       .gte("day", since)
+      .is("reversed_at", null)
       .order("day")
       .order("customer_no")
       .range(from, from + page - 1)
@@ -137,12 +139,20 @@ let subscribedOnce = false
 let watching = false
 let generation = 0
 
+async function fetchAllItems() {
+  const rows: ItemRow[] = []
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabase.from("items").select("*").order("name").order("id").range(offset, offset + 499)
+    if (error) throw error
+    rows.push(...data)
+    if (data.length < 500) return rows
+  }
+}
 async function fetchAll() {
-  const [itemsRes, saleRows] = await Promise.all([supabase.from("items").select("*").order("name"), fetchAllSales(cutoffDay())])
-  if (itemsRes.error) throw itemsRes.error
+  const [itemRows, saleRows] = await Promise.all([fetchAllItems(), fetchAllSales(cutoffDay())])
   const sales: SalesByDay = {}
   for (const r of saleRows) (sales[r.day] ??= []).push(toSale(r))
-  return { items: sortByName((itemsRes.data as ItemRow[]).map(toItem)), sales }
+  return { items: sortByName(itemRows.map(toItem)), sales }
 }
 
 /** Re-fetch in the background; live events can be missed while offline or asleep. */
@@ -165,6 +175,7 @@ function watchConnection() {
   if (watching) return
   watching = true
   window.addEventListener("online", () => {
+    if (state.status !== "ready" || !channel) return
     void resync()
     actions.listen()
   })
@@ -191,18 +202,23 @@ export const actions = {
   },
 
   listen() {
+    const started = generation
     if (channel) supabase.removeChannel(channel)
     channel = supabase
       .channel("pos-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "items" }, (p) => {
+        if (started !== generation) return
         if (p.eventType === "DELETE") setState({ items: state.items.filter((i) => i.id !== (p.old as ItemRow).id) })
         else upsertItem(toItem(p.new as ItemRow))
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, (p) => {
+        if (started !== generation) return
         if (p.eventType === "DELETE") removeSale((p.old as SaleRow).id)
+        else if ((p.new as SaleRow).reversed_at) removeSale((p.new as SaleRow).id)
         else upsertSale((p.new as SaleRow).day, toSale(p.new as SaleRow))
       })
       .subscribe((status) => {
+        if (started !== generation) return
         // A reconnect means events may have been missed in between: catch up.
         if (status === "SUBSCRIBED") {
           if (subscribedOnce) void resync()
@@ -273,9 +289,10 @@ export const actions = {
     return state.items.find((i) => i.name.toLowerCase() === n)
   },
 
-  async recordSale(lines: SaleLine[], payment: PaymentMethod, customerName = ""): Promise<Sale> {
+  async recordSale(lines: SaleLine[], payment: PaymentMethod, customerName: string, requestId: string): Promise<Sale> {
     const day = dayKey()
-    const { data, error } = await supabase.rpc("record_sale", {
+    const { data, error } = await supabase.rpc("record_sale_v2", {
+      p_request_id: requestId,
       p_day: day,
       p_lines: lines,
       p_payment: payment,
@@ -283,15 +300,14 @@ export const actions = {
     })
     if (error) throw error
     const sale = toSale(data as SaleRow)
-    upsertSale(day, sale)
+    if (!(data as SaleRow).reversed_at) upsertSale((data as SaleRow).day, sale)
     return sale
   },
 
-  /** Remove a sale (e.g. goods returned and refunded). */
-  async deleteSale(id: string) {
-    const { error, count } = await supabase.from("sales").delete({ count: "exact" }).eq("id", id)
+  /** Preserve the original bill and record a reasoned financial reversal. */
+  async reverseSale(id: string, kind: "void" | "refund", reason: string) {
+    const { error } = await supabase.rpc("reverse_sale", { p_id: id, p_kind: kind, p_reason: reason.trim() })
     if (error) throw error
-    if (!count) throw new Error("Sale was not found or you are not allowed to delete it.")
     removeSale(id)
   },
 

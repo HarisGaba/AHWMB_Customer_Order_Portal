@@ -18,7 +18,7 @@ const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Jodia Bazaa
 
 type StockRow = { id: string; location: Location; item: string; weight: string; quantity: string; saved: boolean }
 type TransferLine = { item: string; weight: number | null; quantity: number; bags: number | null }
-type Transfer = { id: string; from_location: Location; to_location: Location; lines: TransferLine[]; total_quantity: number; created_at: string; edited_at?: string | null }
+type Transfer = { id: string; from_location: Location; to_location: Location; lines: TransferLine[]; total_quantity: number; created_at: string; edited_at?: string | null; cancelled_at?: string | null }
 type DraftLine = { key: string; item: string; quantity: string; bags: string }
 
 const num = (v: string) => Number(v || 0)
@@ -330,25 +330,10 @@ function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void;
   useEffect(() => { if (!months.includes(month)) setMonth(months[0] || '') }, [months, month])
   const shown = transfers.filter(t => monthKey(t.created_at) === month)
 
-  const deleteMonth = () => {
-    if (!supabase || !month || !shown.length) return
-    setConfirm({
-      title: `Delete all ${shown.length} transfer records from ${monthLabel(month)}?`,
-      detail: 'This only removes the history. Current stock stays as it is.',
-      onConfirm: async () => {
-        const start = new Date(`${month}-01T00:00:00`)
-        const end = new Date(start.getFullYear(), start.getMonth() + 1, 1)
-        const { error } = await supabase!.from('stock_transfers').delete().gte('created_at', start.toISOString()).lt('created_at', end.toISOString())
-        if (error) throw error
-        setMessage(`✓ Deleted transfer history for ${monthLabel(month)}.`)
-        await load()
-      },
-    })
-  }
 
   return <section className="panel report-panel">
     <div className="report-heading">
-      <div><p className="admin-eyebrow">STOCK</p><h2 className="admin-heading">Transfer History</h2><p className="panel-sub">Every confirmed transfer, saved permanently until you delete a month.</p></div>
+      <div><p className="admin-eyebrow">STOCK</p><h2 className="admin-heading">Transfer History</h2><p className="panel-sub">Every confirmed transfer, preserved with its reversal history.</p></div>
       <button type="button" className="btn-secondary" onClick={onBack}>← Back to Stock</button>
     </div>
     {message && <p className="stock-message stock-message--ok" role="status">{message}</p>}
@@ -358,7 +343,6 @@ function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void;
           {months.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
         </select>
         <span className="stock-location-label">{shown.length} transfer{shown.length === 1 ? '' : 's'}</span>
-        {canDelete && <button type="button" className="btn-secondary btn-danger" onClick={() => void deleteMonth()}><Trash2 size={16} /> Delete {monthLabel(month)}</button>}
       </div>
       <div className="transfer-history">
         {shown.map(t => <TransferCard key={t.id} transfer={t} canChange={canChange} onConfirm={setConfirm} onChanged={text => { setMessage(text); void load() }} />)}
@@ -453,24 +437,18 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
   const remove = () => {
     const source = LOCATION_LABEL[t.from_location] ?? t.from_location
     onConfirm({
-      title: 'Are you sure you want to delete this transfer?',
-      detail: `The stock still in ${LOCATION_LABEL[t.to_location] ?? t.to_location} will be moved back to ${source}: ${t.lines.map(l => `${l.item} ${kg(Number(l.quantity))}`).join(', ')}. If some of it is no longer there (sold or adjusted), the record is still deleted.`,
+      title: 'Reverse this transfer?',
+      confirmLabel: 'Reverse transfer',
+      detail: `The stock still in ${LOCATION_LABEL[t.to_location] ?? t.to_location} will be moved back to ${source}: ${t.lines.map(l => `${l.item} ${kg(Number(l.quantity))}`).join(', ')}. If there is insufficient stock, reversal will stop and nothing will change. The original record is retained.`,
       onConfirm: async () => {
         setError('')
         const { data, error: rpcError } = await supabase!.rpc('delete_transfer', { p_id: t.id })
-        if (rpcError) {
-          // Never let missing stock block clean-up: force-delete the history record itself.
-          // (Stock that is no longer at the destination simply isn't moved back.)
-          const { error: forceError } = await supabase!.from('stock_transfers').delete().eq('id', t.id)
-          if (forceError) throw forceError
-          onChanged(`✓ Transfer record force-deleted. Stock was not moved back (${rpcError.message}).`)
-          return
-        }
-        // The record is always removed; report anything that could not be moved back.
+        if (rpcError) throw rpcError
+        // The new RPC reverses all lines atomically and retains the original record.
         const result = (data || {}) as { returned?: { item: string; quantity: number }[]; not_returned?: { item: string; quantity: number }[] }
         const returned = (result.returned || []).reduce((a, l) => a + Number(l.quantity), 0)
         const missing = result.not_returned || []
-        onChanged(`✓ Transfer deleted.${returned ? ` ${kg(returned)} moved back to ${source}.` : ''}${missing.length ? ` Not returned (no longer in stock): ${missing.map(l => `${l.item} ${kg(Number(l.quantity))}`).join(', ')}.` : ''}`)
+        onChanged(`✓ Transfer reversed. Original record retained.${returned ? ` ${kg(returned)} moved back to ${source}.` : ''}${missing.length ? ` Not returned (no longer in stock): ${missing.map(l => `${l.item} ${kg(Number(l.quantity))}`).join(', ')}.` : ''}`)
       },
     })
   }
@@ -498,8 +476,9 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
           <button type="button" className="btn-secondary" onClick={() => setEditing(false)} disabled={busy}>Cancel</button>
           <button type="button" className="btn-submit" onClick={() => void save()} disabled={!canSave}>{busy ? 'Saving…' : 'Save changes'}</button>
         </> : <>
-          {canChange && <button type="button" className="ledger-edit-btn" onClick={() => void startEdit()} disabled={busy}><Pencil size={14} /> Edit</button>}
-          {canChange && <button type="button" className="ledger-delete-btn" onClick={remove} disabled={busy}><Trash2 size={14} /> Delete</button>}
+          {t.cancelled_at && <span className="stock-message">Reversed — history retained</span>}
+          {canChange && !t.cancelled_at && <button type="button" className="ledger-edit-btn" onClick={() => void startEdit()} disabled={busy}><Pencil size={14} /> Edit</button>}
+          {canChange && !t.cancelled_at && <button type="button" className="ledger-delete-btn" onClick={remove} disabled={busy}><Trash2 size={14} /> Reverse</button>}
           <button type="button" className="ledger-print-btn" onClick={() => printTransfer(t)}><Printer size={14} /> Print</button>
         </>}
       </span>
