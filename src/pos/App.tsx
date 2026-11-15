@@ -38,7 +38,7 @@ import { can, hasPosDataAccess, type Access, type Permission } from "../lib/acce
 const SummaryPage = lazy(() => import("@/pages/summary-page").then((m) => ({ default: m.SummaryPage })))
 
 // Admin System pages (reports & management, moved here from the order portal); loaded on demand.
-const sys = (name: "DailyReportPage" | "StockReportPage" | "CustomerReportPage" | "PurchaseReportPage" | "ActivityPage") =>
+const sys = (name: "DailyReportPage" | "StockReportPage" | "CustomerReportPage" | "PurchaseReportPage") =>
   lazy(() => import("@/pages/system-pages").then((m) => ({ default: m[name] })))
 
 const anyOf = (...perms: Permission[]) => (a: Access | null) => perms.some((p) => can(a, p))
@@ -52,7 +52,6 @@ const ALL_NAV = [
   { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), future: true, hidden: false },
   { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), future: true, hidden: false },
   { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary"), future: true, hidden: false },
-  { id: "activity", label: "Activity History", icon: ReceiptTextIcon, page: sys("ActivityPage"), allow: anyOf("orders", "stock_report", "purchase_report", "customer_report", "pos_summary"), future: false, hidden: false },
 ] as const
 
 type PageId = (typeof ALL_NAV)[number]["id"]
