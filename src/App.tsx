@@ -13,14 +13,13 @@ import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals
 import { validOrderQuantity, validCustomerUnit } from './lib/orderValidation'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { searchOrders } from './lib/searchOrders'
-import { boundedRequest, saveStaffOrder } from './lib/saveRequests'
+import { saveCustomerOrder, saveStaffOrder } from './lib/saveRequests'
 import { ActivityLog } from './components/ActivityLog'
 import { PurchaseReport } from './components/PurchaseReport'
 export { PurchaseReport } from './components/PurchaseReport'
 import { useUrlView } from './hooks/useUrlView'
 import { canLeaveScreen, useUnsavedChanges } from './hooks/useUnsavedChanges'
 import { useDraftOrder } from './hooks/useDraftOrder'
-import { requestTurnstileToken } from './lib/turnstile'
 import { InstallBanner } from './components/InstallBanner'
 import { PushBanner } from './components/PushBanner'
 import { AccessDenied, UsersAdmin } from './components/UsersAdmin'
@@ -1343,23 +1342,12 @@ function CustomerPage({
     })
 
     try {
-      const turnstileToken = await requestTurnstileToken()
-      const { data, error } = await boundedRequest(supabase.functions.invoke('submit-customer-order', { body: {
-        token: turnstileToken, p_order_ref: orderRef,
+      await saveCustomerOrder(supabase, {
+        p_order_ref: orderRef,
         p_customer_name: name.trim(), p_customer_phone: normalizePhone(phone),
         p_customer_address: address.trim(), p_location_link: locationLink.trim() || null,
         p_items: items, p_notes: notes.trim(),
-      } }))
-      if (data?.error) throw new Error(data.error)
-      if (error) {
-        const response = (error as { context?: Response }).context
-        if (response instanceof Response) {
-          const details = await response.json().catch(() => null)
-          if (details?.error) throw new Error(details.error)
-        }
-        throw error
-      }
-      if (!data?.id) throw new Error('The server did not confirm this order. Please retry.')
+      })
       checkRateLimit(phone, true)
 
       void notifyNewOrder({ order_ref: orderRef, customer_name: name.trim(), customer_phone: normalizePhone(phone), customer_address: address.trim(), location_link: locationLink.trim() || null, items, grand_total: 0, created_at: new Date().toISOString() })

@@ -4,10 +4,31 @@ import { readFileSync } from 'node:fs'
 import { stripTypeScriptTypes } from 'node:module'
 import { runInNewContext } from 'node:vm'
 const source=stripTypeScriptTypes(readFileSync(new URL('../src/lib/saveRequests.ts',import.meta.url),'utf8').replace(/^import .*$/gm,'').replaceAll('export ',''))
-const {savePosSale,saveStaffOrder,boundedRequest}=runInNewContext(`${source};({savePosSale,saveStaffOrder,boundedRequest})`,{setTimeout,clearTimeout})
+const {savePosSale,saveStaffOrder,saveCustomerOrder,boundedRequest}=runInNewContext(`${source};({savePosSale,saveStaffOrder,saveCustomerOrder,boundedRequest})`,{setTimeout,clearTimeout})
 const missing={data:null,error:{code:'PGRST202',message:'Missing function'}}
 const args={p_day:'2026-11-16',p_lines:[{name:'Rice',qty:2,rate:100}],p_payment:'Cash',p_customer_name:'Customer',p_request_id:'test-request'}
 const storage=()=>{const m=new Map();return {getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)}}
+const orderArgs={p_order_ref:'ref',p_customer_name:'Customer',p_customer_phone:'923001234567',p_customer_address:'Address',p_location_link:null,p_notes:'Ring bell',p_items:[{total:0}]}
+test('customer orders save directly through the existing RPC without an Edge Function',async()=>{
+ let calls=0
+ const db={rpc:async(name,args)=>{
+  assert.equal(name,'submit_order');calls++
+  if(calls===1){assert.equal(args.p_notes,'Ring bell');return missing}
+  assert.equal(args.p_notes,undefined);assert.equal(args.p_customer_address,'Address\nNotes: Ring bell')
+  return {data:'saved-order',error:null}
+ },from:()=>assert.fail('Customer submission must not read or update tables')}
+ assert.equal(await saveCustomerOrder(db,orderArgs),'saved-order');assert.equal(calls,2)
+})
+test('customer orders retain modern notes support and do not downgrade permission errors',async()=>{
+ assert.equal(await saveCustomerOrder({rpc:async()=>({data:'modern-order',error:null})},orderArgs),'modern-order')
+ let calls=0
+ await assert.rejects(saveCustomerOrder({rpc:async()=>{calls++;return {error:{code:'42501',message:'Not authorized'}}}},orderArgs),/Not authorized/)
+ assert.equal(calls,1)
+})
+test('customer retry recognizes only the existing order-reference constraint',async()=>{
+ assert.equal(await saveCustomerOrder({rpc:async()=>({error:{code:'23505',message:'duplicate key violates unique constraint "orders_order_ref_key"'}})},orderArgs),'ref')
+ await assert.rejects(saveCustomerOrder({rpc:async()=>({error:{code:'23505',message:'another constraint'}})},orderArgs),/another constraint/)
+})
 function legacyDb(handler) {
  let existing=null,calls=0
  const db={rpc:async(name,values)=>{

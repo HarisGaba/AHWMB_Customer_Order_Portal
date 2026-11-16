@@ -47,6 +47,24 @@ export async function savePosSale(db: SupabaseClient, args: SaleArgs, storage: S
 const canonical = (value: unknown): string => JSON.stringify(value, (_key, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k, v[k]])) : v)
 
 export type OrderArgs = { p_order_ref: string; p_customer_name: string; p_customer_phone: string; p_customer_address: string; p_location_link: string | null; p_notes: string; p_items: { total: number }[] }
+/** Customer submission uses the existing insert-only RPC. It never selects or
+ * updates customer/order tables and needs no Edge Function or bot-verification key.
+ */
+export async function saveCustomerOrder(db: SupabaseClient, args: OrderArgs) {
+ let result = await boundedRequest(db.rpc('submit_order', args))
+ if (result.error?.code === 'PGRST202') {
+  const { p_notes, ...oldArgs } = args
+  result = await boundedRequest(db.rpc('submit_order', { ...oldArgs, p_customer_address: p_notes ? `${args.p_customer_address}\nNotes: ${p_notes}`.trim() : args.p_customer_address }))
+ }
+ if (result.error) {
+  // A reference is generated once per draft and retained on uncertain responses.
+  // Only the order-reference uniqueness error confirms that earlier submission.
+  if (result.error.code === '23505' && /orders_order_ref_key/.test(result.error.message || '')) return args.p_order_ref
+  throw new Error(saveError(result.error))
+ }
+ if (!result.data) throw new Error('The server did not confirm the order. Your form is preserved; please retry.')
+ return result.data as string
+}
 export async function saveStaffOrder(db: SupabaseClient, args: OrderArgs) {
  let result = await boundedRequest(db.rpc('submit_order', args))
  let legacy = false

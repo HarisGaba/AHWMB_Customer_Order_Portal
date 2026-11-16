@@ -102,4 +102,18 @@ test('reliability migration preserves records and enforces atomic workflows', as
   assert.equal(result.total,1); assert.equal(result.counts.completed,1)
   assert.ok((await one("select count(*)::int as n from activity_log where entity='orders' and record_id=$1",[id])).n>=2)
  })
+ await t.test('direct customer RPC migration preserves existing orders and validates new submissions',async () => {
+  await db.exec('reset role')
+  const previous=(await db.query('select * from orders order by id')).rows
+  await db.exec(read('migrations/20261116_direct_customer_orders.sql'))
+  assert.deepEqual((await db.query('select * from orders order by id')).rows,previous)
+  await identity('anon')
+  const created=await one("select submit_order('direct-customer','Customer','03001234567','Address',null,$1,'Ring bell') as id",[JSON.stringify(line)])
+  assert.ok(created.id)
+  await assert.rejects(db.query("select submit_order('bad-direct','Customer','03001234567','Address',null,$1,'')",[JSON.stringify([{...line[0],quantity_value:-1}])]),/positive quantity/)
+  await assert.rejects(db.query("select previous_order('923001234567')"),/permission denied/)
+  assert.equal((await db.query('select * from orders')).rows.length,0)
+  await identity('authenticated','ahwmb1965@gmail.com')
+  assert.equal((await one('select notes from orders where id=$1',[created.id])).notes,'Ring bell')
+ })
 })
