@@ -2948,13 +2948,19 @@ function AdminPage({
     const nextOrder: OrderRecord = { ...selected, items, grand_total: finalTotalBalance, total_amount: finalTotalAmount, balance: finalBalance, total_balance: finalTotalBalance, deposit: finalDeposit, remaining_balance: finalRemaining, status: 'completed' }
 
     try {
-      const { data: updatedOrder, error: updateError } = await supabase.rpc('save_order_invoice', {
-        p_id: selected.id, p_version: selected.version, p_items: items, p_balance: finalBalance, p_deposit: finalDeposit,
-      })
+      // With a version number: the conflict-safe 5-argument save; otherwise (or if that
+      // function is not installed) the 4-argument save from migration 20261116_save_order_invoice.
+      const base = { p_id: selected.id, p_items: items, p_balance: finalBalance, p_deposit: finalDeposit }
+      let saved = typeof selected.version === 'number'
+        ? await supabase.rpc('save_order_invoice', { ...base, p_version: selected.version })
+        : await supabase.rpc('save_order_invoice', base)
+      if (saved.error?.code === 'PGRST202' && typeof selected.version === 'number') saved = await supabase.rpc('save_order_invoice', base)
+      if (saved.error?.code === 'PGRST202') throw new Error('Invoice saving is not set up in the database yet: run supabase/migrations/20261116_save_order_invoice.sql in Supabase. Nothing was lost.')
+      const { data: updatedOrder, error: updateError } = saved
       if (updateError) throw updateError
       if (!updatedOrder) throw new Error('The order was not updated. Refresh the order list and try again.')
 
-      nextOrder.version = updatedOrder.version
+      if (typeof updatedOrder.version === 'number') nextOrder.version = updatedOrder.version
       setSelected(nextOrder)
       setPricedItems(items)
       setBalance(finalBalance)
