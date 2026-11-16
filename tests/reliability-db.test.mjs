@@ -112,8 +112,22 @@ test('reliability migration preserves records and enforces atomic workflows', as
   assert.ok(created.id)
   await assert.rejects(db.query("select submit_order('bad-direct','Customer','03001234567','Address',null,$1,'')",[JSON.stringify([{...line[0],quantity_value:-1}])]),/positive quantity/)
   await assert.rejects(db.query("select previous_order('923001234567')"),/permission denied/)
-  assert.equal((await db.query('select * from orders')).rows.length,0)
+  // Anonymous visitors must never read orders: either no table access at all, or RLS returns nothing.
+  try { assert.equal((await db.query('select * from orders')).rows.length,0) } catch(e) { assert.match(String(e.message),/permission denied/) }
   await identity('authenticated','ahwmb1965@gmail.com')
   assert.equal((await one('select notes from orders where id=$1',[created.id])).notes,'Ring bell')
+ })
+ await t.test('4-argument save_order_invoice saves an invoice without a version number',async () => {
+  await db.exec('reset role')
+  await db.exec(read('migrations/20261116_save_order_invoice.sql'))
+  const target=(await one("select id from orders where order_ref='existing'")).id
+  const others=(await db.query('select * from orders where id<>$1 order by id',[target])).rows
+  await identity('authenticated','ahwmb1965@gmail.com')
+  const saved=(await one('select (save_order_invoice($1::uuid,$2::jsonb,$3::numeric,$4::numeric)).*',[target,JSON.stringify([{...line[0],total:500}]),100,50]))
+  assert.equal(Number(saved.total_amount),500); assert.equal(Number(saved.remaining_balance),550); assert.equal(saved.status,'completed')
+  await identity('anon')
+  await assert.rejects(db.query('select save_order_invoice($1::uuid,$2::jsonb,0,0)',[target,JSON.stringify(line)]),/permission denied|Not authorized/)
+  await db.exec('reset role')
+  assert.deepEqual((await db.query('select * from orders where id<>$1 order by id',[target])).rows,others)
  })
 })
