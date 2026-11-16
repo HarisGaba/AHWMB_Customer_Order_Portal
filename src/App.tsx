@@ -12,6 +12,7 @@ import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals
 import { validOrderQuantity, validCustomerUnit } from './lib/orderValidation'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { searchOrders } from './lib/searchOrders'
+import { boundedRequest, saveStaffOrder } from './lib/saveRequests'
 import { ActivityLog } from './components/ActivityLog'
 import { PurchaseReport } from './components/PurchaseReport'
 export { PurchaseReport } from './components/PurchaseReport'
@@ -1338,12 +1339,12 @@ function CustomerPage({
 
     try {
       const turnstileToken = await requestTurnstileToken()
-      const { data, error } = await supabase.functions.invoke('submit-customer-order', { body: {
+      const { data, error } = await boundedRequest(supabase.functions.invoke('submit-customer-order', { body: {
         token: turnstileToken, p_order_ref: orderRef,
         p_customer_name: name.trim(), p_customer_phone: normalizePhone(phone),
         p_customer_address: address.trim(), p_location_link: locationLink.trim() || null,
         p_items: items, p_notes: notes.trim(),
-      } })
+      } }))
       if (data?.error) throw new Error(data.error)
       if (error) {
         const response = (error as { context?: Response }).context
@@ -3496,6 +3497,8 @@ function AdminCreateOrder({
   const [address, setAddress] = useState('')
   const [notes, setNotes] = useState('')
   const [rows, setRows] = useState<AdminOrderRow[]>(() => Array.from({ length: 5 }, createAdminRow))
+  const submitting = useRef(false)
+  const orderAttempt = useRef<{ fingerprint: string; reference: string } | null>(null)
   const [suggestionRowId, setSuggestionRowId] = useState<string | null>(null)
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
@@ -3530,12 +3533,17 @@ function AdminCreateOrder({
     const next: FormErrors = {}
     if (filledRows.length === 0 || filledRows.some(r => !r.itemName.trim() || !r.quantityValue.trim()))
       next.items = 'Fill in item name and quantity for every row you use.'
+    if (filledRows.some(r => !Number.isFinite(Number(r.quantityValue)) || (r.unitType !== 'NONE' && Number(r.quantityValue) <= 0) || Number(r.quantityValue) < 0 || !Number.isFinite(Number(r.rate)) || Number(r.rate) < 0)) next.items = 'Use positive quantities and valid nonnegative rates.'
+    if (!name.trim()) next.name = 'Enter a customer name.'
     setErrors(next)
     if (Object.keys(next).length) return
     if (!supabase) { addToast('Supabase not configured.', 'error'); return }
 
-    setSaving(true)
-    const orderRef = createOrderRef()
+    if (submitting.current) return
+    submitting.current = true; setSaving(true)
+    const fingerprint = JSON.stringify([name, phone, address, notes, filledRows])
+    if (orderAttempt.current?.fingerprint !== fingerprint) orderAttempt.current = { fingerprint, reference: createOrderRef() }
+    const orderRef = orderAttempt.current.reference
     const items: OrderItem[] = filledRows.map((row, index) => {
       const quantityValue = Number(row.quantityValue) || 0
       const unitPrice = Number(row.rate) || 0
@@ -3556,7 +3564,7 @@ function AdminCreateOrder({
     const addressVal = address.trim()
 
     try {
-      const { data: orderId, error: rpcError } = await supabase.rpc('submit_order', {
+      await saveStaffOrder(supabase, {
         p_order_ref: orderRef,
         p_customer_name: name.trim(),
         p_customer_phone: phoneNorm,
@@ -3565,14 +3573,13 @@ function AdminCreateOrder({
         p_location_link: null,
         p_items: items,
       })
-      if (rpcError) throw rpcError
 
       addToast(`✓ Order ${orderRef} created successfully!`, 'success')
       setTimeout(() => onSuccess(), 700)
     } catch (err) {
       addToast(readableError(err) || 'Failed to create order.', 'error')
     } finally {
-      setSaving(false)
+      submitting.current = false; setSaving(false)
     }
   }
 

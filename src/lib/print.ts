@@ -9,6 +9,8 @@
  * or downloads it. "Print" opens the phone's own print screen as a second option.
  */
 
+import { prepareReceiptPage, RECEIPT_WIDTH_PX } from './receiptLayout'
+
 export const isMobileDevice = () =>
   /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
@@ -25,7 +27,7 @@ export type PrintOptions = {
 export function openPrintTab(): Window | null { return null }
 
 export function printDocument(html: string, _preparedTab?: Window | null, options: PrintOptions = {}) {
-  if (!isMobileDevice()) return printInHiddenFrame(html)
+  if (!isMobileDevice()) return printInHiddenFrame(html, options)
   showMobilePreview(html, options)
 }
 
@@ -43,16 +45,23 @@ function frameReady(doc: Document | null | undefined) {
   return Promise.race([Promise.all([...images, fonts]), new Promise(resolve => setTimeout(resolve, 4000))])
 }
 
-function printInHiddenFrame(html: string) {
+function printInHiddenFrame(html: string, options: PrintOptions = {}) {
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'
+  frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${options.format === 'receipt' ? Math.ceil(RECEIPT_WIDTH_PX) : 794}px;height:1px;border:0;opacity:0`
   frame.srcdoc = html
   frame.onload = () => {
     const win = frame.contentWindow
     let printed = false
-    const go = () => { if (printed) return; printed = true; win?.focus(); win?.print(); setTimeout(() => frame.remove(), 60_000) }
-    void frameReady(frame.contentDocument).then(go)
+    const go = () => {
+      if (printed) return
+      if (options.format === 'receipt' && frame.contentDocument) prepareReceiptPage(frame.contentDocument)
+      printed = true; win?.focus(); win?.print(); setTimeout(() => frame.remove(), 60_000)
+    }
+    void frameReady(frame.contentDocument).then(go).catch(error => {
+      frame.remove()
+      window.alert(`Receipt could not be prepared: ${error instanceof Error ? error.message : 'Please retry printing.'} Your saved data is unchanged.`)
+    })
   }
   document.body.appendChild(frame)
 }
@@ -60,7 +69,7 @@ function printInHiddenFrame(html: string) {
 /** Draws the document into a PDF file (A4 pages, or one 80 mm receipt page). */
 async function htmlToPdf(html: string, format: 'a4' | 'a5' | 'receipt'): Promise<Blob> {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
-  const cssWidth = format === 'receipt' ? 302 : format === 'a5' ? 559 : 794 // 80 / 148 / 210 mm at 96 dpi
+  const cssWidth = format === 'receipt' ? Math.ceil(RECEIPT_WIDTH_PX) : format === 'a5' ? 559 : 794
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
   frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${cssWidth}px;height:1200px;border:0;visibility:hidden`
@@ -71,22 +80,29 @@ async function htmlToPdf(html: string, format: 'a4' | 'a5' | 'receipt'): Promise
     await loaded
     const doc = frame.contentDocument!
     await frameReady(doc)
-    const height = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight)
+    const receipt = format === 'receipt' ? prepareReceiptPage(doc) : null
+    const height = receipt ? Math.ceil(receipt.heightPx) : Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight)
     frame.style.height = `${height}px`
     const SCALE = 3 // sharp text in the PDF
+    if (receipt) {
+      const pdf = new jsPDF({ unit: 'mm', format: [80, receipt.heightMm], orientation: 'portrait', compress: true })
+      // Render small strips onto ONE PDF page. Avoid mobile canvas-height limits
+      // that otherwise clip long receipts with dozens of item rows.
+      for (let y = 0; y < height; y += 1024) {
+        const tileHeight = Math.min(1024, height - y)
+        const tile = await html2canvas(doc.documentElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true, width: cssWidth, height: tileHeight, y, windowWidth: cssWidth, windowHeight: height, scrollX: 0, scrollY: 0, logging: false })
+        pdf.addImage(tile.toDataURL('image/jpeg', 0.95), 'JPEG', 0, y * 25.4 / 96, cssWidth * 25.4 / 96, tileHeight * 25.4 / 96)
+        tile.width = 0; tile.height = 0
+      }
+      return pdf.output('blob')
+    }
     // Safe places to start a new page: the top of each table row / block, never mid-row.
     const breaks = [...doc.querySelectorAll('tr, .sign, .head, .meta, .route, h1, h2, p')]
       .map(el => Math.round(el.getBoundingClientRect().top * SCALE))
       .filter(y => y > 0)
       .sort((a, b) => a - b)
     const canvas = await html2canvas(doc.documentElement, { scale: SCALE, backgroundColor: '#ffffff', useCORS: true, width: cssWidth, height, windowWidth: cssWidth, windowHeight: height, logging: false })
-    if (format === 'receipt') {
-      const w = 80, h = canvas.height * w / canvas.width
-      const pdf = new jsPDF({ unit: 'mm', format: [w, h], orientation: 'portrait', compress: true })
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, w, h)
-      return pdf.output('blob')
-    }
-    const pdf = new jsPDF({ unit: 'mm', format, orientation: 'portrait', compress: true })
+    const pdf = new jsPDF({ unit: 'mm', format: format === 'a5' ? 'a5' : 'a4', orientation: 'portrait', compress: true })
     const [pageW, pageH] = format === 'a5' ? [148, 210] : [210, 297]
     const pxPerMm = canvas.width / pageW
     const pagePx = Math.floor(pageH * pxPerMm) // canvas pixels per page
@@ -166,7 +182,7 @@ function showMobilePreview(html: string, { filename, format = 'a4', pdf: buildPd
   const frame = document.createElement('iframe')
   frame.title = 'Document preview'
   // Fit an A4 page to the phone width in the preview only (the PDF and paper keep the A4 layout).
-  frame.srcdoc = withBase(html).replace(/<\/head>/i, `<meta name="viewport" content="width=device-width, initial-scale=1"><style>@media screen and (max-width: 700px) { .sheet, .page, .invoice-document { margin: 8px !important; padding: 12px !important; } table { font-size: 12px !important; } th, td { padding: 6px 5px !important; } }</style></head>`)
+  frame.srcdoc = format === 'receipt' ? withBase(html) : withBase(html).replace(/<\/head>/i, `<meta name="viewport" content="width=device-width, initial-scale=1"><style>@media screen and (max-width: 700px) { .sheet, .page, .invoice-document { margin: 8px !important; padding: 12px !important; } table { font-size: 12px !important; } th, td { padding: 6px 5px !important; } }</style></head>`)
   overlay.appendChild(frame)
   document.body.appendChild(overlay)
   const prevOverflow = document.body.style.overflow
@@ -175,7 +191,13 @@ function showMobilePreview(html: string, { filename, format = 'a4', pdf: buildPd
   const share = overlay.querySelector<HTMLButtonElement>('.share')!
   const close = () => { overlay.remove(); document.body.style.overflow = prevOverflow }
   overlay.querySelector<HTMLButtonElement>('.close')!.onclick = close
-  overlay.querySelector<HTMLButtonElement>('.print')!.onclick = () => { frame.contentWindow?.focus(); frame.contentWindow?.print() }
+  const printButton = overlay.querySelector<HTMLButtonElement>('.print')!
+  printButton.disabled = true
+  frame.onload = () => { void frameReady(frame.contentDocument).then(() => { if (format === 'receipt' && frame.contentDocument) prepareReceiptPage(frame.contentDocument); printButton.disabled = false }).catch(error => {
+    const hint = overlay.querySelector<HTMLElement>('.ahw-print-hint')
+    if (hint) hint.textContent = `Print preparation failed: ${error instanceof Error ? error.message : 'Please retry.'} Your saved data is unchanged.`
+  }) }
+  printButton.onclick = () => { if (format === 'receipt' && frame.contentDocument) prepareReceiptPage(frame.contentDocument); frame.contentWindow?.focus(); frame.contentWindow?.print() }
 
   // The file is made now, so the tap on Share opens the share sheet straight away
   // (phones only allow sharing directly after a tap).

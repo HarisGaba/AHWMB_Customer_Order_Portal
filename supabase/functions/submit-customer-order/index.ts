@@ -16,6 +16,7 @@ serve(async req => {
   const body = JSON.parse(raw)
   if (typeof body.token !== 'string' || !body.token || body.token.length > 2048) return reply({ error: 'Please complete the security check.' }, 400)
   if (typeof body.p_order_ref !== 'string' || !/^#AHWMB-[0-9a-f-]{36}$/i.test(body.p_order_ref)) return reply({ error: 'Invalid order reference' }, 400)
+  if (!Array.isArray(body.p_items) || body.p_items.length < 1 || body.p_items.length > 200 || body.p_items.some((l: Record<string, unknown>) => !l || typeof l.name !== 'string' || !l.name.trim() || !Number.isFinite(Number(l.quantity_value)) || Number(l.quantity_value) <= 0 || Number(l.quantity_value) > 1000000 || !['KG','GRAMS','LITRE','PCS','PACKETS','BAGS'].includes(String(l.unit_type)) || Number(l.unit_price || 0) !== 0 || Number(l.total || 0) !== 0)) return reply({ error: 'Every item needs a name, positive quantity and unit. Customer prices must be confirmed by staff.' }, 400)
   const verification = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
    method: 'POST', headers: { 'Content-Type': 'application/json' },
    body: JSON.stringify({ secret, response: body.token }), signal: AbortSignal.timeout(10000),
@@ -29,12 +30,20 @@ serve(async req => {
    p_customer_phone: body.p_customer_phone, p_customer_address: body.p_customer_address,
    p_location_link: body.p_location_link || null, p_items: body.p_items, p_notes: body.p_notes || '',
   }
-  const { data, error } = await db.rpc('submit_order', args)
+  let { data, error } = await db.rpc('submit_order', args)
+  let legacy = false
+  if (error?.code === 'PGRST202') {
+   legacy = true
+   const { p_notes, ...oldArgs } = args
+   const saved = await db.rpc('submit_order', { ...oldArgs, p_customer_address: p_notes ? `${String(args.p_customer_address).trim()}\nNotes: ${String(p_notes).slice(0,2000)}` : args.p_customer_address })
+   data = saved.data; error = saved.error
+  }
   // A repeated reference cannot create a second order, including after a lost response.
   if (error?.code === '23505') {
-   const { data: existing } = await db.from('orders').select('id,items,customer_name,customer_phone,customer_address,location_link,notes').eq('order_ref', args.p_order_ref).maybeSingle()
+   const { data: existing } = await db.from('orders').select('*').eq('order_ref', args.p_order_ref).maybeSingle()
    const phone = String(args.p_customer_phone || '').replace(/[^0-9]/g, '').replace(/^0/, '92')
-   if (existing && canonical(existing.items) === canonical(args.p_items) && existing.customer_phone === phone && existing.customer_name === String(args.p_customer_name).trim() && existing.customer_address === String(args.p_customer_address).trim() && (existing.location_link || '') === String(args.p_location_link || '').trim() && existing.notes === String(args.p_notes).slice(0,2000)) return reply({ id: existing.id })
+   const expectedAddress = legacy && args.p_notes ? `${String(args.p_customer_address).trim()}\nNotes: ${String(args.p_notes).slice(0,2000)}` : String(args.p_customer_address).trim()
+   if (existing && canonical(existing.items) === canonical(args.p_items) && existing.customer_phone === phone && existing.customer_name === String(args.p_customer_name).trim() && existing.customer_address === expectedAddress && (existing.location_link || '') === String(args.p_location_link || '').trim() && (legacy || existing.notes === String(args.p_notes).slice(0,2000))) return reply({ id: existing.id })
   }
   if (error) return reply({ error: error.code === 'P0001' ? error.message : 'Order could not be saved. Please retry with the same order.' }, 400)
   return reply({ id: data })

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { usePosEmail } from "@/components/auth-gate"
 import { toast } from "sonner"
+import { saveError } from '../../lib/saveRequests'
 import {
   BanknoteIcon,
   CheckCircle2Icon,
@@ -130,7 +131,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
       setCustomer("")
       setStage("done")
     } catch (e) {
-      toast.error("Sale not saved", { description: e instanceof Error ? e.message : "Check your internet connection and try again." })
+      toast.error("Sale not confirmed", { description: saveError(e), duration: 10000 })
     } finally {
       saving.current = false
       setBusy(false)

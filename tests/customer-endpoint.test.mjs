@@ -12,7 +12,7 @@ function setup({verified={success:true,hostname:'shop.test',action:'customer-ord
   serve:fn=>{handler=fn},Request,Response,AbortSignal,JSON,
   Deno:{env:{get:name=>({TURNSTILE_SECRET_KEY:secret,TURNSTILE_ALLOWED_HOSTNAMES:'shop.test',SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'test-only'})[name]}},
   fetch:async()=>Response.json(verified),
-  createClient:()=>({rpc:async()=>{calls++;return rpc},from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:existing})})})})}),
+  createClient:()=>({rpc:async(name,args)=>{calls++;return typeof rpc === 'function' ? rpc(name,args,calls) : rpc},from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:existing})})})})}),
  })
  return {send:(body=payload)=>handler(new Request('https://example.test/order',{method:'POST',body:JSON.stringify(body)})),calls:()=>calls}
 }
@@ -34,4 +34,19 @@ test('lost-response retry compares JSON values regardless of object key order',a
 test('same reference with different order details cannot claim an existing receipt',async()=>{
  const app=setup({rpc:{error:{code:'23505'},data:null},existing:{id:'existing-id',customer_name:'Someone else',customer_phone:'923001234567',customer_address:'Address',notes:'Note',items:payload.p_items}})
  assert.equal((await app.send()).status,400)
+})
+test('verified customer submissions support the older RPC without dropping notes',async()=>{
+ const app=setup({rpc:(name,args,calls)=>{
+  assert.equal(name,'submit_order')
+  if(calls===1)return {data:null,error:{code:'PGRST202'}}
+  assert.equal(args.p_notes,undefined);assert.equal(args.p_customer_address,'Address\nNotes: Note')
+  return {data:'legacy-order',error:null}
+ }})
+ assert.equal((await (await app.send()).json()).id,'legacy-order')
+ assert.equal(app.calls(),2)
+})
+test('invalid customer prices are rejected before either database RPC',async()=>{
+ const app=setup()
+ const response=await app.send({...payload,p_items:[{...payload.p_items[0],unit_price:100,total:200}]})
+ assert.equal(response.status,400);assert.equal(app.calls(),0)
 })

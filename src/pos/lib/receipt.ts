@@ -1,11 +1,11 @@
 import { format } from "date-fns"
 import { SHOP } from "@/lib/config"
-import { isMobileDevice, printDocument } from "../../lib/print"
+import { printDocument } from "../../lib/print"
 import { fmt, fmtKg, receiptNo, totalWeight, type Sale } from "@/lib/store"
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
 
-function receiptHtml(sale: Sale) {
+export function receiptHtml(sale: Sale) {
   const date = new Date(sale.createdAt)
   const logo = new URL(SHOP.logo, window.location.origin).href
   // Two lines per item: English name + Qty/Rate/Amount on line 1, Urdu name on line 2.
@@ -23,10 +23,14 @@ function receiptHtml(sale: Sale) {
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=block">
 <style>
   /* 80 mm thermal roll; thermal printers are black-only, so everything is pure black on white. */
-  @page { size: 80mm auto; margin: 0; }
+  @page { margin: 0; } /* Exact roll height is measured after fonts/images load. */
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { margin: 0; color: #000; background: #fff; font: 600 13px/1.45 Arial, "Helvetica Neue", sans-serif; }
-  .wrap { width: 80mm; padding: 4mm 4mm 6mm; margin: 0 auto; }
+  html, body { width: 80mm; max-width: 80mm; height: auto; overflow: visible; }
+  .wrap { width: 80mm; max-width: 80mm; padding: 3mm 5mm 5mm; margin: 0; }
+  td, th, .addr, .payrow, .grand, .weight { overflow-wrap: anywhere; }
+  tr, .grand, .weight, .policy { break-inside: avoid; page-break-inside: avoid; }
+  thead { display: table-row-group; }
   .c { text-align: center; } .r { text-align: right; } .b { font-weight: 700; }
   .mono { font-family: ui-monospace, Consolas, "Courier New", monospace; }
   .logo { width: 26mm; height: 26mm; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto 2mm;
@@ -44,7 +48,7 @@ function receiptHtml(sale: Sale) {
               border-top: 1.5px solid #000; border-bottom: 1.5px solid #000; padding: 1mm 0; }
   .items th.r { text-align: right; }
   .items { table-layout: fixed; }
-  .items col.n { width: 5mm; } .items col.q { width: 8mm; } .items col.rt { width: 16mm; } .items col.am { width: 19mm; }
+  .items col.n { width: 4mm; } .items col.q { width: 7mm; } .items col.rt { width: 14mm; } .items col.am { width: 17mm; }
   .items tbody td { padding: 1.2mm 0 0.6mm; border-bottom: 1px dotted #000; }
   .items .n { font-weight: 700; }
   .items .name { font-size: 13.5px; font-weight: 800; padding-right: 1.5mm; word-break: break-word; }
@@ -55,14 +59,14 @@ function receiptHtml(sale: Sale) {
   .items th.q { text-align: center; }
   .grand { margin-top: 2mm; border: 2px solid #000; padding: 2mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
   .grand span:first-child { font-size: 14px; font-weight: 800; letter-spacing: 2px; }
-  .grand span:last-child { font: 900 21px ui-monospace, Consolas, "Courier New", monospace; }
+  .grand span:last-child { font: 900 18px ui-monospace, Consolas, "Courier New", monospace; min-width:0; text-align:right; }
   .weight { margin-top: 1.5mm; border: 1.5px dashed #000; padding: 1.6mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
   .weight span:first-child { font-size: 13px; font-weight: 800; letter-spacing: 1.5px; }
   .weight span:last-child { font: 900 17px ui-monospace, Consolas, "Courier New", monospace; }
   .payrow { display: flex; align-items: center; justify-content: space-between; margin-top: 2mm; font-weight: 700; }
   .pay { display: inline-block; background: #000; color: #fff; padding: 0.6mm 3mm; border-radius: 2mm; font-weight: 800; letter-spacing: 1px; font-size: 12px; }
   .thanks { font-size: 15px; font-weight: 800; margin-top: 1mm; }
-  .policy { font: 700 15px/2 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif; margin-top: 1mm; }
+  .policy { font: 700 12px/1.5 Arial, sans-serif; margin-top: 1mm; }
 </style></head><body><div class="wrap">
   <div class="c">
     <img class="logo" src="${logo}" alt="">
@@ -88,42 +92,12 @@ function receiptHtml(sale: Sale) {
   <hr>
   <div class="c">
     <div class="thanks">${esc(SHOP.receiptFooter)}</div>
-    ${SHOP.receiptPolicyUr ? `<div class="policy" dir="rtl" lang="ur">${esc(SHOP.receiptPolicyUr)}</div>` : ""}
+    <div class="policy">${esc(SHOP.receiptPolicy)}</div>
   </div>
 </div></body></html>`
 }
 
-/** Print a receipt via a hidden iframe so the app's own styles don't interfere (own page on phones). */
+/** One print job and one measured roll page per complete sale. */
 export function printReceipt(sale: Sale) {
-  if (isMobileDevice()) return printDocument(receiptHtml(sale), null, { filename: `receipt-${sale.customerNo}.pdf`, format: "receipt" })
-  const frame = document.createElement("iframe")
-  frame.setAttribute("aria-hidden", "true")
-  Object.assign(frame.style, { position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0" })
-  document.body.appendChild(frame)
-  const doc = frame.contentDocument!
-  doc.open()
-  doc.write(receiptHtml(sale))
-  doc.close()
-  const win = frame.contentWindow!
-  const cleanup = () => setTimeout(() => frame.remove(), 500)
-  win.addEventListener("afterprint", cleanup)
-  const print = () => {
-    win.focus()
-    win.print()
-    // Some browsers don't fire afterprint for iframes.
-    setTimeout(cleanup, 60_000)
-  }
-  // Wait for the logo and the Urdu font so neither is missing from the printout (give up after 3 s).
-  const img = doc.querySelector("img")
-  const logoReady = new Promise<void>((resolve) => {
-    if (!img || img.complete) return resolve()
-    img.addEventListener("load", () => resolve())
-    img.addEventListener("error", () => {
-      img.remove()
-      resolve()
-    })
-  })
-  const fontsReady = doc.fonts.load('700 14px "Noto Nastaliq Urdu"', "اردو").then(() => doc.fonts.ready).catch(() => undefined)
-  const timeout = new Promise((resolve) => setTimeout(resolve, 3000))
-  void Promise.race([Promise.all([logoReady, fontsReady]), timeout]).then(() => setTimeout(print, 50))
+  return printDocument(receiptHtml(sale), null, { filename: `receipt-${sale.customerNo}.pdf`, format: "receipt" })
 }

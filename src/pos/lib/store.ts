@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react"
 import { format, subDays } from "date-fns"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
+import { savePosSale } from '../../lib/saveRequests'
 
 export const RETENTION_DAYS = 60
 export const CURRENCY = "Rs"
@@ -293,14 +294,14 @@ export const actions = {
 
   async recordSale(lines: SaleLine[], payment: PaymentMethod, customerName: string, requestId: string): Promise<Sale> {
     const day = dayKey()
-    const { data, error } = await supabase.rpc("record_sale_v2", {
+    const save = () => savePosSale(supabase, {
       p_request_id: requestId,
       p_day: day,
       p_lines: lines,
       p_payment: payment,
       p_customer_name: customerName.trim() || null,
-    })
-    if (error) throw error
+    }, localStorage)
+    const data = navigator.locks ? await navigator.locks.request(`ahwmb-checkout:${requestId}`, save) : await save()
     const sale = toSale(data as SaleRow)
     if (!(data as SaleRow).reversed_at) upsertSale((data as SaleRow).day, sale)
     return sale

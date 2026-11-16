@@ -36,6 +36,15 @@ No production mutations during implementation. Database rollout requires the new
 
 ## Validation
 
+### 2026-11-16 save and thermal receipt repair
+
+- POS first uses `record_sale_v2`; only a confirmed missing-function response enables the existing `record_sale` API. Legacy receipts carry a request marker in their existing JSON line snapshot. A retry reads the original receipt; an uncertain legacy save is not inserted again blindly. Permission and validation errors are displayed as returned by the server. No schema changes are required for this compatibility path.
+- Staff New Order supports both submit-order signatures, keeps the same reference on retries, and retains notes in the address on the legacy schema. Legacy totals are finalized only on the newly created/recovered pending order. A failed finalization reports that the order already exists, so users can retry without creating a new reference.
+- The public customer Edge Function retains server-side Turnstile verification and now supports the older submission signature after verification. Deploy the updated function for this change to take effect; an absent function or missing Turnstile configuration still requires the setup described above. The frontend preserves the form and bounds verification/save waiting rather than hanging indefinitely. It does not bypass verification.
+- Receipt footer is exactly `Khareeda hua maal wapsi ho jayega`. Receipt printing measures the complete content after fonts/images load and requests one 80 mm page with that height. Receipt PDF generation paints short raster strips onto one page, avoiding a single oversized canvas. Thermal body width remains inside the printable area, and item names/numbers wrap.
+- Physical printers must use an 80 mm continuous-roll profile, actual-size printing, no browser headers/footers, and cut at end of job. Browser CSS cannot override a printer driver's fixed-length paper or cutter settings. Physical printer acceptance has not been performed. The page-size syntax follows [CSS Paged Media](https://www.w3.org/TR/css-page-3/#page-size-prop).
+- Tests use mocks and an isolated database only. No live sales, orders, stock, catalog, or customer records were created, modified, or deleted during this repair; no migrations/reset scripts were executed.
+
 Run `pnpm test`, `pnpm exec tsc --noEmit -p tsconfig.app.json`, and `pnpm build`.
 
 Database tests use ephemeral PGlite PostgreSQL, never production. Endpoint tests mock Cloudflare and Supabase and cover missing secrets, invalid tokens/hostname/action, valid submission, and same-reference retry matching. Live Turnstile, deployed RLS and browser/mobile behavior still require staging acceptance.
