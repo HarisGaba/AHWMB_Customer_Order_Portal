@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import type { jsPDF as JsPdf } from 'jspdf'
 import {
   AlertCircle, Check, ChevronDown, FileDown, Info, Languages, LogIn, LogOut,
@@ -418,7 +419,10 @@ const copy = {
 
 // ─── Toast system ─────────────────────────────────────────────────────────────
 function ToastContainer({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: string) => void }) {
-  return (
+  // Render outside animated/transformed panels so iOS fixed positioning stays
+  // attached to the viewport. Preserve scoped styles when embedded in the POS.
+  return createPortal(
+    <div className={/^\/pos(\/|$)/.test(window.location.pathname) ? 'portal-embed' : undefined}>
     <div className="toast-container" aria-live="polite">
       {toasts.map(t => (
         <div key={t.id} className={`toast toast-${t.type}`} role="alert">
@@ -428,12 +432,13 @@ function ToastContainer({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: st
               : <Info size={17} />}
           </span>
           <span className="toast-msg">{t.message}</span>
-          <button className="toast-close" onClick={() => dismiss(t.id)} aria-label="Dismiss">
+          <button type="button" className="toast-close" onClick={() => dismiss(t.id)} aria-label="Dismiss">
             <X size={15} />
           </button>
         </div>
       ))}
     </div>
+    </div>, document.body
   )
 }
 
