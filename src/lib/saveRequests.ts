@@ -21,7 +21,7 @@ export async function savePosSale(db: SupabaseClient, args: SaleArgs, storage: S
  if (modern.error.code !== 'PGRST202') throw new Error(saveError(modern.error))
  const key = `ahwmb-sale-attempt:${args.p_request_id}`
  const lines = args.p_lines.map((line, index) => index ? line : { ...line, _checkout_request_id: args.p_request_id })
- const found = await boundedRequest(db.from('sales').select('*').contains('lines', [{ _checkout_request_id: args.p_request_id }]).limit(1).maybeSingle())
+ const found = await boundedRequest(db.from('sales').select('*').contains('lines', JSON.stringify([{ _checkout_request_id: args.p_request_id }])).limit(1).maybeSingle())
  if (found.error) throw new Error(saveError(found.error))
  if (found.data) {
   if (JSON.stringify(found.data.lines.map((l: Record<string, unknown>) => { const { _checkout_request_id, ...rest } = l; return rest })) !== JSON.stringify(args.p_lines)) {

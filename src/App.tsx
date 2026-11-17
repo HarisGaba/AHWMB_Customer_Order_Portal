@@ -891,7 +891,7 @@ async function drawInvoice(
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Invoice text rendering is unavailable')
     const hasUrdu = /[\u0600-\u06ff]/.test(text)
-    const font = hasUrdu ? '700 44px Georgia, "Noto Naskh Arabic", serif' : 'bold 46px Georgia, "Times New Roman", serif'
+    const font = hasUrdu ? '700 38px Georgia, "Noto Naskh Arabic", serif' : 'bold 36px "Times New Roman", Times, serif'
     ctx.font = font
     const lines: string[] = []
     for (const paragraph of text.split(/\r?\n/)) {
@@ -905,8 +905,8 @@ async function drawInvoice(
       }
       lines.push(line)
     }
-    const lineHeight = hasUrdu ? 90 : 80
-    canvas.height = lines.length * lineHeight + 24
+    const lineHeight = hasUrdu ? 58 : 48
+    canvas.height = lines.length * lineHeight + 12
     ctx.font = font
     ctx.fillStyle = '#000'
     ctx.textBaseline = 'middle'
@@ -917,9 +917,9 @@ async function drawInvoice(
       const text = rtl ? line : line.replace(/[\u0600-\u06ff](?:[\u0600-\u06ff\u200c\u200d \d.,،-]*[\u0600-\u06ff])?/g, run => `\u2067${run}\u2069`)
       ctx.direction = rtl ? 'rtl' : 'ltr'
       ctx.textAlign = rtl ? 'right' : 'left'
-      ctx.fillText(text, rtl ? canvas.width - 8 : 8, 12 + (index + 0.5) * lineHeight, canvas.width - 16)
+      ctx.fillText(text, rtl ? canvas.width - 8 : 8, 6 + (index + 0.5) * lineHeight, canvas.width - 16)
     })
-    return { canvas, height: canvas.height / scale }
+    return { canvas, width: canvas.width / scale, height: canvas.height / scale }
   }
   const PW = 148, PH = 210, M = 8
 
@@ -957,7 +957,8 @@ async function drawInvoice(
   const customerImage = unicodeName(order.customer_name || '', divX - (bL+34) - 3)
   doc.setFontSize(9)
   if (customerImage) {
-    doc.addImage(customerImage.canvas, 'PNG', bL+34, barY+1, divX-(bL+34)-3, Math.min(7, customerImage.height))
+    const k = Math.min(1, 7 / customerImage.height)
+    doc.addImage(customerImage.canvas, 'PNG', bL+34, barY+1, customerImage.width * k, customerImage.height * k)
   } else doc.text(nameLines[0] ?? '', bL+34, barY+6)
   doc.setLineWidth(0.3); doc.line(bL+34, barY+8, divX-3, barY+8)
   doc.setFontSize(10); doc.text('Date:', divX+4, barY+6)
@@ -998,24 +999,31 @@ async function drawInvoice(
     const item = items[idx]
     const nameLines2 = doc.splitTextToSize(item.name || '—', CW[1]-4)
     const nameImage = unicodeName(item.name || '', CW[1]-4)
-    const rh = Math.max(7, (nameImage ? Math.min(nameImage.height, 6) : nameLines2.length * 4) + 3)
+    const rh = Math.max(7, (nameImage ? nameImage.height : nameLines2.length * 3.6) + 3)
     // Page break
-    if (curY + rh > PH - M - 40) {
+    if (curY + rh > PH - M - 6) { // fill each page; the totals block moves to a new page by itself if needed
       doc.addPage(); drawFrame(); curY = M+16
       curY = drawItemsHeader(curY)
-      doc.setFont('times','bold'); doc.setFontSize(11); doc.setTextColor(0)
     }
+    doc.setFont('times','bold'); doc.setFontSize(8.5); doc.setTextColor(0)
     doc.setDrawColor(0); doc.setLineWidth(0.4)
     doc.rect(TL, curY, TW, rh)
     for (let i = 1; i < 5; i++) doc.line(CX[i], curY, CX[i], curY+rh)
     const midY = curY + rh/2 + 1.5
     doc.text(String(idx+1),                                    CX[0]+CW[0]/2, midY, {align:'center'})
     if (nameImage) {
-      doc.addImage(nameImage.canvas, 'PNG', CX[1]+1.5, curY+1.5, CW[1]-3, Math.min(nameImage.height, rh-2))
-    } else doc.text(nameLines2, CX[1]+1.5, curY+2.5+2.5)
-    doc.text(pdfQuantityText(item.quantity_value, item.unit_type), CX[2]+CW[2]/2, midY, {align:'center'})
-    doc.text(item.unit_price > 0 ? invoiceNumber(item.unit_price) : '—', CX[3]+CW[3]/2, midY, {align:'center'})
-    doc.text(invoiceNumber(item.total),                        CX[4]+CW[4]/2, midY, {align:'center'})
+      doc.addImage(nameImage.canvas, 'PNG', CX[1]+1.5, curY+1.5, nameImage.width, nameImage.height)
+    } else doc.text(nameLines2, CX[1]+1.5, curY+4.6, { lineHeightFactor: 1.2 })
+    const fit = (text: string, col: number) => {
+      let size = 8.5
+      doc.setFontSize(size)
+      while (size > 6 && doc.getTextWidth(text) > CW[col] - 2) doc.setFontSize(size -= 0.5)
+      doc.text(text, CX[col]+CW[col]/2, midY, {align:'center'})
+      doc.setFontSize(8.5)
+    }
+    fit(pdfQuantityText(item.quantity_value, item.unit_type), 2)
+    fit(item.unit_price > 0 ? invoiceNumber(item.unit_price) : '—', 3)
+    fit(invoiceNumber(item.total), 4)
     curY += rh
   }
 
