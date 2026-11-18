@@ -62,20 +62,22 @@ function useLiveTable(tables: string[], onChange: () => void) {
 }
 
 /**
- * Undo / Redo are switched off on the stock screens (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Cmd on Mac,
- * and the right-click / phone "Undo" menu), so typed stock can never jump back to an old value.
+ * Undo / Redo / Cut are switched off on the stock screens (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Ctrl+X, Cmd on Mac,
+ * and the right-click / phone "Undo" and "Cut" menu), so typed stock can never jump back to an old value.
  */
 function useBlockUndo() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return
       const k = e.key.toLowerCase()
-      if (k === 'z' || k === 'y') { e.preventDefault(); e.stopPropagation() }
+      if (k === 'z' || k === 'y' || k === 'x') { e.preventDefault(); e.stopPropagation() }
     }
-    const onBeforeInput = (e: InputEvent) => { if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') { e.preventDefault(); e.stopPropagation() } }
+    const onBeforeInput = (e: InputEvent) => { if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo' || e.inputType === 'deleteByCut') { e.preventDefault(); e.stopPropagation() } }
+    const onCut = (e: ClipboardEvent) => e.preventDefault()
     window.addEventListener('keydown', onKey, true)
     window.addEventListener('beforeinput', onBeforeInput, true)
-    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('beforeinput', onBeforeInput, true) }
+    window.addEventListener('cut', onCut, true)
+    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('beforeinput', onBeforeInput, true); window.removeEventListener('cut', onCut, true) }
   }, [])
 }
 
@@ -267,7 +269,7 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
               </>
               : <>
                 <button type="button" className="ledger-edit-btn" onClick={() => startEdit(row.id)}>Edit</button>
-                <button type="button" className="ledger-delete-btn" onClick={() => deleteRow(row)} aria-label={`Delete ${row.item}`}><Trash2 size={14} /></button>
+                <button type="button" className="ledger-delete-btn" onClick={() => deleteRow(row)} aria-label={`Delete ${row.item}`}><Trash2 size={14} /> Delete</button>
               </>)}</td>
           </>
         })()}
@@ -344,7 +346,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
               <td data-label="Quantity (kg)"><input className="report-cell-input" type="number" min="0" value={l.quantity} disabled={!l.item} onChange={e => setLine(l.key, { quantity: e.target.value })} placeholder="kg" />
                 {problems[i] && l.item && l.quantity && <small className="transfer-problem">{problems[i]}</small>}</td>
               <td data-label="Bags"><input className="report-cell-input" type="number" min="0" value={l.bags} disabled={!weight} onChange={e => setLine(l.key, { bags: e.target.value })} placeholder={weight ? 'bags' : '—'} /></td>
-              <td data-label="Remove" className="stock-row-actions"><button type="button" className="ledger-delete-btn" disabled={lines.length === 1} onClick={() => setLines(c => c.filter(x => x.key !== l.key))} aria-label="Remove line"><X size={14} /></button></td>
+              <td data-label="Remove" className="stock-row-actions"><button type="button" className="ledger-delete-btn" disabled={lines.length === 1} onClick={() => setLines(c => c.filter(x => x.key !== l.key))} aria-label="Remove this line (not saved yet)"><X size={14} /> Remove</button></td>
             </tr>
           })}
         </tbody></table></div>
@@ -518,7 +520,7 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
           <ItemPicker value={l.item} onChange={item => setLines(c => c.map(x => x.key === l.key ? { ...x, item } : x))}
             options={choices.map(item => ({ item, hint: sourceStock.length ? kg(maxFor(item)) : undefined }))} />
           <input className="report-cell-input" type="number" min="0" value={l.quantity} onChange={e => setLines(c => c.map(x => x.key === l.key ? { ...x, quantity: e.target.value } : x))} placeholder="kg" aria-label="Quantity (kg)" />
-          <button type="button" className="ledger-delete-btn" onClick={() => setLines(c => c.filter(x => x.key !== l.key))} disabled={lines.length === 1} aria-label="Remove line"><X size={14} /></button>
+          <button type="button" className="ledger-delete-btn" onClick={() => setLines(c => c.filter(x => x.key !== l.key))} disabled={lines.length === 1} aria-label="Remove this line (not saved yet)"><X size={14} /> Remove</button>
           {problems[i] && l.item && <small className="transfer-problem">{problems[i]}</small>}
         </div>)}
         <button type="button" className="btn-secondary transfer-add" onClick={() => setLines(c => [...c, { key: crypto.randomUUID(), item: '', quantity: '' }])}><Plus size={15} /> Add item</button>
