@@ -17,7 +17,8 @@ const LOCATION_LABEL: Record<Location, string> = { 'Site Area Godown': 'Site Are
 // Older browser-only data used these names.
 const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Jodia Bazaar Godown', 'Godam Site': 'Site Area Godown' }
 
-type StockRow = { id: string; location: Location; item: string; weight: string; quantity: string; saved: boolean }
+/** saved=false means the row is open for editing (Edit clicked, or a new row); original = values to restore on Cancel. */
+type StockRow = { id: string; location: Location; item: string; weight: string; quantity: string; saved: boolean; original?: { item: string; weight: string; quantity: string } }
 type TransferLine = { item: string; weight: number | null; quantity: number; bags: number | null }
 type Transfer = { id: string; from_location: Location; to_location: Location; lines: TransferLine[]; total_quantity: number; created_at: string; edited_at?: string | null; cancelled_at?: string | null }
 type DraftLine = { key: string; item: string; quantity: string; bags: string }
@@ -60,8 +61,27 @@ function useLiveTable(tables: string[], onChange: () => void) {
   }, [key])
 }
 
+/**
+ * Undo / Redo are switched off on the stock screens (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Cmd on Mac,
+ * and the right-click / phone "Undo" menu), so typed stock can never jump back to an old value.
+ */
+function useBlockUndo() {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+      const k = e.key.toLowerCase()
+      if (k === 'z' || k === 'y') { e.preventDefault(); e.stopPropagation() }
+    }
+    const onBeforeInput = (e: InputEvent) => { if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') { e.preventDefault(); e.stopPropagation() } }
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('beforeinput', onBeforeInput, true)
+    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('beforeinput', onBeforeInput, true) }
+  }, [])
+}
+
 /** canEdit = Stock Report permission (add/edit/delete stock); canTransfer = Stock Transfer permission. */
 export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: boolean; canTransfer?: boolean }) {
+  useBlockUndo()
   const [location, setLocation] = useState<Location>('Site Area Godown')
   const [rows, setRows] = useState<StockRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -129,22 +149,42 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
   // Search by item name. Rows still being typed (unsaved) always stay visible.
   const visible = query ? atLocation.filter(r => !r.saved || r.item.toLowerCase().includes(query)) : atLocation
 
+  // Typing only changes the one row that is open for editing; nothing is saved until "Save".
   const editRow = (id: string, key: 'item' | 'weight' | 'quantity', value: string) =>
-    setRows(current => current.map(r => (r.id === id ? { ...r, [key]: value, saved: false } : r)))
+    setRows(current => current.map(r => (r.id === id && !r.saved ? { ...r, [key]: value } : r)))
 
+  /** "Edit": opens only this row, remembering its values for Cancel. */
+  const startEdit = (id: string) =>
+    setRows(current => current.map(r => (r.id === id && r.saved ? { ...r, saved: false, original: { item: r.item, weight: r.weight, quantity: r.quantity } } : r)))
+
+  /** "Cancel": puts this row back exactly as it was (a new, unsaved row is simply removed). */
+  const cancelEdit = (row: StockRow) =>
+    setRows(current => row.id.startsWith('new-')
+      ? current.filter(r => r.id !== row.id)
+      : current.map(r => (r.id === row.id ? { ...r, ...(r.original ?? {}), saved: true, original: undefined } : r)))
+
+  const [savingId, setSavingId] = useState<string | null>(null)
   const saveRow = async (row: StockRow) => {
-    if (!supabase || row.saved) return
-    if (!row.item.trim()) return
+    if (!supabase || row.saved || savingId) return
+    if (!row.item.trim()) { notify('Enter the item name before saving.', 'error'); return }
+    if (row.quantity.trim() !== '' && (!Number.isFinite(Number(row.quantity)) || Number(row.quantity) < 0)) { notify('Quantity must be 0 or more.', 'error'); return }
+    setSavingId(row.id)
+    try { await persistRow(row) } finally { setSavingId(null) }
+  }
+  const persistRow = async (row: StockRow) => {
+    if (!supabase) return
     const payload = { location: row.location, item: row.item.trim(), weight: num(row.weight) > 0 ? num(row.weight) : null, quantity: Math.max(0, num(row.quantity)), updated_at: new Date().toISOString() }
     const isNew = row.id.startsWith('new-')
     const { data, error } = isNew
       ? await supabase.from('stock_items').insert(payload).select('id').single()
       : await supabase.from('stock_items').update(payload).eq('id', row.id).select('id').single()
     if (error) {
-      notify(error.code === '23505' ? `${row.item} already exists in ${LOCATION_LABEL[row.location]}.` : `Could not save ${row.item}: ${error.message}`, 'error')
+      notify(error.code === '23505' ? `${row.item} already exists in ${LOCATION_LABEL[row.location]}.` : `Could not save ${row.item}: ${error.message}. Your typing is kept; try Save again.`, 'error')
       return
     }
-    setRows(current => current.map(r => (r.id === row.id ? { ...r, id: data.id, item: payload.item, saved: true } : r)))
+    // Only this row is updated on screen; every other row stays exactly as it is.
+    setRows(current => current.map(r => (r.id === row.id ? { ...r, id: data.id, item: payload.item, saved: true, original: undefined } : r)))
+    notify(`✓ Saved ${payload.item}.`)
   }
 
   const addRow = () => setRows(current => [...current, { id: `new-${crypto.randomUUID()}`, location, item: '', weight: '', quantity: '', saved: false }])
@@ -212,11 +252,25 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
       {loading && <tr><td colSpan={5} className="stock-empty">Loading stock…</td></tr>}
       {!loading && visible.length === 0 && <tr><td colSpan={5} className="stock-empty">{query && atLocation.length ? `No item matching “${search.trim()}” in ${LOCATION_LABEL[location]}.` : `No stock in ${LOCATION_LABEL[location]} yet. Click “Add Item”.`}</td></tr>}
       {visible.map(row => <tr key={row.id}>
-        <td data-label="Item"><input className="report-cell-input" value={row.item} onChange={e => editRow(row.id, 'item', e.target.value)} onBlur={() => void saveRow(row)} placeholder="e.g. Chana Dal" readOnly={!canEdit} /></td>
-        <td data-label="Weight (kg / bag)"><input className="report-cell-input" type="number" min="1" value={row.weight} onChange={e => editRow(row.id, 'weight', e.target.value)} onBlur={() => void saveRow(row)} placeholder="50" readOnly={!canEdit} /></td>
-        <td data-label="Quantity (kg)"><input className="report-cell-input" type="number" min="0" value={row.quantity} onChange={e => editRow(row.id, 'quantity', e.target.value)} onBlur={() => void saveRow(row)} placeholder="500" readOnly={!canEdit} /></td>
-        <td data-label="Bags"><input className="report-cell-input stock-bags" value={bagsFor(num(row.quantity), num(row.weight) || null) ?? '—'} readOnly aria-label="Auto calculated bags" /></td>
-        <td data-label="Actions" className="stock-row-actions">{!row.saved && row.item.trim() ? <span className="stock-unsaved">Saving…</span> : null}{canEdit && <button type="button" className="ledger-delete-btn" onClick={() => deleteRow(row)} aria-label={`Delete ${row.item}`}><Trash2 size={14} /></button>}</td>
+        {(() => {
+          const open = canEdit && !row.saved
+          const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); void saveRow(row) } else if (e.key === 'Escape') cancelEdit(row) }
+          return <>
+            <td data-label="Item"><input className="report-cell-input" value={row.item} onChange={e => editRow(row.id, 'item', e.target.value)} onKeyDown={onEnter} placeholder="e.g. Chana Dal" readOnly={!open} /></td>
+            <td data-label="Weight (kg / bag)"><input className="report-cell-input" type="number" min="1" value={row.weight} onChange={e => editRow(row.id, 'weight', e.target.value)} onKeyDown={onEnter} placeholder="50" readOnly={!open} /></td>
+            <td data-label="Quantity (kg)"><input className="report-cell-input" type="number" min="0" value={row.quantity} onChange={e => editRow(row.id, 'quantity', e.target.value)} onKeyDown={onEnter} placeholder="500" readOnly={!open} /></td>
+            <td data-label="Bags"><input className="report-cell-input stock-bags" value={bagsFor(num(row.quantity), num(row.weight) || null) ?? '—'} readOnly aria-label="Auto calculated bags" /></td>
+            <td data-label="Actions" className="stock-row-actions">{canEdit && (open
+              ? <>
+                <button type="button" className="ledger-edit-btn" onClick={() => void saveRow(row)} disabled={savingId !== null}>{savingId === row.id ? 'Saving…' : 'Save'}</button>
+                <button type="button" className="ledger-delete-btn" onClick={() => cancelEdit(row)} disabled={savingId === row.id}>Cancel</button>
+              </>
+              : <>
+                <button type="button" className="ledger-edit-btn" onClick={() => startEdit(row.id)}>Edit</button>
+                <button type="button" className="ledger-delete-btn" onClick={() => deleteRow(row)} aria-label={`Delete ${row.item}`}><Trash2 size={14} /></button>
+              </>)}</td>
+          </>
+        })()}
       </tr>)}
     </tbody></table></div>
     {confirm && <ConfirmModal request={confirm} onClose={() => setConfirm(null)} />}
