@@ -10,7 +10,8 @@ type Location = (typeof LOCATIONS)[number]
 // The Shop is never a source. The source is always the godown being viewed.
 const GODOWNS: Location[] = ['Site Area Godown', 'Jodia Bazaar Godown']
 const isGodown = (l: Location) => GODOWNS.includes(l)
-const TRANSFER_TARGETS: Record<Location, Location[]> = { 'Site Area Godown': ['Jodia Bazaar Godown'], 'Jodia Bazaar Godown': ['Site Area Godown', 'Shop'], Shop: [] }
+// Jodia Bazaar -> Site Area or Shop; Site Area -> Shop only (database rule: migration 20261118_transfer_routes).
+const TRANSFER_TARGETS: Record<Location, Location[]> = { 'Site Area Godown': ['Shop'], 'Jodia Bazaar Godown': ['Site Area Godown', 'Shop'], Shop: [] }
 const transferTargets = (from: Location) => TRANSFER_TARGETS[from].filter(to => to !== from)
 const LOCATION_LABEL: Record<Location, string> = { 'Site Area Godown': 'Site Area Godown', 'Jodia Bazaar Godown': 'Jodia Bazaar Godown', Shop: 'Shop' }
 // Older browser-only data used these names.
