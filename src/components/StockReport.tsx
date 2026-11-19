@@ -13,6 +13,8 @@ const isGodown = (l: Location) => GODOWNS.includes(l)
 // Jodia Bazaar -> Site Area or Shop; Site Area -> Shop only (database rule: migration 20261118_transfer_routes).
 const TRANSFER_TARGETS: Record<Location, Location[]> = { 'Site Area Godown': ['Jodia Bazaar Godown', 'Shop'], 'Jodia Bazaar Godown': ['Site Area Godown', 'Shop'], Shop: [] }
 const transferTargets = (from: Location) => TRANSFER_TARGETS[from].filter(to => to !== from)
+// The "Shifted to …" selector: Site Area offers only Shop. Site Area -> Jodia Bazaar has its own Stock Report button.
+const SELECTOR_TARGETS: Record<Location, Location[]> = { 'Site Area Godown': ['Shop'], 'Jodia Bazaar Godown': ['Site Area Godown', 'Shop'], Shop: [] }
 const LOCATION_LABEL: Record<Location, string> = { 'Site Area Godown': 'Site Area Godown', 'Jodia Bazaar Godown': 'Jodia Bazaar Godown', Shop: 'Shop' }
 // Older browser-only data used these names.
 const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Jodia Bazaar Godown', 'Godam Site': 'Site Area Godown' }
@@ -245,9 +247,11 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
       {!canTransfer ? null : isGodown(location)
         ? <select className="stock-transfer-select" value="" onChange={e => e.target.value && startTransfer(e.target.value as Location)} aria-label={`Transfer stock from ${LOCATION_LABEL[location]}`}>
           <option value="">⇄ Transfer from {LOCATION_LABEL[location]} to…</option>
-          {transferTargets(location).map(to => <option key={to} value={to}>Shifted to {LOCATION_LABEL[to]}</option>)}
+          {SELECTOR_TARGETS[location].map(to => <option key={to} value={to}>Shifted to {LOCATION_LABEL[to]}</option>)}
         </select>
-        : <span className="stock-transfer-note">Transfers are only between godowns — choose a godown above to transfer.</span>}
+        : null}
+      {canTransfer && location === 'Site Area Godown' && <button type="button" className="btn-secondary" onClick={() => startTransfer('Jodia Bazaar Godown')}>⇄ Site Area → Jodia Bazaar</button>}
+      {canTransfer && !isGodown(location) && <span className="stock-transfer-note">Transfers are only between godowns — choose a godown above to transfer.</span>}
       <button type="button" className="btn-secondary stock-history-btn" onClick={() => setView('history')}><History size={16} /> Transfer History</button>
     </div>
     <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Item</th><th>Weight (kg / bag)</th><th>Quantity (kg)</th><th>Bags</th><th aria-label="Actions" /></tr></thead><tbody>
