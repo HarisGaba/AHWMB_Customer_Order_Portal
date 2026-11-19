@@ -52,12 +52,14 @@ const PORTAL_EMAILS = ['ahmedyounus1978@gmail.com']
 /** Accounts that always open the POS / Admin System after login. */
 const POS_EMAILS = ['ahwmb1965@gmail.com']
 export const homePathFor = (access: Access | null | undefined, next?: string | null, email = '') => {
-  if (next === '/pos') return hasPosAccess(access) ? '/pos' : '/login'
-  if (next === '/admin') return hasPortalAccess(access) ? '/admin' : '/login'
   const e = email.trim().toLowerCase()
-  // Fixed homes by account: ahmedyounus1978 -> Customer Order Portal; ahwmb1965 -> POS.
+  // Login always opens the account's own home first, whatever page sent it to the login:
+  // ahmedyounus1978 -> Customer Order Portal; ahwmb1965 -> POS (Daily Report first).
+  // Switching afterwards (Admin Panel / Go to POS, or another tab) keeps the same login.
   if (PORTAL_EMAILS.includes(e) && hasPortalAccess(access)) return '/admin'
   if (POS_EMAILS.includes(e) && hasPosAccess(access)) return '/pos'
+  if (next === '/pos') return hasPosAccess(access) ? '/pos' : '/login'
+  if (next === '/admin') return hasPortalAccess(access) ? '/admin' : '/login'
   return hasPortalAccess(access) ? '/admin' : hasPosAccess(access) ? '/pos' : '/login'
 }
 

@@ -93,9 +93,12 @@ test('portal switching changes only the URL, and POS login uses its existing key
   assert.deepEqual([...shared.data], before)
 })
 
-test('explicit portal destinations take precedence over account default homes', () => {
-  assert.equal(homePathFor(owner, '/pos', 'ahmedyounus1978@gmail.com'), '/pos')
-  assert.equal(homePathFor(owner, '/admin', 'ahwmb1965@gmail.com'), '/admin')
+test('owner accounts always log in to their own home first; other users follow the page they came from', () => {
+  assert.equal(homePathFor(owner, '/pos', 'ahmedyounus1978@gmail.com'), '/admin')
+  assert.equal(homePathFor(owner, '/admin', 'ahwmb1965@gmail.com'), '/pos')
+  assert.equal(homePathFor(owner, '/admin', 'ahmedyounus1978@gmail.com'), '/admin')
+  assert.equal(homePathFor(owner, '/pos', 'staff@example.com'), '/pos')
+  assert.equal(homePathFor(owner, '/admin', 'staff@example.com'), '/admin')
   assert.equal(homePathFor(NO_ACCESS, '/pos', 'ahwmb1965@gmail.com'), '/login')
   assert.equal(homePathFor(NO_ACCESS, '/admin', 'ahmedyounus1978@gmail.com'), '/login')
   assert.equal(homePathFor(owner, null, 'ahwmb1965@gmail.com'), '/pos')
