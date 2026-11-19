@@ -2881,7 +2881,12 @@ function AdminPage({
     if (!editCustomerOrder || !supabase) return
     setSavingCustomer(true)
     try {
-      const { data: updatedOrder, error } = await supabase
+      if (!editCustomerName.trim()) throw new Error('Customer name cannot be empty.')
+      // Only these three fields of this one order change. The version check (another tab edited
+      // the same order) is used only when the order has a version number; without it the filter
+      // would be "version = undefined", match nothing, and the edit would silently not save.
+      const hasVersion = typeof editCustomerOrder.version === 'number'
+      let query = supabase
         .from('orders')
         .update({
           customer_name: editCustomerName.trim(),
@@ -2889,11 +2894,12 @@ function AdminPage({
           customer_address: editCustomerAddress.trim(),
         })
         .eq('id', editCustomerOrder.id)
-        .eq('version', editCustomerOrder.version)
-        .select('*')
-        .maybeSingle()
+      if (hasVersion) query = query.eq('version', editCustomerOrder.version)
+      const { data: updatedOrder, error } = await query.select('*').maybeSingle()
       if (error) throw error
-      if (!updatedOrder) throw new Error('This order changed in another tab. Reload before editing customer details.')
+      if (!updatedOrder) throw new Error(hasVersion
+        ? 'This order changed in another tab. Reload before editing customer details.'
+        : 'The change was not saved (the order was not found or you do not have permission). Nothing was changed.')
       setOrders(curr => curr.map(o => o.id === editCustomerOrder.id ? updatedOrder : o))
       if (selected?.id === editCustomerOrder.id) setSelected(updatedOrder)
       addToast('✓ Customer info updated successfully!', 'success')

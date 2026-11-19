@@ -19,13 +19,15 @@ export function receiptHtml(sale: Sale) {
     )
     .join("")
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Receipt #${sale.customerNo}</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>&#8203;</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=block">
 <style>
   /* 80 mm thermal roll; thermal printers are black-only, so everything is pure black on white. */
+  /* margin 0 leaves the browser no room for its own header (date, title) and footer (URL, "1/1"). */
   @page { margin: 0; } /* Exact roll height is measured after fonts/images load. */
+  @media print { html, body { margin: 0 !important; padding: 0 !important; } }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { margin: 0; color: #000; background: #fff; font: 600 13px/1.45 Arial, "Helvetica Neue", sans-serif; }
+  body { margin: 0; color: #000; background: #fff; font: 700 13px/1.45 Arial, "Helvetica Neue", sans-serif; text-rendering: geometricPrecision; -webkit-font-smoothing: none; }
   html, body { width: 80mm; max-width: 80mm; height: auto; overflow: visible; }
   .wrap { width: 80mm; max-width: 80mm; padding: 3mm 5mm 5mm; margin: 0; }
   td, th, .addr, .payrow, .grand, .weight { overflow-wrap: anywhere; }
