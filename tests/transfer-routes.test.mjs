@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 
 // An ephemeral PostgreSQL instance: never connects to Supabase or production.
-test('godown transfer routes: Jodia -> Site/Shop, Site -> Shop only; stock moves exactly', async t => {
+test('godown transfer routes: Jodia -> Site/Shop, Site -> Jodia/Shop; stock moves exactly', async t => {
  const db = new PGlite()
  t.after(() => db.close())
  await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
@@ -25,7 +25,7 @@ test('godown transfer routes: Jodia -> Site/Shop, Site -> Shop only; stock moves
  await db.exec(`insert into public.stock_items(location,item,weight,quantity) values('Site Area Godown','Chawal',50,500),('Jodia Bazaar Godown','Chawal',50,300),('Shop','Chawal',50,20)`)
  await db.exec(`insert into public.stock_transfers(from_location,to_location,lines,total_quantity) values('Site Area Godown','Jodia Bazaar Godown','[{"item":"Chawal","quantity":10}]',10)`)
  const history = (await db.query('select * from stock_transfers order by created_at')).rows
- await db.exec(read('migrations/20261118_transfer_routes.sql'))
+ await db.exec(read('migrations/20261119_site_to_jodia_transfer.sql'))
  assert.deepEqual((await db.query('select * from stock_transfers order by created_at')).rows, history)
  await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',email:'ahwmb1965@gmail.com'})])
  await db.exec('set role authenticated')
@@ -36,8 +36,10 @@ test('godown transfer routes: Jodia -> Site/Shop, Site -> Shop only; stock moves
  await move('Jodia Bazaar Godown','Site Area Godown',50)
  await move('Jodia Bazaar Godown','Shop',30)
  assert.equal(await qty('Jodia Bazaar Godown'),220); assert.equal(await qty('Site Area Godown'),430); assert.equal(await qty('Shop'),170)
- await assert.rejects(move('Site Area Godown','Jodia Bazaar Godown',1),/Allowed transfers/)
+ await move('Site Area Godown','Jodia Bazaar Godown',30)
+ assert.equal(await qty('Site Area Godown'),400); assert.equal(await qty('Jodia Bazaar Godown'),250)
+ await assert.rejects(move('Shop','Site Area Godown',1),/Allowed transfers/)
  await assert.rejects(move('Site Area Godown','Shop',100000),/Not enough/)
- assert.equal(await qty('Site Area Godown'),430)
- assert.equal((await db.query('select count(*)::int n from stock_transfers')).rows[0].n, 4)
+ assert.equal(await qty('Site Area Godown'),400)
+ assert.equal((await db.query('select count(*)::int n from stock_transfers')).rows[0].n, 5)
 })
