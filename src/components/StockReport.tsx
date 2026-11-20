@@ -72,7 +72,7 @@ function useBlockUndo() {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return
       const k = e.key.toLowerCase()
-      if (k === 'z' || k === 'y' || k === 'x') { e.preventDefault(); e.stopPropagation() }
+      if (k === 'z' || k === 'y' || k === 'x' || e.code === 'KeyZ' || e.code === 'KeyY' || e.code === 'KeyX') { e.preventDefault(); e.stopPropagation() }
     }
     const onBeforeInput = (e: InputEvent) => { if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo' || e.inputType === 'deleteByCut') { e.preventDefault(); e.stopPropagation() } }
     const onCut = (e: ClipboardEvent) => e.preventDefault()
@@ -221,7 +221,7 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
   if (view === 'transfer' && transfer) {
     return <TransferForm from={transfer.from} target={transfer.to} rows={rows} onCancel={() => setView('stock')} onDone={async text => { notify(text); setView('stock'); await load(true) }} />
   }
-  if (view === 'history') return <TransferHistory canDelete={canEdit} canChange={canTransfer} onBack={() => setView('stock')} />
+  if (view === 'history') return <TransferHistory location={location} canDelete={canEdit} canChange={canTransfer} onBack={() => setView('stock')} />
 
   return <section className="panel report-panel">
     <div className="report-heading">
@@ -364,7 +364,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
   </section>
 }
 
-function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void; canDelete: boolean; canChange: boolean }) {
+function TransferHistory({ location, onBack, canDelete, canChange }: { location: Location; onBack: () => void; canDelete: boolean; canChange: boolean }) {
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null)
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [month, setMonth] = useState('')
@@ -376,14 +376,14 @@ function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void;
     setLoading(true)
     const all: Transfer[] = []
     for (let offset = 0; ; offset += 1000) {
-      const { data, error } = await supabase.from('stock_transfers').select('*').order('created_at', { ascending: false }).range(offset, offset + 999)
+      const { data, error } = await supabase.from('stock_transfers').select('*').eq('from_location', location).order('created_at', { ascending: false }).range(offset, offset + 999)
       if (error) { setMessage(`Could not load history: ${error.message}`); break }
       all.push(...(data as Transfer[]))
       if (!data || data.length < 1000) break
     }
     setTransfers(all)
     setLoading(false)
-  }, [])
+  }, [location])
   useEffect(() => { void load() }, [load])
   useLiveTable(['stock_transfers'], () => void load())
 
@@ -394,7 +394,7 @@ function TransferHistory({ onBack, canDelete, canChange }: { onBack: () => void;
 
   return <section className="panel report-panel">
     <div className="report-heading">
-      <div><p className="admin-eyebrow">STOCK</p><h2 className="admin-heading">Transfer History</h2><p className="panel-sub">Every confirmed transfer, preserved with its reversal history.</p></div>
+      <div><p className="admin-eyebrow">STOCK</p><h2 className="admin-heading">{LOCATION_LABEL[location]} — Transfer History</h2><p className="panel-sub">Only transfers sent from {LOCATION_LABEL[location]}. Every confirmed transfer is preserved with its reversal history.</p></div>
       <button type="button" className="btn-secondary" onClick={onBack}>← Back to Stock</button>
     </div>
     {message && <p className="stock-message stock-message--ok" role="status">{message}</p>}

@@ -20,6 +20,8 @@ export type Sale = {
   total: number
   payment: PaymentMethod
   customerName: string | null
+  /** Cash received; null on older sales (Cash = fully paid, Balance = nothing paid). */
+  paidAmount: number | null
 }
 /** Sales grouped by local calendar day, keyed "yyyy-MM-dd". */
 export type SalesByDay = Record<string, Sale[]>
@@ -37,6 +39,7 @@ type SaleRow = {
   total: number | string
   payment: PaymentMethod
   customer_name?: string | null
+  paid_amount?: number | string | null
   created_at: string
   reversed_at?: string | null
 }
@@ -58,6 +61,7 @@ const toSale = (r: SaleRow): Sale => ({
   total: Number(r.total),
   payment: r.payment,
   customerName: r.customer_name ?? null,
+  paidAmount: r.paid_amount == null ? null : Number(r.paid_amount),
 })
 
 // ---------- Tiny external store ----------
@@ -139,6 +143,7 @@ async function setArchived(id: string, archivedAt: string | null) {
 let channel: RealtimeChannel | null = null
 let subscribedOnce = false
 let watching = false
+let lastVisibleResync = Date.now()
 let generation = 0
 
 async function fetchAllItems() {
@@ -182,7 +187,12 @@ function watchConnection() {
     actions.listen()
   })
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void resync()
+    // Live events keep the screen current; a full catch-up on every tab switch slowed billing
+    // during rush, so it runs at most once every 30 s. Reconnects (online/SUBSCRIBED) still resync at once.
+    if (document.visibilityState === "visible" && Date.now() - lastVisibleResync > 30_000) {
+      lastVisibleResync = Date.now()
+      void resync()
+    }
   })
 }
 
@@ -314,6 +324,17 @@ export const actions = {
     removeSale(id)
   },
 
+  /** Fix the payment mode / cash received on a completed sale. The database keeps a log of the old values. */
+  async editSalePayment(sale: Sale, payment: PaymentMethod, paid: number) {
+    const { data, error } = await supabase.rpc("edit_sale_payment", { p_id: sale.id, p_payment: payment, p_paid: paid })
+    if (error) {
+      if (error.code === "PGRST202") throw new Error("Run supabase/migrations/20261120_sale_payment_edit.sql in Supabase first.")
+      throw error
+    }
+    const row = data as SaleRow
+    upsertSale(row.day, toSale(row))
+  },
+
   /** Hide days outside the on-screen window. Nothing is deleted from the database. */
   purgeOld() {
     dropOldDays()
@@ -322,6 +343,10 @@ export const actions = {
 
 /** Number printed on the receipt (first 8 characters of the sale id). */
 export const receiptNo = (sale: Pick<Sale, "id">) => sale.id.slice(0, 8).toUpperCase()
+
+/** Amount still owed on a sale. */
+export const remainingBalance = (sale: Pick<Sale, "total" | "payment" | "paidAmount">) =>
+  Math.max(0, sale.total - (sale.paidAmount ?? (sale.payment === "Cash" ? sale.total : 0)))
 
 export const lineTotal = (lines: SaleLine[]) => lines.reduce((s, l) => s + l.qty * l.rate, 0)
 /** Total kg on a bill, to match against the weighing scale. */

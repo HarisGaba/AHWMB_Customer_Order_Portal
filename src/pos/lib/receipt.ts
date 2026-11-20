@@ -1,7 +1,7 @@
 import { format } from "date-fns"
 import { SHOP } from "@/lib/config"
 import { printDocument } from "../../lib/print"
-import { fmt, fmtKg, receiptNo, totalWeight, type Sale } from "@/lib/store"
+import { fmt, fmtKg, remainingBalance, totalWeight, type Sale } from "@/lib/store"
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
 
@@ -68,7 +68,7 @@ export function receiptHtml(sale: Sale) {
   .payrow { display: flex; align-items: center; justify-content: space-between; margin-top: 2mm; font-weight: 700; }
   .pay { display: inline-block; background: #000; color: #fff; padding: 0.6mm 3mm; border-radius: 2mm; font-weight: 800; letter-spacing: 1px; font-size: 12px; }
   .thanks { font-size: 15px; font-weight: 800; margin-top: 1mm; }
-  .policy { font: 700 12px/1.5 Arial, sans-serif; margin-top: 1mm; }
+  .policy { font: 700 15px/2.1 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif; margin-top: 1mm; text-align: center; }
 </style></head><body><div class="wrap">
   <div class="c">
     <img class="logo" src="${logo}" alt="">
@@ -77,11 +77,9 @@ export function receiptHtml(sale: Sale) {
   </div>
   <div class="title">SALES RECEIPT</div>
   <table class="meta">
-    <tr><td>Receipt No</td><td class="mono">${receiptNo(sale)}</td></tr>
     ${sale.customerName ? `<tr><td>Customer Name</td><td class="b">${esc(sale.customerName)}</td></tr>` : ""}
     <tr><td>Customer No</td><td>#${sale.customerNo}</td></tr>
-    <tr><td>Date</td><td>${format(date, "dd MMM yyyy")}</td></tr>
-    <tr><td>Time</td><td>${format(date, "hh:mm a")}</td></tr>
+    <tr><td>Date / Time</td><td>${format(date, "dd MMM yyyy, hh:mm a")}</td></tr>
   </table>
   <table class="items" style="margin-top:2.5mm">
     <colgroup><col class="n"><col><col class="q"><col class="rt"><col class="am"></colgroup>
@@ -89,12 +87,13 @@ export function receiptHtml(sale: Sale) {
     <tbody>${rows}</tbody>
   </table>
   <div class="payrow"><span>Payment</span><span class="pay">${sale.payment.toUpperCase()}</span></div>
+  <div class="payrow"><span>Remaining Balance</span><span class="mono">${fmt(remainingBalance(sale))}</span></div>
   <div class="grand"><span>TOTAL</span><span>${fmt(sale.total)}</span></div>
   <div class="weight"><span>TOTAL WEIGHT</span><span>${fmtKg(totalWeight(sale.lines))}</span></div>
   <hr>
   <div class="c">
     <div class="thanks">${esc(SHOP.receiptFooter)}</div>
-    <div class="policy">${esc(SHOP.receiptPolicy)}</div>
+    <div class="policy" dir="rtl" lang="ur">${esc(SHOP.receiptPolicy)}</div>
   </div>
 </div></body></html>`
 }

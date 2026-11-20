@@ -7,5 +7,5 @@ export const SHOP = {
   phone: "+92 321 9229419",
   logo: "/logo.png",
   receiptFooter: "Thank you for shopping with us!",
-  receiptPolicy: "Khareeda hua maal wapsi ho jayega",
+  receiptPolicy: "خریدا ہوا مال واپس ہو جائے گا",
 }

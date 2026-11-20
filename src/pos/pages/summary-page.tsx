@@ -7,6 +7,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   DownloadIcon,
+  PencilIcon,
   PrinterIcon,
   ReceiptIcon,
   SearchIcon,
@@ -46,7 +47,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToday } from "@/hooks/use-today"
 import { exportSalesCsv } from "@/lib/export"
 import { printReceipt } from "@/lib/receipt"
-import { actions, CURRENCY, dayKey, fmt, receiptNo, RETENTION_DAYS, useStore, type Sale } from "@/lib/store"
+import { actions, CURRENCY, dayKey, fmt, receiptNo, remainingBalance, RETENTION_DAYS, useStore, type Sale } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 const CHART_DAYS = 14
@@ -66,6 +67,33 @@ export function SummaryPage() {
   const [deleting, setDeleting] = useState(false)
   const [reversalKind, setReversalKind] = useState<"void" | "refund">("refund")
   const [reversalReason, setReversalReason] = useState("")
+
+  // Edit payment on a completed sale (e.g. marked Cash by mistake instead of Balance).
+  const [toEdit, setToEdit] = useState<Sale | null>(null)
+  const [editPayment, setEditPayment] = useState<Sale["payment"]>("Cash")
+  const [editPaid, setEditPaid] = useState("")
+  const [editing, setEditing] = useState(false)
+  function openEdit(sale: Sale) {
+    setToEdit(sale)
+    setEditPayment(sale.payment)
+    setEditPaid(String(sale.total - remainingBalance(sale)))
+  }
+  const editPaidNum = Number(editPaid)
+  const editValid = !!toEdit && editPaid.trim() !== "" && Number.isFinite(editPaidNum) && editPaidNum >= 0 && editPaidNum <= toEdit.total
+  async function confirmEdit() {
+    const sale = toEdit
+    if (!sale || editing || !editValid) return
+    setEditing(true)
+    try {
+      await actions.editSalePayment(sale, editPayment, editPaidNum)
+      toast.success("Sale updated", { description: `${editPayment} · paid ${fmt(editPaidNum)} · remaining ${fmt(sale.total - editPaidNum)}` })
+      setToEdit(null)
+    } catch (e) {
+      toast.error("Sale not updated", { description: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setEditing(false)
+    }
+  }
 
   async function confirmDelete() {
     const sale = toDelete
@@ -378,12 +406,15 @@ export function SummaryPage() {
           <CardHeader className="border-b py-4">
             <CardTitle>{selected ? selected.customerName || `Customer ${selected.customerNo}` : "Transaction details"}</CardTitle>
             <CardDescription>
-              {selected ? `Receipt ${receiptNo(selected)} · ${format(new Date(selected.createdAt), "d MMM yyyy, h:mm a")} · paid by ${selected.payment}` : "Select a customer to view their items."}
+              {selected ? `Receipt ${receiptNo(selected)} · ${format(new Date(selected.createdAt), "d MMM yyyy, h:mm a")} · paid by ${selected.payment} · remaining ${fmt(remainingBalance(selected))}` : "Select a customer to view their items."}
             </CardDescription>
             {selected && (
               <CardAction className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => printReceipt(selected)}>
                   <PrinterIcon /> Print receipt
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => openEdit(selected)}>
+                  <PencilIcon /> Edit
                 </Button>
                 <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => { setReversalReason(""); setToDelete(selected) }}>
                   <Trash2Icon /> Void / refund sale
@@ -479,6 +510,37 @@ export function SummaryPage() {
           </TableBody>
         </Table>
       </Card>
+      <AlertDialog open={!!toEdit} onOpenChange={(o) => !o && !editing && setToEdit(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit payment</AlertDialogTitle>
+            <AlertDialogDescription>
+              {toEdit && `${toEdit.customerName || `Customer ${toEdit.customerNo}`} · total ${fmt(toEdit.total)}. `}
+              Only the payment mode and cash received change; items and total stay the same. The old values are kept in the sale's edit log.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <label className="grid gap-2 text-sm">Payment
+            <select className="rounded-md border p-2" value={editPayment} onChange={(e) => {
+              const p = e.target.value as Sale["payment"]
+              setEditPayment(p)
+              if (toEdit) setEditPaid(String(p === "Cash" ? toEdit.total : 0))
+            }}>
+              <option value="Cash">Cash</option>
+              <option value="Balance">Balance</option>
+            </select>
+          </label>
+          <label className="grid gap-2 text-sm">Cash received
+            <Input type="number" min={0} max={toEdit?.total} step="any" value={editPaid} onChange={(e) => setEditPaid(e.target.value)} />
+          </label>
+          <p className="text-sm">Remaining balance: <span className="font-mono font-semibold">{toEdit && editValid ? fmt(toEdit.total - editPaidNum) : "—"}</span></p>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={editing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={editing || !editValid} onClick={(e) => { e.preventDefault(); void confirmEdit() }}>
+              {editing ? "Saving…" : "Save"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && !deleting && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
