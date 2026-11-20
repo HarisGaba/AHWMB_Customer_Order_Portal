@@ -9,6 +9,8 @@ alter table public.stock_transfers add column if not exists cancelled_at timesta
 alter table public.stock_transfers add column if not exists cancel_result jsonb;
 alter table public.orders add column if not exists notes text not null default '';
 
+-- The live database has an older delete_transfer with a different return type; replace it (function only, no data).
+drop function if exists public.delete_transfer(uuid);
 create or replace function public.delete_transfer(p_id uuid)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -92,7 +94,6 @@ begin
 end $$;
 revoke all on function public.submit_order(text,text,text,text,text,jsonb,text) from public,anon;
 grant execute on function public.submit_order(text,text,text,text,text,jsonb,text) to anon,authenticated,service_role;
-commit;
 
 create or replace function public.save_order_invoice(p_id uuid, p_items jsonb, p_balance numeric, p_deposit numeric)
 returns public.orders
