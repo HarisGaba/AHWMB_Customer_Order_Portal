@@ -25,6 +25,8 @@ test('audit fixes: reversing a transfer keeps history; staff order + invoice sav
  await db.exec(read('migrations/20261119_site_to_jodia_transfer.sql'))
  await db.exec(read('migrations/20261121_audit_fixes.sql'))
  await db.exec(read('migrations/20261121_audit_fixes.sql')) // safe to run twice
+ await db.exec(read('migrations/20261123_admin_orders.sql')); await db.exec(read('migrations/20261123_admin_orders.sql'))
+ await db.exec(`insert into auth.users(id,email) values('11111111-1111-1111-1111-111111111111','ahmedyounus1978@gmail.com')`)
  await db.exec(`insert into public.stock_items(location,item,weight,quantity) values('Jodia Bazaar Godown','Chawal',50,300)`)
  await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',email:'ahwmb1965@gmail.com'})])
  await db.exec('set role authenticated')
@@ -42,4 +44,16 @@ test('audit fixes: reversing a transfer keeps history; staff order + invoice sav
  const { rows: [inv] } = await db.query('select * from save_order_invoice($1,$2,$3,$4)',[o.id,JSON.stringify(items),0,10])
  assert.equal(Number(inv.total_amount),25.03); assert.equal(Number(inv.remaining_balance),15.03); assert.equal(inv.status,'completed')
  await assert.rejects(db.query('select * from save_order_invoice($1,$2,$3,$4)',[o.id,JSON.stringify([{name:'',total:1}]),0,0]),/item name/)
+ await db.exec("reset role")
+ // Owner identified by account id even when the token has no email -> full admin, prices allowed.
+ await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:"authenticated",sub:"11111111-1111-1111-1111-111111111111"})])
+ await db.exec("set role authenticated")
+ await db.query("select submit_order($1,$2,$3,$4,$5,$6,$7)",["REF-2","Kapa Altaf","","","",JSON.stringify(items),""])
+ await db.exec("reset role")
+ // No login (expired session) with prices -> clear message, nothing saved.
+ await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:"anon"})])
+ await db.exec("set role anon")
+ await assert.rejects(db.query("select submit_order($1,$2,$3,$4,$5,$6,$7)",["REF-3","X","03001234567","Addr","",JSON.stringify(items),""]),/login has expired/)
+ await db.exec("reset role")
+ assert.equal((await db.query("select count(*)::int n from orders where order_ref='REF-3'")).rows[0].n,0)
 })

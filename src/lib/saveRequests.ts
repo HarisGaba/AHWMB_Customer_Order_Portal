@@ -65,7 +65,17 @@ export async function saveCustomerOrder(db: SupabaseClient, args: OrderArgs) {
  if (!result.data) throw new Error('The server did not confirm the order. Your form is preserved; please retry.')
  return result.data as string
 }
+/** Staff orders must reach the database with a valid admin login; an expired token would be
+ * treated as a public customer ("Customer prices must be confirmed by staff"). Refresh first. */
+async function requireLogin(db: SupabaseClient) {
+ if (!db.auth) return
+ const { data } = await db.auth.getSession()
+ let session = data.session
+ if (!session || (session.expires_at && session.expires_at * 1000 < Date.now() + 60_000)) session = (await db.auth.refreshSession()).data.session
+ if (!session) throw new Error('Your admin login has expired. Log in again and press Submit — the order was not saved and your form is kept.')
+}
 export async function saveStaffOrder(db: SupabaseClient, args: OrderArgs) {
+ await requireLogin(db)
  let result = await boundedRequest(db.rpc('submit_order', args))
  let legacy = false
  if (result.error?.code === 'PGRST202') {

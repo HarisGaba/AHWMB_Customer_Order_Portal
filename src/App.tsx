@@ -3531,7 +3531,8 @@ function AdminCreateOrder({
     setErrors(curr => ({ ...curr, items: undefined }))
   }
 
-  const filledRows = rows.filter(r => r.itemName.trim() || r.quantityValue.trim())
+  // Blank rows (no item name and no quantity, whatever unit/rate they show) are ignored on submit.
+  const filledRows = rows.filter(r => r.itemName.trim() || (r.quantityValue.trim() && Number(r.quantityValue) !== 0))
 
   const grandTotal = useMemo(() =>
     sumLineTotals(filledRows.map(r => {
