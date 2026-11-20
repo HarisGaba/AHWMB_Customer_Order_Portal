@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { friendlyError } from "../../lib/errors"
 import { ArrowRightIcon, ChevronsUpDownIcon, CornerDownLeftIcon, SearchIcon, TagIcon } from "lucide-react"
 import { ItemCommand } from "@/components/item-command"
 import { PageHeader } from "@/components/page-header"
@@ -48,7 +49,7 @@ export function RatesPage() {
     try {
       await actions.updateRate(selected.id, r)
     } catch (e) {
-      return void toast.error("Rate not saved", { description: e instanceof Error ? e.message : String(e) })
+      return void toast.error("Rate not saved", { description: friendlyError(e) })
     } finally {
       setSaving(false)
     }

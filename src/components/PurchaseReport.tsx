@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
 import { supabase } from '../lib/supabase'
+import { friendlyError } from '../lib/errors'
 import { ActivityLog } from './ActivityLog'
 import { persistPurchase, purchaseSchemaMissing, readLocalPurchases, saveLocalPurchase, validPurchase as valid, type Purchase } from '../lib/purchases'
 const blank = (): Purchase => ({ id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: new Date().toLocaleDateString('en-CA') })
@@ -55,7 +56,7 @@ export function PurchaseReport() {
    setDirty(false); setDraft(blank()); setPage(0); setSearch('')
    setMessage(result.destination === 'device' ? 'Purchase saved on this device. Not synced to other devices; keep a downloaded backup.' : 'Purchase saved to database.')
    void load()
-  } catch (e) { setMessage(e instanceof Error ? e.message : 'Purchase could not save. Your form is preserved; please retry.') }
+  } catch (e) { setMessage(friendlyError(e, 'Purchase could not save. Your form is preserved; please retry.')) }
   finally { saving.current = false; setBusy(false) }
  }
  const migrate = async () => {

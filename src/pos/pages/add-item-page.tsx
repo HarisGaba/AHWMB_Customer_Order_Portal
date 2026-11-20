@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { friendlyError } from "../../lib/errors"
 import { formatDistanceToNow } from "date-fns"
 import { ArchiveIcon, ArchiveRestoreIcon, CornerDownLeftIcon, PackagePlusIcon, SearchIcon, Trash2Icon } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
@@ -23,7 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { actions, fmt, useStore, type Item } from "@/lib/store"
 
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e))
+const errMsg = (e: unknown) => friendlyError(e)
 
 export function AddItemPage() {
   const items = useStore((s) => s.items)

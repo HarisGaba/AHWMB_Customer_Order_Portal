@@ -14,6 +14,7 @@ import { validOrderQuantity, validCustomerUnit } from './lib/orderValidation'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { searchOrders } from './lib/searchOrders'
 import { saveCustomerOrder, saveStaffOrder } from './lib/saveRequests'
+import { friendlyError } from './lib/errors'
 import { ActivityLog } from './components/ActivityLog'
 import { PurchaseReport } from './components/PurchaseReport'
 export { PurchaseReport } from './components/PurchaseReport'
@@ -150,7 +151,8 @@ function checkRateLimit(phone: string, record = false): boolean {
 const formatMoney = (value: number) => `Rs. ${Math.round(value || 0).toLocaleString('en-PK')}`
 /** Can the signed-in user open the admin panel (main admin, or staff with any portal page)? */
 
-const readableError = (error: unknown): string => {
+const readableError = (error: unknown): string => friendlyError(error, readableErrorRaw(error))
+const readableErrorRaw = (error: unknown): string => {
   if (error instanceof Error) return error.message
   if (typeof error === 'string') return error
   if (error && typeof error === 'object') {
@@ -1260,7 +1262,7 @@ function CustomerPage({
   }
 
   const filledRows = useMemo(
-    () => rows.filter(r => r.itemName.trim() || r.quantityValue.trim()),
+    () => rows.filter(r => r.itemName.trim() || (r.quantityValue.trim() && Number(r.quantityValue) !== 0)),
     [rows]
   )
   const hasContent = filledRows.length > 0 || notes.trim().length > 0
@@ -2949,17 +2951,31 @@ function AdminPage({
     const printTab = printAfter ? openPrintTab() : null
     setSaving(true)
 
+    // Blank lines (no name, no quantity) are ignored; a line with a quantity but no name is reported.
     const items = pricedItems
-      .filter(item => item.name.trim() || item.quantity.trim())
-      .map((item, index) => ({
-        ...item,
-        sr: index + 1,
-        quantity: quantityText(Number(item.quantity_value) || parseQuantity(item.quantity), item.unit_type, 'en'),
-        quantity_value: Number(item.quantity_value) || parseQuantity(item.quantity),
-        unit_price: Number(item.unit_price ?? item.rate) || 0,
-        rate: Number(item.unit_price ?? item.rate) || 0,
-        total: Number(item.total) || 0,
-      }))
+      .filter(item => item.name.trim() || (item.quantity.trim() && (Number(item.quantity_value) || parseQuantity(item.quantity)) !== 0))
+      .map((item, index) => {
+        const quantityValue = Number(item.quantity_value) || parseQuantity(item.quantity)
+        const rate = Number(item.unit_price ?? item.rate) || 0
+        return {
+          ...item,
+          name: item.name.trim(),
+          sr: index + 1,
+          quantity: quantityText(quantityValue, item.unit_type, 'en'),
+          quantity_value: quantityValue,
+          unit_price: rate,
+          rate,
+          // Keep the line total as shown/typed (staff may override it for an adjustment).
+          total: Number(item.total) || 0,
+        }
+      })
+    const unnamed = items.findIndex(item => !item.name)
+    if (!items.length || unnamed >= 0) {
+      printTab?.close()
+      setSaving(false)
+      addToast(!items.length ? 'Add at least one item before saving the invoice.' : `Line ${unnamed + 1} has a quantity but no item name. Enter the name or clear the line.`, 'error')
+      return
+    }
 
     const finalFinancials = calculateFinancials(sumLineTotals(items), balance, deposit)
     const { totalAmount: finalTotalAmount, balance: finalBalance, totalBalance: finalTotalBalance, deposit: finalDeposit, remainingBalance: finalRemaining } = finalFinancials

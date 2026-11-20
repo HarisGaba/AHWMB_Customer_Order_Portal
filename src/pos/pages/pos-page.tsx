@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { usePosEmail } from "@/components/auth-gate"
 import { toast } from "sonner"
-import { saveError } from '../../lib/saveRequests'
+import { friendlyError as saveError } from '../../lib/errors'
 import {
   BanknoteIcon,
   CheckCircle2Icon,

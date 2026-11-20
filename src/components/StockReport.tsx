@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, ArrowRight, Check, History, Pencil, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react'
+import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { isMobileDevice, printDocument } from '../lib/print'
 
@@ -29,7 +30,7 @@ const bagsFor = (quantity: number, weight: number | null) => (weight && weight >
 const monthKey = (iso: string) => iso.slice(0, 7)
 const monthLabel = (key: string) => new Date(`${key}-01T00:00:00`).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })
 const newDraftLine = (): DraftLine => ({ key: crypto.randomUUID(), item: '', quantity: '', bags: '' })
-const errorText = (e: unknown) => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
+const errorText = (e: unknown) => friendlyError(e)
 
 /**
  * Calls onChange when any of the tables change (Supabase Realtime), and again when the tab
@@ -101,7 +102,7 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
     if (!quiet) setLoading(true)
     const { data, error } = await supabase.from('stock_items').select('id,location,item,weight,quantity,sort_order').order('sort_order').order('created_at')
     if (!quiet) setLoading(false)
-    if (error) { if (!quiet) notify(`Could not load stock: ${error.message}`, 'error'); return }
+    if (error) { if (!quiet) notify(`Could not load stock: ${friendlyError(error)}`, 'error'); return }
     const fresh: StockRow[] = (data || []).map(r => ({ id: r.id, location: r.location, item: r.item, weight: r.weight == null ? '' : String(r.weight), quantity: String(r.quantity), saved: true }))
     setRows(current => {
       const editing = new Map(current.filter(r => !r.saved).map(r => [r.id, r]))
@@ -319,7 +320,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
     setBusy(true); setError('')
     const { error: rpcError } = await supabase.rpc('transfer_stock', { p_from: from, p_to: target, p_lines: lines.map(l => ({ item: l.item, quantity: num(l.quantity) })) })
     setBusy(false)
-    if (rpcError) { setError(rpcError.message); return }
+    if (rpcError) { setError(friendlyError(rpcError)); return }
     onDone(`✓ ${lines.length} item${lines.length === 1 ? '' : 's'} (${kg(total)}) shifted from ${LOCATION_LABEL[from]} to ${LOCATION_LABEL[target]}.`)
   }
 
@@ -375,7 +376,7 @@ function TransferHistory({ location, onBack, canDelete, canChange }: { location:
     const all: Transfer[] = []
     for (let offset = 0; ; offset += 1000) {
       const { data, error } = await supabase.from('stock_transfers').select('*').eq('from_location', location).order('created_at', { ascending: false }).range(offset, offset + 999)
-      if (error) { setMessage(`Could not load history: ${error.message}`); break }
+      if (error) { setMessage(`Could not load history: ${friendlyError(error)}`); break }
       all.push(...(data as Transfer[]))
       if (!data || data.length < 1000) break
     }
@@ -488,7 +489,7 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
     setBusy(true); setError('')
     const { error: rpcError } = await supabase!.rpc('edit_transfer', { p_id: t.id, p_lines: lines.map(l => ({ item: l.item, quantity: num(l.quantity) })) })
     setBusy(false)
-    if (rpcError) { setError(rpcError.message); return }
+    if (rpcError) { setError(friendlyError(rpcError)); return }
     setEditing(false)
     onChanged('✓ Transfer updated. Stock in both godowns was adjusted.')
   }

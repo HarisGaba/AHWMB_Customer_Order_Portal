@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { friendlyError } from "../../lib/errors"
 import { addDays, format, parseISO, subDays } from "date-fns"
 import {
   BanknoteIcon,
@@ -91,7 +92,7 @@ export function SummaryPage() {
       toast.success("Sale updated", { description: `${editPayment} · paid ${fmt(editPaidNum)} · remaining ${fmt(sale.total - editPaidNum)}` })
       setToEdit(null)
     } catch (e) {
-      toast.error("Sale not updated", { description: e instanceof Error ? e.message : String(e) })
+      toast.error("Sale not updated", { description: friendlyError(e) })
     } finally {
       setEditing(false)
     }
@@ -107,7 +108,7 @@ export function SummaryPage() {
       setSelectedId(null)
       setToDelete(null)
     } catch (e) {
-      toast.error("Sale not reversed", { description: e instanceof Error ? e.message : String(e) })
+      toast.error("Sale not reversed", { description: friendlyError(e) })
     } finally {
       setDeleting(false)
     }
