@@ -202,8 +202,9 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
       title: 'Are you sure you want to delete this item?',
       detail: `${row.item || 'This item'} (${kg(num(row.quantity))}) will be removed from ${LOCATION_LABEL[row.location]}.`,
       onConfirm: async () => {
-        const { error } = await supabase!.from('stock_items').delete().eq('id', row.id)
+        const { data: removed, error } = await supabase!.from('stock_items').delete().eq('id', row.id).select('id')
         if (error) throw error
+        if (!removed?.length) throw new Error('Item was not deleted: the database did not remove it (no permission, or it was already removed). Refresh and try again.')
         setRows(current => current.filter(r => r.id !== row.id))
         notify(`✓ Deleted ${row.item} from ${LOCATION_LABEL[row.location]}.`)
       },

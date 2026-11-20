@@ -9,7 +9,7 @@ import {
 import { checkClient, clientFor, openPosFromPortal, supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
-import { calculateFinancials, calculateLineTotal, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
+import { calculateFinancials, calculateLineTotal, multiplyCurrency, roundCurrency, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
 import { validOrderQuantity, validCustomerUnit } from './lib/orderValidation'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { searchOrders } from './lib/searchOrders'
@@ -198,8 +198,8 @@ const unitLabel = (unit: UnitType, language: Language) =>
 const calculateAppLineTotal = (item: Pick<OrderItem, 'quantity_value' | 'unit_type' | 'unit_price' | 'rate'>) => {
   const quantity = Number(item.quantity_value) || 0
   const price = Number(item.unit_price ?? item.rate) || 0
-  if (item.unit_type === 'NONE') return Math.round(price * 100) / 100
-  if (item.unit_type === 'LITRE') return Math.round(quantity * price * 100) / 100
+  if (item.unit_type === 'NONE') return roundCurrency(price)
+  if (item.unit_type === 'LITRE') return multiplyCurrency(quantity, price)
   return calculateLineTotal({ quantity_value: quantity, unit_type: item.unit_type, unit_price: price, rate: price })
 }
 
@@ -2266,6 +2266,8 @@ export function DailyReports({ language, onBack, showOrdersButton = true }: { la
         .from('daily_expenses')
         .delete()
         .eq('id', id)
+        .select('id')
+        .then(r => (!r.error && !r.data?.length ? { ...r, error: { message: 'Expense was not deleted: the database did not remove it (no permission, or it was already removed). Refresh and try again.' } } : r))
       if (error) {
         addToast(`Delete failed: ${error.message}`, 'error')
         return
@@ -2851,8 +2853,10 @@ function AdminPage({
     if (!deleteOrderId || !supabase) return
     setDeleting(true)
     try {
-      const { error } = await supabase.from('orders').delete().eq('id', deleteOrderId)
+      const { data: removed, error } = await supabase.from('orders').delete().eq('id', deleteOrderId).select('id')
       if (error) throw error
+      // RLS can block a delete without an error; only remove it from the screen if the row is really gone.
+      if (!removed?.length) throw new Error('Order was not deleted: the database did not remove it (no permission, or it was already removed). Refresh and try again.')
       setOrders(curr => curr.filter(o => o.id !== deleteOrderId))
       if (selected?.id === deleteOrderId) {
         setSelected(null)

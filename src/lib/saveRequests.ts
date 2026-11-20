@@ -83,7 +83,7 @@ export async function saveStaffOrder(db: SupabaseClient, args: OrderArgs) {
  } else if (result.error) throw new Error(saveError(result.error))
  if (!id) throw new Error('The server did not confirm the order. Your form is preserved.')
  if (legacy) {
-  const total = Math.round(args.p_items.reduce((sum, l) => sum + l.total, 0) * 100) / 100
+  const total = Math.round(Number((args.p_items.reduce((sum, l) => sum + l.total, 0) * 100).toPrecision(12))) / 100
   // Only finalize the newly created/recovered pending order; never overwrite a
   // completed invoice another user has already processed.
   const update = await boundedRequest(db.from('orders').update({ grand_total: total, total_amount: total, total_balance: total, remaining_balance: total }).eq('id', id).eq('status', 'pending'))

@@ -292,8 +292,9 @@ export const actions = {
 
   /** Permanent delete. Past sales keep their own copy of the name and rate. */
   async deleteItemForever(id: string) {
-    const { error } = await supabase.from("items").delete().eq("id", id)
+    const { data: removed, error } = await supabase.from("items").delete().eq("id", id).select("id")
     if (error) throw error
+    if (!removed?.length) throw new Error("Item was not deleted: the database did not remove it (no permission, or it was already removed). Refresh and try again.")
     setState({ items: state.items.filter((i) => i.id !== id) })
   },
 

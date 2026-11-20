@@ -98,8 +98,32 @@ export type PricedQuantity = {
   rate?: number
 }
 
-export const roundCurrency = (value: number): number =>
-  Math.round((Number(value) || 0) * 100) / 100
+/** Round to paisa like PostgreSQL numeric round(x, 2): exact half-up (away from zero).
+ * Plain Math.round(x * 100) / 100 is wrong for floats such as 1.005 (stored as 1.00499…)
+ * or 2.5 * 10.01 (25.024999…), which made the database reject the line total. */
+export const roundCurrency = (value: number): number => {
+  const n = Number(value) || 0
+  const cents = Math.round(Number((Math.abs(n) * 100).toPrecision(15)))
+  return (n < 0 ? -cents : cents) / 100
+}
+
+// A number as an exact decimal: digits (BigInt) and how many of them are after the point.
+const toDecimal = (v: number): [bigint, number] => {
+  const [mant, exp = '0'] = Math.abs(v).toPrecision(15).split('e')
+  const [int, frac = ''] = mant.split('.')
+  let digits = BigInt(int + frac), scale = frac.length - Number(exp)
+  if (scale < 0) { digits *= 10n ** BigInt(-scale); scale = 0 }
+  return [v < 0 ? -digits : digits, scale]
+}
+/** round(a × b ÷ divisor, 2) computed exactly, the same way PostgreSQL numeric does. */
+export const multiplyCurrency = (a: number, b: number, divisor = 1): number => {
+  const [x, sx] = toDecimal(Number(a) || 0), [y, sy] = toDecimal(Number(b) || 0)
+  const num = x * y * 100n, den = 10n ** BigInt(sx + sy) * BigInt(divisor)
+  const neg = num < 0n
+  const abs = neg ? -num : num
+  const cents = (abs * 2n + den) / (den * 2n)
+  return Number(neg ? -cents : cents) / 100
+}
 
 export const sumLineTotals = (items: Array<{ total?: number | null }>): number =>
   roundCurrency(items.reduce((sum, item) => sum + (Number(item.total) || 0), 0))
@@ -112,8 +136,7 @@ export const calculateLineTotal = (item: PricedQuantity): number => {
   const quantity = Number(item.quantity_value) || 0
   const price = Number(item.unit_price ?? item.rate) || 0
   if (item.unit_type === 'NONE') return roundCurrency(price)
-  const billableQuantity = item.unit_type === 'GRAMS' ? quantity / 1000 : quantity
-  return roundCurrency(billableQuantity * price)
+  return multiplyCurrency(quantity, price, item.unit_type === 'GRAMS' ? 1000 : 1)
 }
 
 export type InvoiceFinancials = { totalAmount: number; balance: number; totalBalance: number; deposit: number; remainingBalance: number }
