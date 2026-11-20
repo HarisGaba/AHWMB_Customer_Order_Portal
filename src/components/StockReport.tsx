@@ -13,8 +13,6 @@ const isGodown = (l: Location) => GODOWNS.includes(l)
 // Jodia Bazaar -> Site Area or Shop; Site Area -> Shop only (database rule: migration 20261118_transfer_routes).
 const TRANSFER_TARGETS: Record<Location, Location[]> = { 'Site Area Godown': ['Jodia Bazaar Godown', 'Shop'], 'Jodia Bazaar Godown': ['Site Area Godown', 'Shop'], Shop: [] }
 const transferTargets = (from: Location) => TRANSFER_TARGETS[from].filter(to => to !== from)
-// The "Shifted to …" selector: Site Area offers only Shop. Site Area -> Jodia Bazaar has its own Stock Report button.
-const SELECTOR_TARGETS: Record<Location, Location[]> = { 'Site Area Godown': ['Shop'], 'Jodia Bazaar Godown': ['Site Area Godown', 'Shop'], Shop: [] }
 const LOCATION_LABEL: Record<Location, string> = { 'Site Area Godown': 'Site Area Godown', 'Jodia Bazaar Godown': 'Jodia Bazaar Godown', Shop: 'Shop' }
 // Older browser-only data used these names.
 const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Jodia Bazaar Godown', 'Godam Site': 'Site Area Godown' }
@@ -226,34 +224,33 @@ export function StockReport({ canEdit = true, canTransfer = true }: { canEdit?: 
 
   return <section className="panel report-panel">
     <div className="report-heading">
-      <div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Stock Report</h2><p className="panel-sub">Stock is saved permanently. Transfers deduct from the source automatically.</p></div>
+      <div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Stock Report</h2><p className="panel-sub">Choose a godown to see its stock. Add or edit items, or send stock to another place.</p></div>
       <div className="stock-heading-actions">
-        <button type="button" className="btn-secondary stock-print-btn" onClick={() => printStockReport(location, atLocation.filter(r => r.saved && r.item.trim()))} disabled={loading}><Printer size={17} /> Print Stock Report</button>
-        <select className="stock-location-select" value={location} onChange={e => setLocation(e.target.value as Location)}>
-          {/* Only the two godowns; the Shop is not part of the Stock Report. */}
-          {GODOWNS.map(l => <option key={l} value={l}>{LOCATION_LABEL[l]}</option>)}
-        </select>
+        <button type="button" className="btn-secondary stock-print-btn" onClick={() => printStockReport(location, atLocation.filter(r => r.saved && r.item.trim()))} disabled={loading}><Printer size={17} /> Print</button>
       </div>
+    </div>
+    <div className="stock-godown-tabs" role="tablist" aria-label="Godown">
+      {GODOWNS.map(l => <button key={l} type="button" role="tab" aria-selected={location === l} className={`stock-godown-tab${location === l ? ' is-active' : ''}`} onClick={() => setLocation(l)}>
+        <span>{LOCATION_LABEL[l]}</span><small>{rows.filter(r => r.location === l && r.saved).length} items</small>
+      </button>)}
     </div>
     {message && <p className={`stock-message stock-message--${message.type}`} role="status">{message.text}</p>}
     {legacyCount > 0 && <div className="stock-legacy"><span>{legacyCount} stock items are saved only in this browser.</span><button type="button" className="btn-secondary" onClick={() => void importLegacy()}>Move them to the database</button></div>}
-    <div className="site-tabs stock-toolbar">
+    {canTransfer && isGodown(location) && <div className="stock-transfer-bar">
+      <div className="stock-transfer-bar__text"><Truck size={22} aria-hidden="true" /><div><strong>Send stock from {LOCATION_LABEL[location]}</strong><span>Choose where it goes. The quantity is removed here and added there.</span></div></div>
+      <div className="stock-transfer-bar__actions">
+        {transferTargets(location).map(to => <button key={to} type="button" className="stock-send-btn" onClick={() => startTransfer(to)}>To {LOCATION_LABEL[to]} <ArrowRight size={16} aria-hidden="true" /></button>)}
+      </div>
+    </div>}
+    <div className="stock-toolbar">
       <label className="stock-search">
         <Search size={17} aria-hidden="true" />
         <input type="search" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setSearch('') }}
           placeholder={`Search items in ${LOCATION_LABEL[location]}…`} aria-label={`Search items in ${LOCATION_LABEL[location]}`} />
         {search && <button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={15} /></button>}
       </label>
-      {canEdit && <button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button>}
-      {!canTransfer ? null : isGodown(location)
-        ? <select className="stock-transfer-select" value="" onChange={e => e.target.value && startTransfer(e.target.value as Location)} aria-label={`Transfer stock from ${LOCATION_LABEL[location]}`}>
-          <option value="">⇄ Transfer from {LOCATION_LABEL[location]} to…</option>
-          {SELECTOR_TARGETS[location].map(to => <option key={to} value={to}>Shifted to {LOCATION_LABEL[to]}</option>)}
-        </select>
-        : null}
-      {canTransfer && location === 'Site Area Godown' && <button type="button" className="btn-secondary" onClick={() => startTransfer('Jodia Bazaar Godown')}>⇄ Site Area → Jodia Bazaar</button>}
-      {canTransfer && !isGodown(location) && <span className="stock-transfer-note">Transfers are only between godowns — choose a godown above to transfer.</span>}
       <button type="button" className="btn-secondary stock-history-btn" onClick={() => setView('history')}><History size={16} /> Transfer History</button>
+      {canEdit && <button type="button" className="btn-submit report-add" onClick={addRow}><Plus size={17} /> Add Item</button>}
     </div>
     <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Item</th><th>Weight (kg / bag)</th><th>Quantity (kg)</th><th>Bags</th><th aria-label="Actions" /></tr></thead><tbody>
       {loading && <tr><td colSpan={5} className="stock-empty">Loading stock…</td></tr>}

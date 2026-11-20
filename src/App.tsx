@@ -3131,12 +3131,7 @@ function AdminPage({
             </div>
 
             <div className="order-search-bar"><label className="field"><span className="field-label">{isRtl ? 'آرڈر تلاش کریں' : 'Customer, phone or order reference'}</span><input className="field-input" value={orderSearch} onChange={e => { setOrderSearch(e.target.value); setOrderPage(0) }} placeholder={isRtl ? 'تلاش کریں…' : 'Search orders…'} /></label><label className="field"><span className="field-label">{isRtl ? 'تاریخ سے' : 'From'}</span><input className="field-input" type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setOrderPage(0) }} /></label><label className="field"><span className="field-label">{isRtl ? 'تاریخ تک' : 'To'}</span><input className="field-input" type="date" min={dateFrom} value={dateTo} onChange={e => { setDateTo(e.target.value); setOrderPage(0) }} /></label></div>
-            <div className="pagination"><button className="btn-secondary" disabled={!orderPage} onClick={() => setOrderPage(p=>p-1)}>{isRtl ? 'پچھلا' : 'Previous'}</button><span>{orderPage*25+ (orders.length ? 1 : 0)}–{orderPage*25+orders.length} / {orderCount}</span><button className="btn-secondary" disabled={(orderPage+1)*25>=orderCount} onClick={() => setOrderPage(p=>p+1)}>{isRtl ? 'اگلا' : 'Next'}</button></div>
-            <div className="order-status-summary" aria-label="Order status summary">
-              <button type="button" onClick={() => setFilter('urgent')} className="order-summary-pill order-summary-pill--red">{orderSummary.urgent} {isRtl ? 'فوری' : 'Urgent'} 🔴</button>
-              <button type="button" onClick={() => setFilter('pending')} className="order-summary-pill order-summary-pill--yellow">{orderSummary.pending} {isRtl ? 'زیر التوا' : 'Pending'} ⏳</button>
-              <button type="button" onClick={() => setFilter('completed')} className="order-summary-pill order-summary-pill--green">{orderSummary.completed} {isRtl ? 'مکمل' : 'Completed'} ✅</button>
-            </div>
+            {orderCount > 25 && <div className="pagination"><button className="btn-secondary" disabled={!orderPage} onClick={() => setOrderPage(p=>p-1)}>{isRtl ? 'پچھلا' : 'Previous'}</button><span>{orderPage*25+ (orders.length ? 1 : 0)}–{orderPage*25+orders.length} / {orderCount}</span><button className="btn-secondary" disabled={(orderPage+1)*25>=orderCount} onClick={() => setOrderPage(p=>p+1)}>{isRtl ? 'اگلا' : 'Next'}</button></div>}
 
             {loading ? (
               <div>{Array.from({ length: 5 }).map((_, index) => <div key={index} className="skeleton" style={{ height: 72, marginBottom: 8, borderRadius: 10 }} />)}</div>
