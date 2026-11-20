@@ -333,7 +333,9 @@ export const actions = {
       throw error
     }
     const row = data as SaleRow
-    upsertSale(row.day, toSale(row))
+    const updated = toSale(row)
+    upsertSale(row.day, updated)
+    return updated
   },
 
   /** Hide days outside the on-screen window. Nothing is deleted from the database. */

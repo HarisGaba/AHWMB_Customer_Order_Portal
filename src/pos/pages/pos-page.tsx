@@ -69,6 +69,8 @@ export function PosPage({ active = true }: { active?: boolean }) {
   const [qty, setQty] = useState("")
   const [stage, setStage] = useState<Stage>(null)
   const [payment, setPayment] = useState<PaymentMethod>("Cash")
+  // Optional cash received now on a Balance (credit) sale; the rest stays as remaining balance.
+  const [paidNow, setPaidNow] = useState("")
   const [lastSale, setLastSale] = useState<Sale | null>(null)
   const [printed, setPrinted] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -122,8 +124,18 @@ export function PosPage({ active = true }: { active?: boolean }) {
     saving.current = true
     setBusy(true)
     try {
-      const sale = await actions.recordSale(cart, method, customer, requestId.current)
+      let sale = await actions.recordSale(cart, method, customer, requestId.current)
       requestId.current = crypto.randomUUID()
+      const part = Number(paidNow)
+      if (method === "Balance" && paidNow.trim() && Number.isFinite(part) && part > 0) {
+        // The sale is already saved; a failure here only skips the part-payment, never the sale.
+        try {
+          sale = await actions.editSalePayment(sale, "Balance", Math.min(part, sale.total))
+        } catch (err) {
+          toast.warning("Sale saved, cash received not recorded", { description: `${saveError(err)} Use Total Summary → Edit to add it.`, duration: 10000 })
+        }
+      }
+      setPaidNow("")
       setDraftMessage("Sale saved. Ready for the next customer.")
       setLastSale(sale)
       setPrinted(false)
@@ -157,6 +169,8 @@ export function PosPage({ active = true }: { active?: boolean }) {
   const keys = useRef<(e: KeyboardEvent) => void>(() => {})
   keys.current = (e: KeyboardEvent) => {
     if (!stage || e.ctrlKey || e.metaKey || e.altKey) return
+    // Typing in the "cash received" box: digits are amounts, not shortcuts. Enter still completes.
+    if (e.target instanceof HTMLInputElement && e.key !== "Enter") return
     const k = e.key.toLowerCase()
     const handled = () => {
       e.preventDefault()
@@ -453,6 +467,14 @@ export function PosPage({ active = true }: { active?: boolean }) {
               </button>
             ))}
           </div>
+          {payment === "Balance" && (
+            <label className="grid gap-1.5 text-sm">
+              Cash received now (optional)
+              <Input type="number" inputMode="decimal" min={0} max={total} step="any" value={paidNow} disabled={busy}
+                onChange={(e) => setPaidNow(e.target.value)} placeholder="0" />
+              <span className="text-xs text-muted-foreground">Remaining balance: <span className="font-mono">{fmt(Math.max(0, total - (Number(paidNow) || 0)))}</span></span>
+            </label>
+          )}
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>
               <Kbd>←</Kbd> <Kbd>→</Kbd> switch

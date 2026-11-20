@@ -63,7 +63,7 @@ test('bounded requests release the busy state path rather than waiting forever',
 })
 test('legacy staff order preserves notes and finalizes only its new pending order',async()=>{
  let calls=0,patch,filters=[]
- const db={rpc:async(name,v)=>{assert.equal(name,'submit_order');calls++;if(calls===1)return missing;assert.equal(v.p_notes,undefined);assert.equal(v.p_customer_address,'Address\nNotes: Ring bell');return {data:'new-order',error:null}},from:table=>{assert.equal(table,'orders');const q={update:v=>{patch=v;return q},eq:(k,v)=>{filters.push([k,v]);return q},then:resolve=>resolve({error:null})};return q}}
+ const db={rpc:async(name,v)=>{assert.equal(name,'submit_order');calls++;if(calls===1)return missing;assert.equal(v.p_notes,undefined);assert.equal(v.p_customer_address,'Address\nNotes: Ring bell');return {data:'new-order',error:null}},from:table=>{assert.equal(table,'orders');const q={update:v=>{patch=v;return q},eq:(k,v)=>{filters.push([k,v]);return q},select:()=>q,then:resolve=>resolve({data:[{id:'new-order'}],error:null})};return q}}
  const id=await saveStaffOrder(db,{p_order_ref:'ref',p_customer_name:'Customer',p_customer_phone:'923001234567',p_customer_address:'Address',p_location_link:null,p_notes:'Ring bell',p_items:[{total:200}]})
  assert.equal(id,'new-order');assert.equal(patch.grand_total,200);assert.deepEqual(filters,[['id','new-order'],['status','pending']])
 })

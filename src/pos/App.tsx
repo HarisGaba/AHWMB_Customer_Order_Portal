@@ -48,9 +48,9 @@ const ALL_NAV = [
   { id: "stock", label: "Stock Report", icon: BoxesIcon, page: sys("StockReportPage"), allow: anyOf("stock_report", "stock_transfer"), future: false, hidden: false },
   { id: "customers", label: "Customer Report", icon: BookUserIcon, page: sys("CustomerReportPage"), allow: anyOf("customer_report"), future: false, hidden: false },
   { id: "purchase", label: "Purchase Report", icon: ReceiptTextIcon, page: sys("PurchaseReportPage"), allow: anyOf("purchase_report"), future: false, hidden: false },
-  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, allow: anyOf("pos_billing"), future: true, hidden: false },
-  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), future: true, hidden: false },
-  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), future: true, hidden: false },
+  { id: "pos", label: "Point of Sale", icon: ShoppingCartIcon, page: PosPage, allow: anyOf("pos_billing"), future: true, hidden: true },
+  { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), future: true, hidden: true },
+  { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), future: true, hidden: true },
   { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary"), future: true, hidden: false },
 ] as const
 

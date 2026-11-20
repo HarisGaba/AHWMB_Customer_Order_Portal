@@ -51,7 +51,9 @@ import { actions, CURRENCY, dayKey, fmt, receiptNo, remainingBalance, RETENTION_
 import { cn } from "@/lib/utils"
 
 const CHART_DAYS = 14
-const sumBy = (sales: Sale[], p?: Sale["payment"]) => sales.filter((s) => !p || s.payment === p).reduce((a, s) => a + s.total, 0)
+// Cash = money actually received, Balance = amount still owed (part-payments split correctly).
+const sumBy = (sales: Sale[], p?: Sale["payment"]) =>
+  sales.reduce((a, s) => a + (!p ? s.total : p === "Balance" ? remainingBalance(s) : s.total - remainingBalance(s)), 0)
 
 
 export function SummaryPage() {

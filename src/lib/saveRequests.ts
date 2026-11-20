@@ -86,7 +86,12 @@ export async function saveStaffOrder(db: SupabaseClient, args: OrderArgs) {
   const total = Math.round(Number((args.p_items.reduce((sum, l) => sum + l.total, 0) * 100).toPrecision(12))) / 100
   // Only finalize the newly created/recovered pending order; never overwrite a
   // completed invoice another user has already processed.
-  const update = await boundedRequest(db.from('orders').update({ grand_total: total, total_amount: total, total_balance: total, remaining_balance: total }).eq('id', id).eq('status', 'pending'))
+  const update = await boundedRequest(db.from('orders').update({ grand_total: total, total_amount: total, total_balance: total, remaining_balance: total }).eq('id', id).eq('status', 'pending').select('id'))
+  if (!update.error && !update.data?.length) {
+   // Nothing updated: fine if someone already completed it; otherwise the totals were blocked.
+   const check = await boundedRequest(db.from('orders').select('status').eq('id', id).maybeSingle())
+   if (check.error || !check.data || check.data.status === 'pending') throw new Error(`Order ${args.p_order_ref} was saved, but its totals could not be finalized. Open it from Orders and save the invoice.`)
+  }
   if (update.error) throw new Error(`Order ${args.p_order_ref} exists, but its totals could not be finalized: ${saveError(update.error)}. Retry this same form; do not create it again.`)
  }
  return id as string
