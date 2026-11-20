@@ -15,6 +15,7 @@ import { ConnectionStatus } from './components/ConnectionStatus'
 import { searchOrders } from './lib/searchOrders'
 import { saveCustomerOrder, saveStaffOrder } from './lib/saveRequests'
 import { friendlyError } from './lib/errors'
+import { encodeOrderTag } from './lib/commission'
 import { ActivityLog } from './components/ActivityLog'
 import { PurchaseReport } from './components/PurchaseReport'
 export { PurchaseReport } from './components/PurchaseReport'
@@ -877,6 +878,14 @@ async function drawInvoice(
 ): Promise<Blob> {
   const { jsPDF } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5', compress: true })
+  // Hidden exact copy of the order, read back by POS → Add Commission when this PDF is uploaded.
+  doc.setProperties({
+    title: `Sales Invoice ${order.customer_name || ''}`.trim(),
+    keywords: encodeOrderTag({
+      customer: order.customer_name || '', date: formatDateShort(order.created_at), ref: order.order_ref,
+      lines: items.map(item => ({ name: item.name, quantity: pdfQuantityText(Number(item.quantity_value) || 0, item.unit_type), rate: Number(item.unit_price ?? item.rate) || 0, total: Number(item.total) || 0 })),
+    }),
+  })
   // Load the bold Urdu font before drawing, otherwise the canvas falls back to a thin system font.
   await Promise.race([
     document.fonts.load('700 44px "Noto Naskh Arabic"', 'اردو'),

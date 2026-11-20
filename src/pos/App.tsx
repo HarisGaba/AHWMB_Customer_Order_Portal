@@ -3,6 +3,7 @@ import { ConnectionStatus } from "../components/ConnectionStatus"
 import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { useTheme } from "next-themes"
+import { PercentIcon } from "lucide-react"
 import { BarChart3Icon, BookUserIcon, BoxesIcon, KeyboardIcon, LogOutIcon, MoonIcon, PackagePlusIcon, ShoppingCartIcon, SunIcon, TagIcon, NotebookPenIcon, ReceiptTextIcon, ChevronRightIcon, LayoutDashboardIcon } from "lucide-react"
 import {
   Sidebar,
@@ -35,6 +36,7 @@ import { usePosAccess } from "@/components/auth-gate"
 import { can, hasPosDataAccess, type Access, type Permission } from "../lib/access"
 
 // Summary pulls in the charting library; load it only when opened.
+const CommissionPage = lazy(() => import("@/pages/commission-page").then((m) => ({ default: m.CommissionPage })))
 const SummaryPage = lazy(() => import("@/pages/summary-page").then((m) => ({ default: m.SummaryPage })))
 
 // Admin System pages (reports & management, moved here from the order portal); loaded on demand.
@@ -52,6 +54,7 @@ const ALL_NAV = [
   { id: "rates", label: "Rate Changing", icon: TagIcon, page: RatesPage, allow: anyOf("pos_items"), future: true, hidden: true },
   { id: "add", label: "Item Addition", icon: PackagePlusIcon, page: AddItemPage, allow: anyOf("pos_items"), future: true, hidden: true },
   { id: "summary", label: "Total Summary", icon: BarChart3Icon, page: SummaryPage, allow: anyOf("pos_summary"), future: true, hidden: false },
+  { id: "commission", label: "Add Commission", icon: PercentIcon, page: CommissionPage, allow: anyOf("orders", "pos_summary"), future: true, hidden: false },
 ] as const
 
 type PageId = (typeof ALL_NAV)[number]["id"]
