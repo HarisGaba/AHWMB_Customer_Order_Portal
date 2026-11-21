@@ -952,13 +952,13 @@ async function drawInvoice(
   drawFrame()
 
   // SALES INVOICE title box
-  const cx = PW/2, titleY = M+12
+  const cx = PW/2, titleY = M+9
   doc.setFont('times','bold'); doc.setFontSize(17); doc.setTextColor(0)
   doc.text('SALES INVOICE', cx, titleY+7, {align:'center'})
   doc.setLineWidth(0.7); doc.rect(cx-40, titleY, 80, 11)
 
   // Customer / Date bar
-  const barY = titleY+15, barH = 14
+  const barY = titleY+14, barH = 12
   const bL = M+9, bW = PW-M*2-18, divX = bL + bW*0.63
   doc.setLineWidth(0.5); doc.rect(bL, barY, bW, barH)
   doc.line(divX, barY, divX, barY+barH)
@@ -980,7 +980,7 @@ async function drawInvoice(
   const TL = M+5, TW = PW-M*2-10
   // Compact A5 columns: S.No, Item, Quantity, Rate, Amount.
   const CX = [TL, TL+10, TL+50, TL+75, TL+101]
-  const CW = [10,    40,    25,    26,     26]
+  const CW = [10,    40,    25,    26,     21] // sums to the table width (122 mm)
   const HDR_H = 10
 
   const drawItemsHeader = (y: number): number => {
@@ -995,6 +995,8 @@ async function drawInvoice(
         doc.text('Per', mx, y+4.5, {align:'center'})
         doc.text('KG/Gram/Piece', mx, y+8, {align:'center'})
       } else {
+        doc.setFontSize(7.5)
+        while (doc.getTextWidth(hdrs[i]) > CW[i] - 1.5 && doc.getFontSize() > 5.5) doc.setFontSize(doc.getFontSize() - 0.25) // e.g. "Amount (PKR)" stays inside its column
         doc.text(hdrs[i], mx, y+HDR_H/2+2, {align:'center'})
       }
     }
@@ -1002,7 +1004,7 @@ async function drawInvoice(
     return y + HDR_H
   }
 
-  let curY = barY + barH + 4
+  let curY = barY + barH + 3
   curY = drawItemsHeader(curY)
   doc.setFont('times','bold'); doc.setFontSize(8.5); doc.setTextColor(0)
 
@@ -1010,10 +1012,10 @@ async function drawInvoice(
     const item = items[idx]
     const nameLines2 = doc.splitTextToSize(item.name || '—', CW[1]-4)
     const nameImage = unicodeName(item.name || '', CW[1]-4)
-    const rh = Math.max(7, (nameImage ? nameImage.height : nameLines2.length * 3.6) + 3)
+    const rh = Math.max(5.6, (nameImage ? nameImage.height : nameLines2.length * 3.6) + 2)
     // Page break
-    if (curY + rh > PH - M - 6) { // fill each page; the totals block moves to a new page by itself if needed
-      doc.addPage(); drawFrame(); curY = M+16
+    if (curY + rh > PH - M - 8.5) { // fill each page, stopping above the corner ornaments; the totals block moves to a new page by itself if needed
+      doc.addPage(); drawFrame(); curY = M+9 // below the corner ornaments
       curY = drawItemsHeader(curY)
     }
     doc.setFont('times','bold'); doc.setFontSize(8.5); doc.setTextColor(0)
@@ -1023,8 +1025,9 @@ async function drawInvoice(
     const midY = curY + rh/2 + 1.5
     doc.text(String(idx+1),                                    CX[0]+CW[0]/2, midY, {align:'center'})
     if (nameImage) {
-      doc.addImage(nameImage.canvas, 'PNG', CX[1]+1.5, curY+1.5, nameImage.width, nameImage.height)
-    } else doc.text(nameLines2, CX[1]+1.5, curY+4.6, { lineHeightFactor: 1.2 })
+      doc.addImage(nameImage.canvas, 'PNG', CX[1]+1.5, curY+1.1, nameImage.width, nameImage.height)
+    } else if (nameLines2.length === 1) doc.text(nameLines2, CX[1]+1.5, midY) // one line: same baseline as the numbers
+    else doc.text(nameLines2, CX[1]+1.5, curY+4.1, { lineHeightFactor: 1.2 })
     const fit = (text: string, col: number) => {
       let size = 8.5
       doc.setFontSize(size)
@@ -1040,9 +1043,10 @@ async function drawInvoice(
 
   // ── Financials (5-col) ────────────────────────────────────────────────
   const FCW = TW / 5   // 34.8 mm per column
-  const FH  = 8, FRH = 9
-  if (curY + 5 + FH + FRH + 28 > PH - M) { doc.addPage(); drawFrame(); curY = M+16 }
-  const fY = curY + 5
+  const FH  = 7, FRH = 7.5
+  // Totals block = 3 + 7 + 7.5 + 2 + 8 + ~11 (Thank You) mm; move it to a new page only if it truly does not fit.
+  if (curY + 3 + FH + FRH + 2 + 8 + 11 > PH - M - 2) { doc.addPage(); drawFrame(); curY = M+9 }
+  const fY = curY + 3
 
   doc.setFillColor('#000000'); doc.setDrawColor(0); doc.setLineWidth(0.4)
   doc.rect(TL, fY, TW, FH, 'FD')
@@ -1052,7 +1056,7 @@ async function drawInvoice(
     const fx = TL + i*FCW
     if (i > 0) doc.line(fx, fY, fx, fY+FH)
     const ls = doc.splitTextToSize(fHdrs[i], FCW-1)
-    doc.text(ls, fx+FCW/2, fY+FH/2+(ls.length>1?0:1.5), {align:'center'})
+    doc.text(ls, fx+FCW/2, fY+FH/2+(ls.length>1?-0.3:1.3), {align:'center'})
   }
   const fDY = fY + FH
   doc.rect(TL, fDY, TW, FRH)
@@ -1067,19 +1071,19 @@ async function drawInvoice(
   for (let i = 0; i < 5; i++) {
     const fx = TL + i*FCW
     if (i > 0) doc.line(fx, fDY, fx, fDY+FRH)
-    doc.text(fVals[i], fx+FCW/2, fDY+FRH/2+2, {align:'center'})
+    doc.text(fVals[i], fx+FCW/2, fDY+FRH/2+1.4, {align:'center'})
   }
 
   // ── Remaining balance box ─────────────────────────────────────────────
-  const rY = fDY + FRH + 3, rH = 10
+  const rY = fDY + FRH + 2, rH = 8
   doc.setLineWidth(0.6); doc.rect(TL, rY, TW, rH)
   doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(0)
-  doc.text('Remaining Balance:', TL+4, rY+rH/2+2)
-  doc.text(`Rs. ${invoiceNumber(financials.remainingBalance)}`, TL+TW-3, rY+rH/2+2, {align:'right'})
+  doc.text('Remaining Balance:', TL+4, rY+rH/2+1.6)
+  doc.text(`Rs. ${invoiceNumber(financials.remainingBalance)}`, TL+TW-3, rY+rH/2+1.6, {align:'right'})
 
   // ── Footer ────────────────────────────────────────────────────────────
   doc.setFontSize(13); doc.setFont('times','bolditalic'); doc.setTextColor(0)
-  doc.text('Thank You', PW/2, rY+rH+14, {align:'center'})
+  doc.text('Thank You', PW/2, rY+rH+8, {align:'center'})
 
   // Resolve the blob before triggering the browser download. This avoids
   // Safari/Chromium races where save() can run before jsPDF has finished
