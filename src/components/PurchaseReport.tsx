@@ -12,6 +12,8 @@ const blank = (): Purchase => ({ id: crypto.randomUUID(), party: '', area: '', i
 const rs = (n: number) => `Rs. ${(Number(n) || 0).toLocaleString('en-PK', { maximumFractionDigits: 2 })}`
 const cents = (n: number) => Math.round((Number(n) || 0) * 100)
 const PAGE = 25
+// The database trims the supplier name, so compare it trimmed ("leela foods " = "leela foods").
+const sameField = (k: string, a: unknown, b: unknown) => k === 'party' ? String(a ?? '').trim() === String(b ?? '').trim() : String(a ?? '') === String(b ?? '')
 
 /**
  * Purchase Report: Add Supplier (new purchase), Edit Supplier (search → Edit loads the form),
@@ -65,7 +67,7 @@ export function PurchaseReport() {
     }
    }
    if (sequence !== querySequence.current) return
-   const pending = local.filter(l => !remote.some(r => r.id === l.id && ['party','area','item','date'].every(k => r[k as keyof Purchase] === l[k as keyof Purchase]) && Number(r.amount) === Number(l.amount)))
+   const pending = local.filter(l => !remote.some(r => r.id === l.id && ['party','area','item','date'].every(k => sameField(k, r[k as keyof Purchase], l[k as keyof Purchase])) && Number(r.amount) === Number(l.amount)))
    setLegacy(pending); setDeviceMode(missing); setDeposits(deps.filter(d => !d.archived_at)); setDepositsReady(depsOk)
    const term = search.trim().toLowerCase()
    const matches = [...remote.filter(r => !r.archived_at), ...pending]
@@ -150,7 +152,7 @@ export function PurchaseReport() {
     const { data: existing, error: readError } = await supabase.from('purchases').select('*').eq('id', row.id).maybeSingle()
     if (readError) throw readError
     if (existing) {
-     if (['party','area','item','date'].some(k => String(existing[k]) !== String(row[k as keyof Purchase] || '')) || Number(existing.amount) !== Number(row.amount)) throw new Error('A local purchase differs from its database copy. Neither copy was overwritten; review the backup.')
+     if (['party','area','item','date'].some(k => !sameField(k, existing[k], row[k as keyof Purchase])) || Number(existing.amount) !== Number(row.amount)) throw new Error('A local purchase differs from its database copy. Neither copy was overwritten; review the backup.')
      continue
     }
     const { error } = await supabase.rpc('save_purchase', { p_row: row, p_version: null }); if (error) throw error
