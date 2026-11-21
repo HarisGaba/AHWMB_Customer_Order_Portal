@@ -22,7 +22,7 @@ test('purchase quantity is saved and Delete hides (never erases) any purchase', 
   if (name >= '20261115') break
   try { await db.exec(read('migrations/'+name)) } catch(e) { throw new Error(`${name}: ${e.message}`) }
  }
- for (const m of ['20261126_purchase_deposits','20261127_activity_log','20261128_purchase_quantity','20261128_purchase_quantity']) await db.exec(read(`migrations/${m}.sql`))
+ for (const m of ['20261126_purchase_deposits','20261127_activity_log','20261128_purchase_quantity','20261128_purchase_quantity','20261129_deposit_method','20261129_deposit_method']) await db.exec(read(`migrations/${m}.sql`))
  await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',email:'ahwmb1965@gmail.com'})])
  await db.exec('set role authenticated')
  const id = '11111111-2222-3333-4444-666666666666'
@@ -34,9 +34,13 @@ test('purchase quantity is saved and Delete hides (never erases) any purchase', 
  // Old rows without quantity still import (blank quantity).
  const { rows: [o] } = await db.query('select * from save_purchase($1,null)',[JSON.stringify({ id: '11111111-2222-3333-4444-777777777777', party: 'journal impex', area: '', item: '', amount: 241000, date: '2026-11-16' })])
  assert.equal(o.quantity, '')
- await db.query('select * from add_purchase_deposit($1,$2,$3)',[id, 1000, '2026-11-21'])
+ await db.query('select * from add_purchase_deposit($1,$2,$3)',[id, 1000, '2026-11-21']) // old screens still work (Cash)
+ const { rows: [chq] } = await db.query('select * from add_purchase_deposit($1,$2,$3,$4,$5)',[id, 2000, '2026-11-22', '', 'Cheque'])
+ assert.equal(chq.method, 'Cheque')
+ await assert.rejects(db.query('select * from add_purchase_deposit($1,$2,$3,$4,$5)',[id, 10, '2026-11-22', '', 'Card']), /Cash, Cheque or Online/)
+ assert.deepEqual((await db.query('select method from purchase_deposits order by date')).rows.map(r => r.method), ['Cash', 'Cheque'])
  await db.query('select archive_purchase($1)',[id]) // unsettled delete allowed (hidden)
  await db.exec('reset role')
  assert.ok((await db.query('select archived_at from purchases where id=$1',[id])).rows[0].archived_at)
- assert.equal((await db.query('select count(*)::int n from purchase_deposits where purchase_id=$1',[id])).rows[0].n, 1)
+ assert.equal((await db.query('select count(*)::int n from purchase_deposits where purchase_id=$1',[id])).rows[0].n, 2)
 })

@@ -418,6 +418,11 @@ export function PosPage({ active = true }: { active?: boolean }) {
               Amount due <span className="font-mono font-medium text-foreground">{fmt(total)}</span>
             </DialogDescription>
           </DialogHeader>
+          <div className="flex items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2 text-sm">
+            <UserRoundIcon className="size-4 text-primary" />
+            <span className="text-muted-foreground">Customer:</span>
+            <span className="font-semibold">{customer.trim() || "Walk-in (no name)"}</span>
+          </div>
           <div className="grid grid-cols-2 gap-3 py-2">
             {(
               [

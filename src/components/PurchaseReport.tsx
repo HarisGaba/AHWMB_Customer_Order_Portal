@@ -6,7 +6,9 @@ import { ddmmyyyy } from '../lib/dates'
 import { persistPurchase, purchaseSchemaMissing, readLocalPurchases, samePurchase, saveLocalPurchase, syncLocalPurchases, validPurchase as valid, type Purchase } from '../lib/purchases'
 
 type Row = Purchase & { archived_at?: string | null }
-type Deposit = { id: string; purchase_id: string; amount: number; date: string; note: string; archived_at?: string | null }
+type Deposit = { id: string; purchase_id: string; amount: number; date: string; note: string; method?: string; archived_at?: string | null }
+const METHODS = ['Cash', 'Cheque', 'Online'] as const
+type Method = typeof METHODS[number]
 const today = () => new Date().toLocaleDateString('en-CA')
 const blank = (): Purchase => ({ id: crypto.randomUUID(), party: '', area: '', item: '', quantity: '', amount: '', date: today() })
 const rs = (n: number) => `Rs. ${(Number(n) || 0).toLocaleString('en-PK', { maximumFractionDigits: 2 })}`
@@ -32,7 +34,7 @@ export function PurchaseReport() {
  const [search, setSearch] = useState('')
  const [deviceMode, setDeviceMode] = useState(!supabase)
  const [modal, setModal] = useState<{ id: string; kind: 'deposit' | 'details' } | null>(null)
- const [dep, setDep] = useState({ amount: '', date: today() })
+ const [dep, setDep] = useState<{ amount: string; date: string; method: Method }>({ amount: '', date: today(), method: 'Cash' })
  const saving = useRef(false)
  const autoSynced = useRef(false) // one automatic sync per page visit
  const querySequence = useRef(0)
@@ -124,10 +126,11 @@ export function PurchaseReport() {
   if (cents(amount) > cents(remainingFor(r))) { setMessage(`This deposit is more than the remaining balance (${rs(remainingFor(r))}).`); return }
   saving.current = true; setBusy(true); setMessage('')
   try {
-   const { error } = await supabase.rpc('add_purchase_deposit', { p_purchase: r.id, p_amount: amount, p_date: dep.date, p_note: '' })
+   const { error } = await supabase.rpc('add_purchase_deposit', { p_purchase: r.id, p_amount: amount, p_date: dep.date, p_note: '', p_method: dep.method })
+   if (error?.code === 'PGRST202') throw new Error('Payment method needs a database update: run supabase/migrations/20261129_deposit_method.sql in Supabase. The deposit was not saved.')
    if (error) throw error
-   setDep({ amount: '', date: today() }); setModal(null)
-   setMessage(`Deposit of ${rs(amount)} saved for ${r.party}. Remaining: ${rs(Math.max(0, remainingFor(r) - amount))}.`)
+   setDep({ amount: '', date: today(), method: 'Cash' }); setModal(null)
+   setMessage(`Deposit of ${rs(amount)} (${dep.method}) saved for ${r.party}. Remaining: ${rs(Math.max(0, remainingFor(r) - amount))}.`)
    await load()
   } catch (e) { setMessage(friendlyError(e)) }
   finally { saving.current = false; setBusy(false) }
@@ -208,7 +211,7 @@ It stays saved in the database and in Activity history.`)) return
        <button className="ledger-delete-btn" disabled={busy || local} title={local ? 'Import this purchase to the database first' : undefined} onClick={() => void deletePurchase(r)}>Delete</button>
       </div>
       {canDeposit && <div className="purchase-actions-row">
-       <button className="btn-submit purchase-small-btn" disabled={busy || settled} title={settled ? 'Bill is fully paid' : undefined} onClick={() => { setDep({ amount: '', date: today() }); setModal({ id: r.id, kind: 'deposit' }) }}>Deposit</button>
+       <button className="btn-submit purchase-small-btn" disabled={busy || settled} title={settled ? 'Bill is fully paid' : undefined} onClick={() => { setDep({ amount: '', date: today(), method: 'Cash' }); setModal({ id: r.id, kind: 'deposit' }) }}>Deposit</button>
        <button className="btn-secondary" onClick={() => setModal({ id: r.id, kind: 'details' })}>Details</button>
       </div>}
      </td>
@@ -226,12 +229,13 @@ It stays saved in the database and in Activity history.`)) return
      {modal!.kind === 'deposit' ? (remaining > 0 ? <form className="purchase-deposit-form" onSubmit={e => { e.preventDefault(); void addDeposit(r) }}>
       <label className="field"><span className="field-label">Deposit amount</span><input className="field-input" autoFocus type="number" min={0} step=".01" max={remaining} value={dep.amount} onChange={e => setDep({ ...dep, amount: e.target.value })} placeholder={`Up to ${remaining.toLocaleString('en-PK')}`} /></label>
       <label className="field"><span className="field-label">Date</span><input className="field-input" type="date" value={dep.date} onChange={e => setDep({ ...dep, date: e.target.value })} /></label>
+      <div className="field"><span className="field-label">Payment method</span><div className="deposit-methods" role="radiogroup" aria-label="Payment method">{METHODS.map(m => <button key={m} type="button" role="radio" aria-checked={dep.method === m} className={`deposit-method${dep.method === m ? ' is-active' : ''}`} onClick={() => setDep({ ...dep, method: m })}>{m}</button>)}</div></div>
       <button type="submit" className="btn-submit" disabled={busy}>{busy ? 'Saving…' : 'Save deposit'}</button>
      </form> : <p className="form-message">This bill is fully paid — remaining balance is 0.</p>)
-     : list.length ? <table className="report-table"><thead><tr><th>#</th><th>Date</th><th>Deposit</th><th>Remaining after</th><th aria-label="Remove" /></tr></thead><tbody>
+     : list.length ? <table className="report-table"><thead><tr><th>#</th><th>Date</th><th>Deposit</th><th>Method</th><th>Remaining after</th><th aria-label="Remove" /></tr></thead><tbody>
       {list.reduce<{ el: ReactNode[]; left: number }>((acc, d, i) => {
        const left = acc.left - cents(d.amount)
-       acc.el.push(<tr key={d.id}><td>{i + 1}</td><td>{ddmmyyyy(d.date)}</td><td>{rs(d.amount)}</td><td>{rs(Math.max(0, left) / 100)}</td><td><button className="ledger-delete-btn" disabled={busy} onClick={() => void removeDeposit(d)}>Remove</button></td></tr>)
+       acc.el.push(<tr key={d.id}><td>{i + 1}</td><td>{ddmmyyyy(d.date)}</td><td>{rs(d.amount)}</td><td>{d.method || 'Cash'}</td><td>{rs(Math.max(0, left) / 100)}</td><td><button className="ledger-delete-btn" disabled={busy} onClick={() => void removeDeposit(d)}>Remove</button></td></tr>)
        return { el: acc.el, left }
       }, { el: [], left: cents(Number(r.amount)) }).el}
      </tbody></table> : <p className="empty-state">No deposits yet.</p>}

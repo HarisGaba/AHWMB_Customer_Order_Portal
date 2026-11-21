@@ -16,5 +16,6 @@ from (values
   ('purchases + date-wise deposits',          exists(select 1 from pg_proc where proname = 'add_purchase_deposit'), '20261126_purchase_deposits.sql'),
   ('activity history',                         exists(select 1 from information_schema.tables where table_schema = 'public' and table_name = 'activity_log'), '20261127_activity_log.sql'),
   ('purchase quantity + delete',               exists(select 1 from pg_proc where proname = 'archive_purchase'), '20261128_purchase_quantity.sql'),
+  ('deposit payment method',                   exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'purchase_deposits' and column_name = 'method'), '20261129_deposit_method.sql'),
   ('sales.paid_amount column',                 exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'sales' and column_name = 'paid_amount'), '20261120_sale_payment_edit.sql')
 ) as t(item, ok, fix);
