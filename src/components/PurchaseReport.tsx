@@ -8,7 +8,7 @@ import { persistPurchase, purchaseSchemaMissing, readLocalPurchases, saveLocalPu
 type Row = Purchase & { archived_at?: string | null }
 type Deposit = { id: string; purchase_id: string; amount: number; date: string; note: string; archived_at?: string | null }
 const today = () => new Date().toLocaleDateString('en-CA')
-const blank = (): Purchase => ({ id: crypto.randomUUID(), party: '', area: '', item: '', amount: '', date: today() })
+const blank = (): Purchase => ({ id: crypto.randomUUID(), party: '', area: '', item: '', quantity: '', amount: '', date: today() })
 const rs = (n: number) => `Rs. ${(Number(n) || 0).toLocaleString('en-PK', { maximumFractionDigits: 2 })}`
 const cents = (n: number) => Math.round((Number(n) || 0) * 100)
 const PAGE = 25
@@ -22,7 +22,6 @@ const sameField = (k: string, a: unknown, b: unknown) => k === 'party' ? String(
  * Older purchases kept only in this browser are shown and can still be imported; they are never changed here.
  */
 export function PurchaseReport() {
- const [mode, setMode] = useState<'add' | 'edit'>('add')
  const [rows, setRows] = useState<Row[]>([])
  const [deposits, setDeposits] = useState<Deposit[]>([])
  const [depositsReady, setDepositsReady] = useState(false)
@@ -84,19 +83,14 @@ export function PurchaseReport() {
  const remainingFor = (r: Purchase) => Math.max(0, (cents(Number(r.amount)) - cents(paidFor(r.id))) / 100)
  const isEditing = draft.version != null || draft.localRevision != null
 
- const switchMode = (next: 'add' | 'edit') => {
-  if (dirty && !window.confirm('Discard unsaved purchase changes?')) return
-  setMode(next); setDraft(blank()); setDirty(false); setMessage('')
- }
  const startEdit = (r: Purchase) => {
   if (dirty && !window.confirm('Discard unsaved purchase changes?')) return
-  setMode('edit'); setDraft(r); setDirty(false); setMessage(`Editing ${r.party}. Change the details above and press Save changes.`)
+  setDraft({ quantity: '', ...r }); setDirty(false); setMessage(`Editing ${r.party}. Change the details above and press Save changes.`)
   formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
  }
 
  const save = async () => {
   if (saving.current) return
-  if (mode === 'edit' && !isEditing) { setMessage('Search for the supplier below and press Edit on the purchase you want to change.'); return }
   if (!valid(draft)) { setMessage('Enter supplier, date and a nonnegative amount.'); return }
   saving.current = true; setBusy(true); setMessage('')
   try {
@@ -136,10 +130,23 @@ export function PurchaseReport() {
   catch (e) { setMessage(friendlyError(e)) }
   finally { saving.current = false; setBusy(false) }
  }
- const deleteSettled = async (r: Purchase) => {
-  if (!supabase || saving.current || !window.confirm(`${r.party}: this bill is fully paid. Delete it from the list? (It stays saved in the database.)`)) return
+ const deletePurchase = async (r: Purchase) => {
+  const remaining = depositsReady ? remainingFor(r) : 0
+  const warn = remaining > 0 ? `
+
+Warning: ${rs(remaining)} is still remaining on this bill.` : ''
+  if (!supabase || saving.current || !window.confirm(`Delete ${r.party} (${rs(Number(r.amount))}, ${r.date}) from the list?${warn}
+
+It stays saved in the database and in Activity history.`)) return
   saving.current = true; setBusy(true)
-  try { const { error } = await supabase.rpc('archive_settled_purchase', { p_id: r.id }); if (error) throw error; setOpen(null); setMessage(`${r.party} — settled bill deleted from the list.`); await load() }
+  try {
+   let { error } = await supabase.rpc('archive_purchase', { p_id: r.id })
+   // Before 20261128_purchase_quantity.sql is run, only settled bills can be deleted.
+   if (error?.code === 'PGRST202') ({ error } = await supabase.rpc('archive_settled_purchase', { p_id: r.id }))
+   if (error) throw error
+   if (draft.id === r.id) { setDraft(blank()); setDirty(false) }
+   setOpen(null); setMessage(`${r.party} deleted from the list (kept in the database).`); await load()
+  }
   catch (e) { setMessage(friendlyError(e)) }
   finally { saving.current = false; setBusy(false) }
  }
@@ -165,28 +172,24 @@ export function PurchaseReport() {
  }
  const download = () => { const url = URL.createObjectURL(new Blob([JSON.stringify(legacy, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = 'purchase-local-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) }
 
- const labels = { party: 'Supplier', area: 'Area', item: 'Item', amount: 'Amount (bill total)', date: 'Date' } as const
+ const labels = { party: 'Supplier', area: 'Area', item: 'Item', quantity: 'Quantity', amount: 'Amount (bill total)', date: 'Date' } as const
 
  return <section className="panel report-panel">
   <h2 className="admin-heading">Purchase Report</h2>
   <p className="panel-sub">{deviceMode ? 'Purchases are saved in this browser only until the database update (20261126_purchase_deposits.sql) is run. Keep a downloaded backup.' : 'Add a supplier purchase, record deposits by date, and see the remaining balance.'}</p>
   {legacy.length > 0 && <div className="notice-card"><strong>{legacy.length} purchases saved only in this browser</strong><p>They are kept as they are. Import them to the database to add deposits and see them on every device.</p><button className="btn-secondary" onClick={download}>Download local backup</button><button type="button" className="btn-submit" disabled={busy || deviceMode} onClick={() => void migrate()}>Import existing purchases</button></div>}
 
-  <div className="purchase-mode" role="tablist" aria-label="Purchase mode">
-   <button type="button" role="tab" aria-selected={mode === 'add'} className={`purchase-mode-tab${mode === 'add' ? ' is-active' : ''}`} onClick={() => switchMode('add')}><strong>Add Supplier</strong><small>New purchase entry</small></button>
-   <button type="button" role="tab" aria-selected={mode === 'edit'} className={`purchase-mode-tab${mode === 'edit' ? ' is-active' : ''}`} onClick={() => switchMode('edit')}><strong>Edit Supplier</strong><small>Search below, then press Edit</small></button>
-  </div>
 
   <form ref={formRef} className="purchase-form" onSubmit={e => { e.preventDefault(); void save() }}>
-   {(['party', 'area', 'item', 'amount', 'date'] as const).map(k => <label className="field" key={k}><span className="field-label">{labels[k]}</span><input className="field-input" disabled={busy || (mode === 'edit' && !isEditing)} type={k === 'date' ? 'date' : k === 'amount' ? 'number' : 'text'} min={k === 'amount' ? 0 : undefined} step={k === 'amount' ? '.01' : undefined} required={['party', 'amount', 'date'].includes(k)} value={draft[k]} onChange={e => { setDraft({ ...draft, [k]: e.target.value }); setDirty(true) }} /></label>)}
-   <button type="submit" className="btn-submit" disabled={busy || (mode === 'edit' && !isEditing)}>{busy ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Add Purchase'}</button>
-   {mode === 'edit' && isEditing && <button type="button" className="btn-secondary" disabled={busy} onClick={() => { setDraft(blank()); setDirty(false); setMessage('') }}>Cancel</button>}
+   {(['party', 'area', 'item', 'quantity', 'amount', 'date'] as const).map(k => <label className="field" key={k}><span className="field-label">{labels[k]}</span><input className="field-input" disabled={busy} placeholder={k === 'quantity' ? 'e.g. 50 bags / 1200 kg' : undefined} type={k === 'date' ? 'date' : k === 'amount' ? 'number' : 'text'} min={k === 'amount' ? 0 : undefined} step={k === 'amount' ? '.01' : undefined} required={['party', 'amount', 'date'].includes(k)} value={draft[k] ?? ''} onChange={e => { setDraft({ ...draft, [k]: e.target.value }); setDirty(true) }} /></label>)}
+   <button type="submit" className="btn-submit" disabled={busy}>{busy ? 'Saving…' : isEditing ? 'Save changes' : 'Add Purchase'}</button>
+   {isEditing && <button type="button" className="btn-secondary" disabled={busy} onClick={() => { setDraft(blank()); setDirty(false); setMessage('') }}>Cancel</button>}
   </form>
-  {mode === 'edit' && !isEditing && <p className="form-message">Search the supplier below and press <strong>Edit</strong> — the purchase opens in the form above.</p>}
+  {isEditing && <p className="form-message">Editing <strong>{draft.party}</strong> — change the details above and press <strong>Save changes</strong>, or <strong>Cancel</strong>.</p>}
   {message && <p role="status" className="form-message">{message}</p>}
 
   <label className="field"><span className="field-label">Search supplier</span><input className="field-input" value={search} placeholder="Supplier, area or item" onChange={e => { setSearch(e.target.value); setPage(0) }} /></label>
-  <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Supplier</th><th>Area</th><th>Item</th><th>Amount</th><th>Deposited</th><th>Remaining</th><th>Date</th><th>Action</th></tr></thead><tbody>
+  <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Supplier</th><th>Area</th><th>Item</th><th>Quantity</th><th>Amount</th><th>Deposited</th><th>Remaining</th><th>Date</th><th>Action</th></tr></thead><tbody>
    {rows.map(r => {
     const local = r.localRevision != null
     const paid = paidFor(r.id), remaining = remainingFor(r), settled = !local && depositsReady && remaining === 0
@@ -194,18 +197,20 @@ export function PurchaseReport() {
     const expanded = open === r.id
     return <Fragment key={`${r.id}-${local ? 'device' : 'database'}`}>
      <tr className={settled ? 'purchase-settled' : undefined}>
-      <td>{r.party}{local && <small> · This device</small>}</td><td>{r.area}</td><td>{r.item}</td>
+      <td>{r.party}{local && <small> · This device</small>}</td><td>{r.area}</td><td>{r.item}</td><td>{r.quantity || '—'}</td>
       <td>{rs(Number(r.amount))}</td>
       <td>{local || !depositsReady ? '—' : rs(paid)}</td>
       <td><strong className={remaining > 0 ? 'money-negative' : 'money-positive'}>{local || !depositsReady ? '—' : settled ? 'Settled' : rs(remaining)}</strong></td>
       <td>{r.date}</td>
       <td className="purchase-actions">
-       <button className="btn-secondary" onClick={() => startEdit(r)}>Edit</button>
-       {!local && depositsReady && <button className="btn-secondary" onClick={() => { setOpen(expanded ? null : r.id); setDep({ amount: '', date: today() }) }}>{expanded ? 'Close' : `Deposits (${list.length})`}</button>}
-       {settled && <button className="ledger-delete-btn" disabled={busy} onClick={() => void deleteSettled(r)}>Delete</button>}
+       <div className="purchase-actions-row">
+        <button className="btn-secondary" onClick={() => startEdit(r)}>Edit</button>
+        <button className="ledger-delete-btn" disabled={busy || local} title={local ? 'Import this purchase to the database first' : undefined} onClick={() => void deletePurchase(r)}>Delete</button>
+       </div>
+       {!local && depositsReady && <button className="btn-secondary purchase-deposits-btn" onClick={() => { setOpen(expanded ? null : r.id); setDep({ amount: '', date: today() }) }}>{expanded ? 'Close' : `Deposits (${list.length})`}</button>}
       </td>
      </tr>
-     {expanded && <tr className="purchase-deposits-row"><td colSpan={8}>
+     {expanded && <tr className="purchase-deposits-row"><td colSpan={9}>
       <div className="purchase-deposits">
        <div className="purchase-deposit-summary"><span>Bill <strong>{rs(Number(r.amount))}</strong></span><span>Deposited <strong>{rs(paid)}</strong></span><span>Remaining <strong className={remaining > 0 ? 'money-negative' : 'money-positive'}>{rs(remaining)}</strong></span></div>
        {list.length ? <table className="report-table"><thead><tr><th>Date</th><th>Deposit</th><th>Remaining after</th><th aria-label="Remove" /></tr></thead><tbody>

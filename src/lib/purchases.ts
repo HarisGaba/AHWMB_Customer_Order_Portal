@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type Purchase = { id: string; party: string; area: string; item: string; amount: string; date: string; version?: number; localRevision?: number }
+export type Purchase = { id: string; party: string; area: string; item: string; quantity?: string; amount: string; date: string; version?: number; localRevision?: number }
 const LEGACY_KEY = 'ahwmb-purchase-report'
 const PREFIX = 'ahwmb-purchase-snapshot:'
 export const validPurchase = (r: Purchase) => typeof r?.party === 'string' && !!r.party.trim() && /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') && String(r.amount ?? '').trim() !== '' && Number.isFinite(Number(r.amount)) && Number(r.amount) >= 0 && Number(r.amount) <= 100000000000
@@ -29,7 +29,7 @@ export function saveLocalPurchase(storage: Storage, row: Purchase): Purchase {
  if (!validPurchase(row)) throw new Error('Enter supplier, date and a nonnegative amount.')
  if (row.version != null) throw new Error('This database purchase cannot be edited locally. Your form is preserved; please restore database saving.')
  const existing = readLocalPurchases(storage).find(r => r.id === row.id)
- const same = existing && ['party','area','item','amount','date'].every(k => String(existing[k as keyof Purchase] ?? '') === String(row[k as keyof Purchase] ?? ''))
+ const same = existing && ['party','area','item','quantity','amount','date'].every(k => String(existing[k as keyof Purchase] ?? '') === String(row[k as keyof Purchase] ?? ''))
  if (same) return existing
  if (existing && existing.localRevision !== row.localRevision) throw new Error('This purchase changed in another tab. Reload before editing; your entry has not been overwritten.')
  const saved = { ...row, localRevision: Math.max(Date.now(), (existing?.localRevision ?? 0) + 1) }
