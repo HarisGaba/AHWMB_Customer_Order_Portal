@@ -3,7 +3,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
 import { supabase } from '../lib/supabase'
 import { friendlyError } from '../lib/errors'
 import { ActivityLog } from './ActivityLog'
-import { persistPurchase, purchaseSchemaMissing, readLocalPurchases, saveLocalPurchase, validPurchase as valid, type Purchase } from '../lib/purchases'
+import { persistPurchase, purchaseSchemaMissing, readLocalPurchases, samePurchase, saveLocalPurchase, syncLocalPurchases, validPurchase as valid, type Purchase } from '../lib/purchases'
 
 type Row = Purchase & { archived_at?: string | null }
 type Deposit = { id: string; purchase_id: string; amount: number; date: string; note: string; archived_at?: string | null }
@@ -12,8 +12,6 @@ const blank = (): Purchase => ({ id: crypto.randomUUID(), party: '', area: '', i
 const rs = (n: number) => `Rs. ${(Number(n) || 0).toLocaleString('en-PK', { maximumFractionDigits: 2 })}`
 const cents = (n: number) => Math.round((Number(n) || 0) * 100)
 const PAGE = 25
-// The database trims the supplier name, so compare it trimmed ("leela foods " = "leela foods").
-const sameField = (k: string, a: unknown, b: unknown) => k === 'party' ? String(a ?? '').trim() === String(b ?? '').trim() : String(a ?? '') === String(b ?? '')
 
 /**
  * Purchase Report: Add Supplier (new purchase), Edit Supplier (search → Edit loads the form),
@@ -36,6 +34,7 @@ export function PurchaseReport() {
  const [open, setOpen] = useState<string | null>(null)
  const [dep, setDep] = useState({ amount: '', date: today() })
  const saving = useRef(false)
+ const autoSynced = useRef(false) // one automatic sync per page visit
  const querySequence = useRef(0)
  const formRef = useRef<HTMLFormElement>(null)
  useUnsavedChanges(dirty, 'Discard unsaved purchase changes?')
@@ -67,7 +66,16 @@ export function PurchaseReport() {
     }
    }
    if (sequence !== querySequence.current) return
-   const pending = local.filter(l => !remote.some(r => r.id === l.id && ['party','area','item','date'].every(k => sameField(k, r[k as keyof Purchase], l[k as keyof Purchase])) && Number(r.amount) === Number(l.amount)))
+   const pending = local.filter(l => { const r = remote.find(x => x.id === l.id); return !r || (!samePurchase(r, l) && (l.localRevision ?? 0) > (Date.parse(String((r as { updated_at?: string }).updated_at || '')) || 0)) })
+   // Browser-only purchases go to the database automatically (identical copies are skipped; nothing is deleted).
+   if (supabase && !missing && pending.length && !autoSynced.current) {
+    autoSynced.current = true
+    const result = await syncLocalPurchases(supabase, pending, remote)
+    if (result.imported || result.updated) setMessage(`${result.imported + result.updated} purchase${result.imported + result.updated === 1 ? '' : 's'} from this browser saved to the database. The browser copy is kept as a backup.`)
+    if (result.problems.length) setMessage(`Some browser purchases could not be saved to the database: ${result.problems.join('; ')}. They are kept in this browser.`)
+    if (sequence === querySequence.current) void load()
+    return
+   }
    setLegacy(pending); setDeviceMode(missing); setDeposits(deps.filter(d => !d.archived_at)); setDepositsReady(depsOk)
    const term = search.trim().toLowerCase()
    const matches = [...remote.filter(r => !r.archived_at), ...pending]
@@ -153,21 +161,14 @@ It stays saved in the database and in Activity history.`)) return
 
  const migrate = async () => {
   if (!supabase || saving.current || deviceMode) return
-  saving.current = true; setBusy(true); let imported = 0
+  saving.current = true; setBusy(true)
   try {
-   for (const row of legacy) {
-    if (!valid(row)) throw new Error('Some local rows need a supplier, valid date and amount. Download the backup and correct these before importing.')
-    const { data: existing, error: readError } = await supabase.from('purchases').select('*').eq('id', row.id).maybeSingle()
-    if (readError) throw readError
-    if (existing) {
-     if (['party','area','item','date'].some(k => !sameField(k, existing[k], row[k as keyof Purchase])) || Number(existing.amount) !== Number(row.amount)) throw new Error('A local purchase differs from its database copy. Neither copy was overwritten; review the backup.')
-     continue
-    }
-    const { error } = await supabase.rpc('save_purchase', { p_row: row, p_version: null }); if (error) throw error
-    imported++
-   }
-   setLegacy([]); setMessage(`${imported} purchases imported. Original browser data kept as backup.`); await load()
-  } catch (e) { setMessage(`Import paused after ${imported} rows. ${friendlyError(e)} Original data is preserved; retry skips identical rows.`) }
+   const { data, error } = await supabase.from('purchases').select('*')
+   if (error) throw error
+   const result = await syncLocalPurchases(supabase, legacy, data || [])
+   setMessage(result.problems.length ? `Saved ${result.imported + result.updated}. Not saved: ${result.problems.join('; ')}. They stay in this browser.` : `${result.imported + result.updated} purchases saved to the database. Browser copy kept as backup.`)
+   await load()
+  } catch (e) { setMessage(friendlyError(e)) }
   finally { saving.current = false; setBusy(false) }
  }
  const download = () => { const url = URL.createObjectURL(new Blob([JSON.stringify(legacy, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = 'purchase-local-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000) }
@@ -177,7 +178,7 @@ It stays saved in the database and in Activity history.`)) return
  return <section className="panel report-panel">
   <h2 className="admin-heading">Purchase Report</h2>
   <p className="panel-sub">{deviceMode ? 'Purchases are saved in this browser only until the database update (20261126_purchase_deposits.sql) is run. Keep a downloaded backup.' : 'Add a supplier purchase, record deposits by date, and see the remaining balance.'}</p>
-  {legacy.length > 0 && <div className="notice-card"><strong>{legacy.length} purchases saved only in this browser</strong><p>They are kept as they are. Import them to the database to add deposits and see them on every device.</p><button className="btn-secondary" onClick={download}>Download local backup</button><button type="button" className="btn-submit" disabled={busy || deviceMode} onClick={() => void migrate()}>Import existing purchases</button></div>}
+  {legacy.length > 0 && <div className="notice-card"><strong>{legacy.length} purchase{legacy.length === 1 ? '' : 's'} still only in this browser</strong><p>{deviceMode ? 'The database table is not set up yet, so these stay in this browser for now.' : 'These could not be saved to the database automatically (see the message below). They are kept here.'}</p><button className="btn-secondary" onClick={download}>Download local backup</button><button type="button" className="btn-submit" disabled={busy || deviceMode} onClick={() => void migrate()}>Try saving to database again</button></div>}
 
 
   <form ref={formRef} className="purchase-form" onSubmit={e => { e.preventDefault(); void save() }}>
