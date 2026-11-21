@@ -73,7 +73,6 @@ export function receiptHtml(sale: Sale) {
   <div class="c">
     <img class="logo" src="${logo}" alt="">
     ${SHOP.address ? `<div class="addr">${esc(SHOP.address)}</div>` : ""}
-    ${SHOP.phone ? `<div class="addr">Tel: ${esc(SHOP.phone)}</div>` : ""}
   </div>
   <div class="title">SALES RECEIPT</div>
   <table class="meta">
