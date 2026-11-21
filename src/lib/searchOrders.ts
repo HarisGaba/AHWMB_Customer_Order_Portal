@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 type SearchArgs = { p_search: string; p_status: string; p_from: string | null; p_to: string | null; p_page: number }
-type SearchRow = { id: string; customer_name: string; customer_phone: string; order_ref: string; status: string; created_at: string }
+type SearchRow = { id: string; customer_name: string; customer_phone: string; order_ref: string; order_no?: number | null; status: string; created_at: string }
 
 /** Keep existing deployments readable while the optional search RPC is rolled out.
  * Uses the signed-in client and normal orders RLS; never retries authorization errors.
@@ -20,7 +20,9 @@ export async function searchOrders(db: SupabaseClient, args: SearchArgs) {
   if (!data || data.length < 1000) break
  }
  const search = args.p_search.toLowerCase()
- const matches = rows.filter(row => `${row.customer_name || ''} ${row.customer_phone || ''} ${row.order_ref || ''}`.toLowerCase().includes(search))
+ // Order number matches "12" or "#12".
+ const number = search.replace(/^#/, '').trim()
+ const matches = rows.filter(row => `${row.customer_name || ''} ${row.customer_phone || ''} ${row.order_ref || ''}`.toLowerCase().includes(search) || (/^d+$/.test(number) && String(row.order_no ?? '') === number))
  const cutoff = Date.now() - 86400000
  const urgent = (row: SearchRow) => row.status === 'pending' && Date.parse(row.created_at) < cutoff
  const filtered = matches.filter(row => args.p_status === 'all' || row.status === args.p_status || (args.p_status === 'urgent' && urgent(row)))

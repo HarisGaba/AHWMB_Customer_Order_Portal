@@ -62,6 +62,7 @@ type OrderItem = {
 type OrderRecord = {
   id: string
   order_ref: string
+  order_no?: number | null
   customer_name: string
   customer_phone: string
   customer_address: string
@@ -179,11 +180,20 @@ const formatDateShort = (value: string | Date) =>
   }).format(new Date(value))
 
 const buildAdminWhatsAppLink = (order: OrderRecord) => {
-  const message = `*AHWMB Order — ${order.order_ref}*\nCustomer: ${order.customer_name}\nAddress: ${order.customer_address}\nDate: ${formatDateShort(order.created_at)}\n\nItems:\n${order.items.map((item, index) => `${index + 1}. ${item.name} — ${item.quantity_value} ${item.unit_type} × Rs.${item.unit_price} = Rs.${item.total}`).join('\n')}\n\n*Grand Total: Rs.${order.grand_total.toLocaleString('en-PK')}*\n\n_Sent from AHWMB Customer Portal_`
+  const message = `*AHWMB Order ${orderLabel(order)}*\nCustomer: ${order.customer_name}\nAddress: ${order.customer_address}\nDate: ${formatDateShort(order.created_at)}\n\nItems:\n${order.items.map((item, index) => `${index + 1}. ${item.name} — ${item.quantity_value} ${item.unit_type} × Rs.${item.unit_price} = Rs.${item.total}`).join('\n')}\n\n*Grand Total: Rs.${order.grand_total.toLocaleString('en-PK')}*\n\n_Sent from AHWMB Customer Portal_`
   return `https://wa.me/?text=${encodeURIComponent(message)}`
 }
 
 const createOrderRef = () => `#AHWMB-${crypto.randomUUID()}`
+/** Short order number for screens and printouts (#1, #2 …); the long reference stays internal. */
+const orderLabel = (o: { order_no?: number | null; order_ref: string }) => (o.order_no ? `#${o.order_no}` : o.order_ref)
+/** Look up the short number of an order just submitted (falls back to the reference). */
+const lookupOrderLabel = async (ref: string) => {
+  try {
+    const { data } = await supabase!.rpc('order_number', { p_ref: ref })
+    return typeof data === 'number' || (typeof data === 'string' && data) ? `#${data}` : ref
+  } catch { return ref }
+}
 const parseQuantity = (value: string) => {
   const match = value.replace(',', '.').match(/\d+(?:\.\d+)?/)
   return match ? Number(match[0]) : 0
@@ -1377,7 +1387,7 @@ function CustomerPage({
       draft.clearDraft()
       orderRequest.current = null
       try { sessionStorage.removeItem('ahwmb-order-request') } catch { /* no local cache */ }
-      setSuccessRef(orderRef)
+      setSuccessRef(await lookupOrderLabel(orderRef))
       setCartOpen(false)
     } catch (err) {
       const message = readableError(err)
@@ -3182,7 +3192,7 @@ function AdminPage({
                       onClick={() => choose(order)}
                     >
                       <div className="order-card-top">
-                        <span className="order-ref">{order.order_ref}</span>
+                        <span className="order-ref">{orderLabel(order)}</span>
                         {(() => { const badge = getOrderBadge(order); return <span className={`order-badge order-badge--${badge.color}`}>{badge.emoji} {language === 'ur' ? badge.labelUr : badge.label}</span> })()}
                       </div>
                       <strong className="order-name">{order.customer_name}</strong>
@@ -3200,7 +3210,7 @@ function AdminPage({
                       className="order-card-edit-customer"
                       title="Edit customer info"
                       onClick={e => openEditCustomer(order, e)}
-                      aria-label={`Edit customer info for ${order.order_ref}`}
+                      aria-label={`Edit customer info for order ${orderLabel(order)}`}
                     >
                       ✏️
                     </button>
@@ -3209,7 +3219,7 @@ function AdminPage({
                       className="order-card-delete"
                       title="Delete order"
                       onClick={e => { e.stopPropagation(); setDeleteOrderId(order.id) }}
-                      aria-label={`Delete order ${order.order_ref}`}
+                      aria-label={`Delete order ${orderLabel(order)}`}
                     >
                       <Trash2 size={15} />
                     </button>
@@ -3259,7 +3269,7 @@ function AdminPage({
                 <div className="modal-icon"><UserRound size={28} /></div>
                 <h3 className="modal-title" id="edit-customer-title">Edit Customer Info</h3>
                 <p className="modal-body" style={{ marginBottom: 16 }}>
-                  <strong>{editCustomerOrder.order_ref}</strong> — Fix typos in customer details below.
+                  <strong>Order {orderLabel(editCustomerOrder)}</strong> — Fix typos in customer details below.
                 </p>
                 <label className="field" style={{ marginBottom: 10, display: 'block', textAlign: 'left' }}>
                   <span className="field-label">Customer Name</span>
@@ -3326,7 +3336,7 @@ function AdminPage({
                 {/* Order header */}
                 <div className="editor-head">
                   <div className="editor-head-info">
-                    <p className="admin-eyebrow">{selected.order_ref}</p>
+                    <p className="admin-eyebrow">Order {orderLabel(selected)}</p>
                     <h3 className="editor-customer">{selected.customer_name}</h3>
                     <div className="editor-contact">
                       <span><Phone size={13} /> {selected.customer_phone}</span>
@@ -3606,7 +3616,7 @@ function AdminCreateOrder({
     const addressVal = address.trim()
 
     try {
-      await saveStaffOrder(supabase, {
+      const newOrderId = await saveStaffOrder(supabase, {
         p_order_ref: orderRef,
         p_customer_name: name.trim(),
         p_customer_phone: phoneNorm,
@@ -3616,7 +3626,8 @@ function AdminCreateOrder({
         p_items: items,
       })
 
-      addToast(`✓ Order ${orderRef} created successfully!`, 'success')
+      const { data: created } = await supabase.from('orders').select('order_no').eq('id', newOrderId).maybeSingle()
+      addToast(`✓ Order ${created?.order_no ? `#${created.order_no}` : orderRef} created successfully!`, 'success')
       setTimeout(() => onSuccess(), 700)
     } catch (err) {
       addToast(readableError(err) || 'Failed to create order.', 'error')

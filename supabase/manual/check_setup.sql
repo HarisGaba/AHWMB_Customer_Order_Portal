@@ -12,5 +12,6 @@ from (values
   ('orders.notes column (direct orders)',       exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'orders' and column_name = 'notes'), '20261121_audit_fixes.sql'),
   ('owner admins + expired-login message',     exists(select 1 from pg_proc where proname = 'submit_order' and prosrc like '%login has expired%'), '20261123_admin_orders.sql'),
   ('transfers merge into matching item',      exists(select 1 from pg_proc where proname = '_stock_add'), '20261124_transfer_merge.sql'),
+  ('short order numbers (#1, #2 …)',          exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'orders' and column_name = 'order_no'), '20261125_order_numbers.sql'),
   ('sales.paid_amount column',                 exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'sales' and column_name = 'paid_amount'), '20261120_sale_payment_edit.sql')
 ) as t(item, ok, fix);
