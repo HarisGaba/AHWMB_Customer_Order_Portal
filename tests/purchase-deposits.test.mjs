@@ -23,6 +23,7 @@ test('purchase deposits: date-wise payments, remaining balance, settled delete k
   try { await db.exec(read('migrations/'+name)) } catch(e) { throw new Error(`${name}: ${e.message}`) }
  }
  await db.exec(read('migrations/20261126_purchase_deposits.sql')); await db.exec(read('migrations/20261126_purchase_deposits.sql'))
+ await db.exec(read('migrations/20261127_activity_log.sql')); await db.exec(read('migrations/20261127_activity_log.sql'))
  await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',email:'ahwmb1965@gmail.com'})])
  await db.exec('set role authenticated')
  const id = '11111111-2222-3333-4444-555555555555'
@@ -41,4 +42,12 @@ test('purchase deposits: date-wise payments, remaining balance, settled delete k
  const kept = (await db.query('select archived_at from purchases where id=$1',[id])).rows[0]
  assert.ok(kept?.archived_at, 'settled purchase hidden but kept')
  assert.equal((await db.query('select count(*)::int n from purchase_deposits')).rows[0].n, 3)
+ const log = (await db.query("select entity, action, actor_email from activity_log order by id")).rows
+ assert.ok(log.some(l => l.entity === "purchases" && l.action === "INSERT" && l.actor_email === "ahwmb1965@gmail.com"), "purchase add logged")
+ assert.equal(log.filter(l => l.entity === "purchase_deposits" && l.action === "INSERT").length, 3)
+ assert.ok(log.some(l => l.entity === "purchases" && l.action === "UPDATE"), "settled delete logged")
+ // A broken log never blocks the real change.
+ await db.exec("alter table activity_log add constraint block_all check (false) not valid")
+ await db.query("select * from save_purchase($1,null)",[JSON.stringify({ id: "99999999-2222-3333-4444-555555555555", party: "Test", area: "", item: "", amount: 5, date: "2026-11-21" })])
+ assert.equal((await db.query("select count(*)::int n from purchases where party = 'Test'")).rows[0].n, 1)
 })

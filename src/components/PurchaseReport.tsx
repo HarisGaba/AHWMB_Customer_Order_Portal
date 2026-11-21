@@ -41,6 +41,7 @@ export function PurchaseReport() {
  const formRef = useRef<HTMLFormElement>(null)
  useUnsavedChanges(dirty, 'Discard unsaved purchase changes?')
  const [legacy, setLegacy] = useState<Purchase[]>([])
+ const [logRevision, setLogRevision] = useState(0) // refreshes Activity history after each change
 
  const load = useCallback(async () => {
   const sequence = ++querySequence.current
@@ -73,7 +74,7 @@ export function PurchaseReport() {
    const matches = [...remote.filter(r => !r.archived_at), ...pending]
     .filter(r => `${r.party || ''} ${r.area || ''} ${r.item || ''}`.toLowerCase().includes(term))
     .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id))
-   setCount(matches.length); setRows(matches.slice(page * PAGE, page * PAGE + PAGE))
+   setCount(matches.length); setRows(matches.slice(page * PAGE, page * PAGE + PAGE)); setLogRevision(v => v + 1)
   } catch (e) { setMessage(`Purchases could not load: ${friendlyError(e)}. Existing records are preserved.`) }
  }, [page, search])
  useEffect(() => { const timer = setTimeout(() => { void load() }, 250); return () => clearTimeout(timer) }, [load])
@@ -225,6 +226,6 @@ export function PurchaseReport() {
    })}
   </tbody></table>{!rows.length && <p className="empty-state">No purchases found.</p>}</div>
   <div className="pagination"><button className="btn-secondary" disabled={!page} onClick={() => setPage(p => p - 1)}>Previous</button><span>{count} purchases · Page {page + 1}</span><button className="btn-secondary" disabled={(page + 1) * PAGE >= count} onClick={() => setPage(p => p + 1)}>Next</button></div>
-  {!deviceMode && <ActivityLog entity="purchases" />}
+  {!deviceMode && <ActivityLog entity="purchases" revision={logRevision} />}
  </section>
 }
