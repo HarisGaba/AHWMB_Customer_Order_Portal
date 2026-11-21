@@ -3191,3 +3191,5 @@ button:disabled { cursor:not-allowed; opacity:.55; }
   .stock-send-btn { justify-content:center; }
   .stock-toolbar > * { flex:1 1 100%; justify-content:center; }
 }
+.transfer-into { font-size:13px; color:#286044; }
+.transfer-into strong { color:#073d25; }

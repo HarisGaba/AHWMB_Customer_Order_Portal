@@ -20,16 +20,33 @@ const LEGACY_LOCATION: Record<string, Location> = { 'Jodia Bazaar': 'Jodia Bazaa
 
 /** saved=false means the row is open for editing (Edit clicked, or a new row); original = values to restore on Cancel. */
 type StockRow = { id: string; location: Location; item: string; weight: string; quantity: string; saved: boolean; original?: { item: string; weight: string; quantity: string } }
-type TransferLine = { item: string; weight: number | null; quantity: number; bags: number | null }
+type TransferLine = { item: string; to_item?: string; weight: number | null; quantity: number; bags: number | null }
 type Transfer = { id: string; from_location: Location; to_location: Location; lines: TransferLine[]; total_quantity: number; created_at: string; edited_at?: string | null; cancelled_at?: string | null }
-type DraftLine = { key: string; item: string; quantity: string; bags: string }
+type DraftLine = { key: string; item: string; quantity: string; bags: string; toItem: string }
 
 const num = (v: string) => Number(v || 0)
 const kg = (n: number) => `${n.toLocaleString('en-PK', { maximumFractionDigits: 2 })} kg`
 const bagsFor = (quantity: number, weight: number | null) => (weight && weight > 0 ? Math.ceil(quantity / weight) : null)
 const monthKey = (iso: string) => iso.slice(0, 7)
 const monthLabel = (key: string) => new Date(`${key}-01T00:00:00`).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })
-const newDraftLine = (): DraftLine => ({ key: crypto.randomUUID(), item: '', quantity: '', bags: '' })
+const newDraftLine = (): DraftLine => ({ key: crypto.randomUUID(), item: '', quantity: '', bags: '', toItem: '' })
+
+// Same rules as the database (_norm_item): ignore capitals, extra spaces and punctuation.
+export const normItem = (s: string) => s.toLowerCase().replace(/[\s\-_.,()/\\:;'"+&]+/g, ' ').trim()
+/** Best existing destination item for a source item: same name (normalised) first; otherwise one whose
+ *  words start the same way ("b2 toota" ~ "b2 toota basmati"), needing at least 2 matching words and only
+ *  when there is a single clear candidate (preferring the same bag weight). '' = none. */
+export function suggestDestination(item: string, weight: number | null, dest: { item: string; weight: number | null }[]) {
+  const n = normItem(item)
+  if (!n) return ''
+  const exact = dest.find(d => normItem(d.item) === n)
+  if (exact) return exact.item
+  const words = n.split(' ')
+  const startsWith = (a: string[], b: string[]) => b.length >= 2 && b.length <= a.length && b.every((w, i) => a[i] === w)
+  let found = dest.filter(d => { const w = normItem(d.item).split(' '); return startsWith(words, w) || startsWith(w, words) })
+  if (found.length > 1 && weight) found = found.filter(d => d.weight === weight)
+  return found.length === 1 ? found[0].item : ''
+}
 const errorText = (e: unknown) => friendlyError(e)
 
 /**
@@ -288,6 +305,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
   const [error, setError] = useState('')
 
   const available = useMemo(() => rows.filter(r => r.location === from && r.saved && num(r.quantity) > 0), [rows, from])
+  const destItems = useMemo(() => rows.filter(r => r.location === target && r.saved && r.item.trim()).map(r => ({ item: r.item, weight: num(r.weight || '') || null })), [rows, target])
   const stockOf = (item: string) => available.find(r => r.item === item)
 
   const setLine = (key: string, patch: Partial<DraftLine>) => setLines(current => current.map(l => {
@@ -297,7 +315,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
     // Keep quantity (kg) and bags in sync when the item has a bag weight.
     if ('quantity' in patch) next.bags = weight ? String(bagsFor(num(next.quantity), weight) ?? '') : ''
     if ('bags' in patch && weight) next.quantity = next.bags ? String(num(next.bags) * weight) : ''
-    if ('item' in patch) { next.quantity = ''; next.bags = '' }
+    if ('item' in patch) { next.quantity = ''; next.bags = ''; next.toItem = suggestDestination(next.item, weight, destItems) }
     return next
   }))
 
@@ -318,7 +336,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
   const confirm = async () => {
     if (!supabase || !canConfirm) return
     setBusy(true); setError('')
-    const { error: rpcError } = await supabase.rpc('transfer_stock', { p_from: from, p_to: target, p_lines: lines.map(l => ({ item: l.item, quantity: num(l.quantity) })) })
+    const { error: rpcError } = await supabase.rpc('transfer_stock', { p_from: from, p_to: target, p_lines: lines.map(l => ({ item: l.item, quantity: num(l.quantity), ...(l.toItem ? { to_item: l.toItem } : {}) })) })
     setBusy(false)
     if (rpcError) { setError(friendlyError(rpcError)); return }
     onDone(`✓ ${lines.length} item${lines.length === 1 ? '' : 's'} (${kg(total)}) shifted from ${LOCATION_LABEL[from]} to ${LOCATION_LABEL[target]}.`)
@@ -338,7 +356,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
     {available.length === 0
       ? <p className="stock-empty">There is no stock in {LOCATION_LABEL[from]} to shift. Add stock there first.</p>
       : <>
-        <div className="report-table-wrap"><table className="report-table transfer-table"><thead><tr><th>Item</th><th>Available</th><th>Quantity (kg)</th><th>Bags</th><th aria-label="Remove" /></tr></thead><tbody>
+        <div className="report-table-wrap"><table className="report-table transfer-table"><thead><tr><th>Item</th><th>Available</th><th>Quantity (kg)</th><th>Bags</th><th>Goes into ({LOCATION_LABEL[target]})</th><th aria-label="Remove" /></tr></thead><tbody>
           {lines.map((l, i) => {
             const stock = stockOf(l.item)
             const weight = num(stock?.weight || '') || null
@@ -349,6 +367,15 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
               <td data-label="Quantity (kg)"><input className="report-cell-input" type="number" min="0" value={l.quantity} disabled={!l.item} onChange={e => setLine(l.key, { quantity: e.target.value })} placeholder="kg" />
                 {problems[i] && l.item && l.quantity && <small className="transfer-problem">{problems[i]}</small>}</td>
               <td data-label="Bags"><input className="report-cell-input" type="number" min="0" value={l.bags} disabled={!weight} onChange={e => setLine(l.key, { bags: e.target.value })} placeholder={weight ? 'bags' : '—'} /></td>
+              <td data-label={`Goes into (${LOCATION_LABEL[target]})`}>{l.item ? (() => {
+                const same = destItems.find(d => normItem(d.item) === normItem(l.item))
+                // Same name already there: it is always added to that item (no duplicate possible).
+                if (same) return <span className="transfer-into">Adds to <strong>{same.item}</strong></span>
+                return <select className="report-cell-input" value={l.toItem} onChange={e => setLines(c => c.map(x => x.key === l.key ? { ...x, toItem: e.target.value } : x))} aria-label={`Where ${l.item} goes in ${LOCATION_LABEL[target]}`}>
+                  <option value="">New item: {l.item}</option>
+                  {destItems.map(d => <option key={d.item} value={d.item}>Add to: {d.item}</option>)}
+                </select>
+              })() : '—'}</td>
               <td data-label="Remove" className="stock-row-actions"><button type="button" className="ledger-delete-btn" disabled={lines.length === 1} onClick={() => setLines(c => c.filter(x => x.key !== l.key))} aria-label="Remove this line (not saved yet)"><X size={14} /> Remove</button></td>
             </tr>
           })}
@@ -487,7 +514,9 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
   const save = async () => {
     if (!canSave) return
     setBusy(true); setError('')
-    const { error: rpcError } = await supabase!.rpc('edit_transfer', { p_id: t.id, p_lines: lines.map(l => ({ item: l.item, quantity: num(l.quantity) })) })
+    // Keep where each item went last time (e.g. "b2 toota basmati" -> "b2 toota").
+    const into = (item: string) => t.lines.find(x => x.item.toLowerCase() === item.toLowerCase())?.to_item
+    const { error: rpcError } = await supabase!.rpc('edit_transfer', { p_id: t.id, p_lines: lines.map(l => ({ item: l.item, quantity: num(l.quantity), ...(into(l.item) ? { to_item: into(l.item) } : {}) })) })
     setBusy(false)
     if (rpcError) { setError(friendlyError(rpcError)); return }
     setEditing(false)
@@ -517,7 +546,7 @@ function TransferCard({ transfer: t, canChange, onChanged, onConfirm }: { transf
     <header><strong>{LOCATION_LABEL[t.from_location] ?? t.from_location} <ArrowRight size={14} /> {LOCATION_LABEL[t.to_location] ?? t.to_location}</strong>
       <span>{when(t.created_at)}{t.edited_at ? ` · edited ${when(t.edited_at)}` : ''}</span></header>
     {!editing
-      ? <ul>{t.lines.map((l, i) => <li key={`${i}-${l.item}`}><span>{l.item}</span><span>{kg(Number(l.quantity))}{l.bags ? ` · ${l.bags} bags` : ''}</span></li>)}</ul>
+      ? <ul>{t.lines.map((l, i) => <li key={`${i}-${l.item}`}><span>{l.item}{l.to_item && normItem(l.to_item) !== normItem(l.item) ? ` → ${l.to_item}` : ''}</span><span>{kg(Number(l.quantity))}{l.bags ? ` · ${l.bags} bags` : ''}</span></li>)}</ul>
       : <div className="transfer-edit">
         {lines.map((l, i) => <div key={l.key} className="transfer-edit-row">
           <ItemPicker value={l.item} onChange={item => setLines(c => c.map(x => x.key === l.key ? { ...x, item } : x))}
