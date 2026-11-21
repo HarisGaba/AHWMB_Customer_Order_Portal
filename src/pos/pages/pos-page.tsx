@@ -240,43 +240,8 @@ export function PosPage({ active = true }: { active?: boolean }) {
         />
 
         <Card className="flex min-h-0 flex-col gap-0 overflow-hidden rounded-2xl py-0 shadow-panel">
-          {/* Customer */}
-          <div className="flex flex-wrap items-center gap-3 border-b bg-card px-4 py-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
-              <UserRoundIcon className="size-4" />
-            </div>
-            <label htmlFor="pos-customer" className="shrink-0 text-[11px] font-semibold tracking-wider text-primary uppercase">
-              Customer Name
-            </label>
-            <Input
-              id="pos-customer"
-              list="pos-customers"
-              autoComplete="off"
-              placeholder="Type or select customer (optional)"
-              value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  focusSearch()
-                }
-              }}
-              className="h-10 min-w-48 flex-1 rounded-xl text-base"
-            />
-            <datalist id="pos-customers">
-              {knownCustomers.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
-            {customer && (
-              <Button variant="ghost" size="icon-sm" aria-label="Clear customer" onClick={() => setCustomer("")}>
-                <XIcon />
-              </Button>
-            )}
-          </div>
-
           {/* Quantity entry bar */}
-          <div className={cn("flex flex-wrap items-center gap-3 border-b bg-gradient-to-r from-accent/70 to-card p-4 transition-colors", picked && "from-gold/20")}>
+          <div className={cn("flex flex-wrap items-center gap-3 border-b bg-gradient-to-r from-accent/70 to-card px-4 py-3.5 transition-colors", picked && "from-gold/20")}>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-semibold tracking-wider text-primary uppercase">Selected item</div>
               {picked ? (
@@ -304,10 +269,10 @@ export function PosPage({ active = true }: { active?: boolean }) {
                   focusSearch()
                 }
               }}
-              className="h-11 w-28 rounded-xl bg-card text-right font-mono text-base"
+              className="h-12 w-32 rounded-xl bg-card text-right font-mono text-lg"
             />
-            <Button size="lg" className="h-11 rounded-xl px-5 shadow-sm" disabled={!picked} onClick={addLine}>
-              Add <EnterKbd inverted />
+            <Button size="lg" className="h-12 min-w-40 rounded-xl px-6 text-base shadow-sm" disabled={!picked} onClick={addLine}>
+              Add to cart <EnterKbd inverted />
             </Button>
           </div>
 
@@ -421,6 +386,16 @@ export function PosPage({ active = true }: { active?: boolean }) {
           <div className="flex items-center justify-center gap-2 pb-4 text-muted-foreground">
             <ScaleIcon className="size-4" /> Total Weight <span className="font-mono font-semibold text-foreground">{fmtKg(weight)}</span>
           </div>
+          {/* Customer name is entered here, at checkout (optional). Enter continues to payment. */}
+          <label htmlFor="pos-customer" className="grid gap-1.5 text-sm font-medium">
+            <span className="flex items-center gap-2 text-[11px] font-semibold tracking-wider text-primary uppercase"><UserRoundIcon className="size-3.5" /> Customer Name</span>
+            <div className="flex items-center gap-2">
+              <Input id="pos-customer" list="pos-customers" autoComplete="off" autoFocus placeholder="Type or select customer (optional)"
+                value={customer} onChange={(e) => setCustomer(e.target.value)} className="h-11 flex-1 rounded-xl text-base" />
+              {customer && <Button variant="ghost" size="icon-sm" aria-label="Clear customer" onClick={() => setCustomer("")}><XIcon /></Button>}
+            </div>
+            <datalist id="pos-customers">{knownCustomers.map((n) => <option key={n} value={n} />)}</datalist>
+          </label>
           <Button
             size="lg"
             className="h-11"
