@@ -356,7 +356,7 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
     {available.length === 0
       ? <p className="stock-empty">There is no stock in {LOCATION_LABEL[from]} to shift. Add stock there first.</p>
       : <>
-        <div className="report-table-wrap"><table className="report-table transfer-table"><thead><tr><th>Item</th><th>Available</th><th>Quantity (kg)</th><th>Bags</th><th>Goes into ({LOCATION_LABEL[target]})</th><th aria-label="Remove" /></tr></thead><tbody>
+        <div className="report-table-wrap"><table className="report-table transfer-table"><thead><tr><th>Item</th><th>Available</th><th>Quantity (kg)</th><th>Bags</th><th aria-label="Remove" /></tr></thead><tbody>
           {lines.map((l, i) => {
             const stock = stockOf(l.item)
             const weight = num(stock?.weight || '') || null
@@ -367,15 +367,6 @@ function TransferForm({ from, target, rows, onCancel, onDone }: { from: Location
               <td data-label="Quantity (kg)"><input className="report-cell-input" type="number" min="0" value={l.quantity} disabled={!l.item} onChange={e => setLine(l.key, { quantity: e.target.value })} placeholder="kg" />
                 {problems[i] && l.item && l.quantity && <small className="transfer-problem">{problems[i]}</small>}</td>
               <td data-label="Bags"><input className="report-cell-input" type="number" min="0" value={l.bags} disabled={!weight} onChange={e => setLine(l.key, { bags: e.target.value })} placeholder={weight ? 'bags' : '—'} /></td>
-              <td data-label={`Goes into (${LOCATION_LABEL[target]})`}>{l.item ? (() => {
-                const same = destItems.find(d => normItem(d.item) === normItem(l.item))
-                // Same name already there: it is always added to that item (no duplicate possible).
-                if (same) return <span className="transfer-into">Adds to <strong>{same.item}</strong></span>
-                return <select className="report-cell-input" value={l.toItem} onChange={e => setLines(c => c.map(x => x.key === l.key ? { ...x, toItem: e.target.value } : x))} aria-label={`Where ${l.item} goes in ${LOCATION_LABEL[target]}`}>
-                  <option value="">New item: {l.item}</option>
-                  {destItems.map(d => <option key={d.item} value={d.item}>Add to: {d.item}</option>)}
-                </select>
-              })() : '—'}</td>
               <td data-label="Remove" className="stock-row-actions"><button type="button" className="ledger-delete-btn" disabled={lines.length === 1} onClick={() => setLines(c => c.filter(x => x.key !== l.key))} aria-label="Remove this line (not saved yet)"><X size={14} /> Remove</button></td>
             </tr>
           })}
