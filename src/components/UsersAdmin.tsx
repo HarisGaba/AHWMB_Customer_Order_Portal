@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { KeyRound, Pencil, Plus, Trash2, UserPlus, Users, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { ddmmyyyy } from '../lib/dates'
 import { PERMISSIONS, permissionLabel, type Permission } from '../lib/access'
 
 type AppUser = { user_id: string; email: string; name: string; permissions: Permission[]; active: boolean; created_at: string; last_sign_in_at: string | null }
@@ -110,7 +111,7 @@ export function UsersAdmin() {
       {loading && <tr><td colSpan={5} className="stock-empty">Loading users…</td></tr>}
       {!loading && users.length === 0 && <tr><td colSpan={5} className="stock-empty">No staff users yet. Click “Create User”.</td></tr>}
       {users.map(u => <tr key={u.user_id}>
-        <td data-label="Email"><strong>{u.email}</strong>{u.last_sign_in_at && <small className="user-last-login">Last login {new Date(u.last_sign_in_at).toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' })}</small>}</td>
+        <td data-label="Email"><strong>{u.email}</strong>{u.last_sign_in_at && <small className="user-last-login">Last login {ddmmyyyy(u.last_sign_in_at)}</small>}</td>
         <td data-label="Name / Role">{u.name || '—'}</td>
         <td data-label="Allowed Pages"><div className="perm-chips">{u.permissions.length ? u.permissions.map(p => <span key={p} className="perm-chip">{permissionLabel(p)}</span>) : <span className="perm-chip perm-chip--none">No pages</span>}</div></td>
         <td data-label="Status"><span className={`user-status ${u.active ? 'user-status--on' : 'user-status--off'}`}>{u.active ? 'Active' : 'Disabled'}</span></td>

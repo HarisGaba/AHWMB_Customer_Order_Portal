@@ -29,7 +29,7 @@ const isBlank = (r: Row) => !r.name.trim() && !r.quantity.trim() && !r.rate.trim
  */
 export function CommissionPage() {
   const [customer, setCustomer] = useState("")
-  const [date, setDate] = useState(format(new Date(), "dd-MM-yyyy"))
+  const [date, setDate] = useState(format(new Date(), "dd/MM/yyyy"))
   const [rate, setRate] = useState("5.5")
   const [balance, setBalance] = useState("")
   const [deposit, setDeposit] = useState("")
@@ -57,7 +57,7 @@ export function CommissionPage() {
   function load(next: { customer: string; date: string; lines: CommissionLine[] }, from: string) {
     if (used.length && !window.confirm("Replace the rows on screen with this order?")) return
     setCustomer(next.customer)
-    setDate(next.date || format(new Date(), "dd-MM-yyyy"))
+    setDate(next.date || format(new Date(), "dd/MM/yyyy"))
     setRows(toRows(next.lines))
     setSource(from)
     toast.success(`Loaded ${next.lines.length} item${next.lines.length === 1 ? "" : "s"}`, { description: from })
@@ -102,7 +102,7 @@ export function CommissionPage() {
     const items = (o.items ?? []).filter((i) => (i.name ?? "").trim())
     load({
       customer: o.customer_name,
-      date: format(new Date(o.created_at), "dd-MM-yyyy"),
+      date: format(new Date(o.created_at), "dd/MM/yyyy"),
       lines: items.map((i) => ({ name: String(i.name).trim(), quantity: String(i.quantity ?? ""), rate: Number(i.unit_price ?? i.rate) || 0, total: Number(i.total) || 0 })),
     }, `From Orders: ${o.order_ref}`)
     setPickerOpen(false)
@@ -181,7 +181,7 @@ export function CommissionPage() {
                 {hits.map((o) => (
                   <button key={o.id} type="button" onClick={() => pickOrder(o)} className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left hover:bg-accent">
                     <span className="min-w-0"><span className="block truncate font-medium">{o.customer_name || "—"}</span><span className="text-xs text-muted-foreground">{o.order_ref} · {(o.items ?? []).length} items</span></span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{format(new Date(o.created_at), "dd MMM yyyy")}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy")}</span>
                   </button>
                 ))}
               </div>
@@ -189,7 +189,7 @@ export function CommissionPage() {
           )}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <label className="grid gap-1.5 text-sm lg:col-span-2">Customer Name<Input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="e.g. Qapas Altaf Company" /></label>
-            <label className="grid gap-1.5 text-sm">Date<Input value={date} onChange={(e) => setDate(e.target.value)} placeholder="dd-mm-yyyy" /></label>
+            <label className="grid gap-1.5 text-sm">Date<Input value={date} onChange={(e) => setDate(e.target.value)} placeholder="dd/mm/yyyy" /></label>
             <label className="grid gap-1.5 text-sm">Balance (optional)<Input type="number" inputMode="decimal" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="Leave blank to write by hand" /></label>
             <label className="grid gap-1.5 text-sm">Deposit (optional)<Input type="number" inputMode="decimal" value={deposit} onChange={(e) => setDeposit(e.target.value)} placeholder="Leave blank to write by hand" /></label>
           </div>

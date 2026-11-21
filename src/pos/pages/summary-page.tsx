@@ -219,7 +219,7 @@ export function SummaryPage() {
                 className="flex min-w-44 cursor-pointer items-center justify-center gap-2 rounded-md px-2 py-1 text-sm font-medium transition-colors hover:bg-muted"
               >
                 <CalendarDaysIcon className="size-4 text-primary" />
-                {format(parseISO(day), "EEE, d MMM yyyy")}
+                {format(parseISO(day), "EEE, dd/MM/yyyy")}
                 {day === today && <Badge variant="secondary">Today</Badge>}
               </button>
               <input
@@ -250,7 +250,7 @@ export function SummaryPage() {
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Export sales as CSV</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => exportRange("day")}>{format(parseISO(day), "d MMM yyyy")}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportRange("day")}>{format(parseISO(day), "dd/MM/yyyy")}</DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => exportRange(7)}>Last 7 days</DropdownMenuItem>
@@ -286,7 +286,7 @@ export function SummaryPage() {
                 >
                   <span className="rounded-md bg-gold/15 px-2 py-0.5 font-mono text-xs font-semibold">{receiptNo(s)}</span>
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.customerName || `Customer ${s.customerNo}`}</span>
-                  <span className="text-xs text-muted-foreground">{format(new Date(s.createdAt), "d MMM yyyy, h:mm a")}</span>
+                  <span className="text-xs text-muted-foreground">{format(new Date(s.createdAt), "dd/MM/yyyy, h:mm a")}</span>
                   <span className="font-mono text-sm font-semibold tabular-nums">{fmt(s.total)}</span>
                 </button>
               ))
@@ -333,7 +333,7 @@ export function SummaryPage() {
         <Card className="rounded-2xl shadow-panel">
           <CardHeader>
             <CardTitle>Top items by revenue</CardTitle>
-            <CardDescription>{topRange === "day" ? format(parseISO(day), "d MMM yyyy") : `Last ${CHART_DAYS} days`}</CardDescription>
+            <CardDescription>{topRange === "day" ? format(parseISO(day), "dd/MM/yyyy") : `Last ${CHART_DAYS} days`}</CardDescription>
             <CardAction>
               <Tabs value={topRange} onValueChange={(v) => setTopRange(v as "day" | "period")}>
                 <TabsList>
@@ -409,7 +409,7 @@ export function SummaryPage() {
           <CardHeader className="border-b py-4">
             <CardTitle>{selected ? selected.customerName || `Customer ${selected.customerNo}` : "Transaction details"}</CardTitle>
             <CardDescription>
-              {selected ? `Receipt ${receiptNo(selected)} · ${format(new Date(selected.createdAt), "d MMM yyyy, h:mm a")} · paid by ${selected.payment} · remaining ${fmt(remainingBalance(selected))}` : "Select a customer to view their items."}
+              {selected ? `Receipt ${receiptNo(selected)} · ${format(new Date(selected.createdAt), "dd/MM/yyyy, h:mm a")} · paid by ${selected.payment} · remaining ${fmt(remainingBalance(selected))}` : "Select a customer to view their items."}
             </CardDescription>
             {selected && (
               <CardAction className="flex gap-2">
@@ -490,7 +490,7 @@ export function SummaryPage() {
                 }}
               >
                 <TableCell className="pl-4 font-medium">
-                  {format(parseISO(h.day), "EEE, d MMM yyyy")}
+                  {format(parseISO(h.day), "EEE, dd/MM/yyyy")}
                   {h.day === today && (
                     <Badge variant="secondary" className="ml-2">
                       Today
@@ -549,7 +549,7 @@ export function SummaryPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Void or refund this sale?</AlertDialogTitle>
             <AlertDialogDescription>
-              {toDelete && `${toDelete.customerName || `Customer ${toDelete.customerNo}`} · ${fmt(toDelete.total)} · ${format(new Date(toDelete.createdAt), "d MMM yyyy, h:mm a")}. `}
+              {toDelete && `${toDelete.customerName || `Customer ${toDelete.customerNo}`} · ${fmt(toDelete.total)} · ${format(new Date(toDelete.createdAt), "dd/MM/yyyy, h:mm a")}. `}
               Choose Refund after returning money, or Void for an incorrect bill. The original receipt and reason remain in activity history; active sales totals exclude the reversed bill. Stock and customer ledger are not automatically adjusted.
             </AlertDialogDescription>
           </AlertDialogHeader>

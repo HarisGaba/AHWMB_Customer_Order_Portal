@@ -48,7 +48,7 @@ export async function buildStockReportPdf(location: string, rows: StockPdfRow[],
 
   const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait', compress: true })
   const W = 148, H = 210, M = 10
-  const dateText = when.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+  const dateText = `${String(when.getDate()).padStart(2, '0')}/${String(when.getMonth() + 1).padStart(2, '0')}/${when.getFullYear()}`
   const timeText = when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   const totalKg = rows.reduce((a, r) => a + r.quantity, 0)
   const totalBags = rows.reduce((a, r) => a + (r.bags ?? 0), 0)

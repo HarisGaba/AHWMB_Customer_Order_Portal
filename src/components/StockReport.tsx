@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, ArrowRight, Check, History, Pencil, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
+import { ddmmyyyy, ddmmyyyyTime } from '../lib/dates'
 import { supabase } from '../lib/supabase'
 import { isMobileDevice, printDocument } from '../lib/print'
 
@@ -430,7 +431,7 @@ function TransferHistory({ location, onBack, canDelete, canChange }: { location:
   </section>
 }
 
-const when = (iso: string) => new Date(iso).toLocaleString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+const when = (iso: string) => ddmmyyyyTime(iso)
 const escapeHtml = (v: string) => v.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 /** Item name for print/PDF: the whole name (brackets included), Urdu kept as one right-to-left run in a proper Urdu font. */
 const nameHtml = (v: string) => `<span class="nm">${escapeHtml(v.trim()).replace(/[\u0600-\u06ff](?:[\u0600-\u06ff\u200c\u200d \d.,،-]*[\u0600-\u06ff])?/g, run => `<span class="ur" dir="rtl" lang="ur">${run}</span>`)}</span>`
@@ -615,7 +616,7 @@ function printStockReport(location: Location, rows: StockRow[]) {
     .sign div { flex: 1; border-top: 1.5px solid #000; padding-top: 1.5mm; text-align: center; font-size: 10px; }
   </style></head><body><div class="sheet">
     <div class="head"><img src="${window.location.origin}/logo.png" alt=""><div><h1>STOCK REPORT</h1><p class="sub">AHWMB · Jodia Bazaar, Karachi</p></div></div>
-    <div class="meta"><span>Location: <b>${escapeHtml(LOCATION_LABEL[location])}</b></span><span>Date: <b>${escapeHtml(now.toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' }))}</b>, ${escapeHtml(now.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }))}</span></div>
+    <div class="meta"><span>Location: <b>${escapeHtml(LOCATION_LABEL[location])}</b></span><span>Date: <b>${escapeHtml(ddmmyyyy(now))}</b>, ${escapeHtml(now.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }))}</span></div>
     <table>
       <thead><tr><th>#</th><th>Item Name</th><th class="r">Weight (kg/bag)</th><th class="r">Total Qty (kg)</th><th class="r">Bags</th></tr></thead>
       <tbody>${body}${rows.length ? `<tr class="total"><td></td><td>Total (${rows.length} item${rows.length === 1 ? '' : 's'})</td><td></td><td class="r">${kgPrint(totalKg)}</td><td class="r">${totalBags || '—'}</td></tr>` : ''}</tbody>

@@ -78,7 +78,7 @@ export function receiptHtml(sale: Sale) {
   <table class="meta">
     ${sale.customerName ? `<tr><td>Customer Name</td><td class="b">${esc(sale.customerName)}</td></tr>` : ""}
     <tr><td>Customer No</td><td>#${sale.customerNo}</td></tr>
-    <tr><td>Date / Time</td><td>${format(date, "dd MMM yyyy, hh:mm a")}</td></tr>
+    <tr><td>Date / Time</td><td>${format(date, "dd/MM/yyyy, hh:mm a")}</td></tr>
   </table>
   <table class="items" style="margin-top:2.5mm">
     <colgroup><col class="n"><col><col class="q"><col class="rt"><col class="am"></colgroup>

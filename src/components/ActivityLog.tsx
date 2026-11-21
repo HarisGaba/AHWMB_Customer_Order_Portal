@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { ddmmyyyy, ddmmyyyyTime } from '../lib/dates'
 
 type Data = Record<string, unknown> | null
 type Entry = { id: number; entity: string; action: string; actor_email: string | null; record_id: string; created_at: string; before_data: Data; after_data: Data }
@@ -16,11 +17,11 @@ function describe(e: Entry): { title: string; detail: string } {
   if (e.entity === 'purchases') {
     if (a?.archived_at && !b?.archived_at) return { title: 'Settled bill deleted', detail: `${s(d.party)} · ${rs(d.amount)}` }
     const changes = e.action === 'UPDATE' && a && b ? (['party', 'area', 'item', 'amount', 'date'] as const).filter(k => s(a[k]) !== s(b[k])).map(k => `${k === 'party' ? 'supplier' : k}: ${k === 'amount' ? `${rs(b[k])} → ${rs(a[k])}` : `${s(b[k]) || '—'} → ${s(a[k]) || '—'}`}`) : []
-    return { title: `Purchase ${verb}`, detail: changes.length ? `${s(d.party)} · ${changes.join(', ')}` : `${s(d.party)} · ${s(d.item)} · ${rs(d.amount)} · ${s(d.date)}` }
+    return { title: `Purchase ${verb}`, detail: changes.length ? `${s(d.party)} · ${changes.join(', ')}` : `${s(d.party)} · ${s(d.item)} · ${rs(d.amount)} · ${ddmmyyyy(s(d.date))}` }
   }
   if (e.entity === 'purchase_deposits') {
-    if (a?.archived_at && !b?.archived_at) return { title: 'Deposit removed', detail: `${rs(d.amount)} on ${s(d.date)}` }
-    return { title: `Deposit ${verb}`, detail: `${rs(d.amount)} on ${s(d.date)}` }
+    if (a?.archived_at && !b?.archived_at) return { title: 'Deposit removed', detail: `${rs(d.amount)} on ${ddmmyyyy(s(d.date))}` }
+    return { title: `Deposit ${verb}`, detail: `${rs(d.amount)} on ${ddmmyyyy(s(d.date))}` }
   }
   if (e.entity === 'stock_transfers') return { title: a?.cancelled_at && !b?.cancelled_at ? 'Transfer reversed' : `Transfer ${verb}`, detail: `${s(d.from_location)} → ${s(d.to_location)} · ${(Number(d.total_quantity) || 0).toLocaleString()} kg` }
   if (e.entity === 'stock_items') return { title: `Stock item ${verb}`, detail: `${s(d.item)} · ${s(d.location)} · ${(Number(d.quantity) || 0).toLocaleString()} kg` }
@@ -60,7 +61,7 @@ export function ActivityLog({ entity, recordId, revision }: { entity?: string; r
       return <li key={r.id}>
         <strong>{title}</strong>
         {detail && <span>{detail}</span>}
-        <small>{r.actor_email || 'System / customer submission'} · {new Date(r.created_at).toLocaleString()}</small>
+        <small>{r.actor_email || 'System / customer submission'} · {ddmmyyyyTime(r.created_at)}</small>
         <details><summary>View full details</summary><pre>{JSON.stringify({ before: r.before_data, after: r.after_data }, null, 2)}</pre></details>
       </li>
     })}</ol>}

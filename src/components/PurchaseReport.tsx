@@ -1,7 +1,8 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
 import { supabase } from '../lib/supabase'
 import { friendlyError } from '../lib/errors'
+import { ddmmyyyy } from '../lib/dates'
 import { ActivityLog } from './ActivityLog'
 import { persistPurchase, purchaseSchemaMissing, readLocalPurchases, samePurchase, saveLocalPurchase, syncLocalPurchases, validPurchase as valid, type Purchase } from '../lib/purchases'
 
@@ -31,7 +32,7 @@ export function PurchaseReport() {
  const [count, setCount] = useState(0)
  const [search, setSearch] = useState('')
  const [deviceMode, setDeviceMode] = useState(!supabase)
- const [open, setOpen] = useState<string | null>(null)
+ const [modal, setModal] = useState<{ id: string; kind: 'deposit' | 'details' } | null>(null)
  const [dep, setDep] = useState({ amount: '', date: today() })
  const saving = useRef(false)
  const autoSynced = useRef(false) // one automatic sync per page visit
@@ -89,6 +90,7 @@ export function PurchaseReport() {
 
  const paidFor = (id: string) => deposits.filter(d => d.purchase_id === id).reduce((s, d) => s + cents(d.amount), 0) / 100
  const remainingFor = (r: Purchase) => Math.max(0, (cents(Number(r.amount)) - cents(paidFor(r.id))) / 100)
+ const modalRow = modal ? rows.find(r => r.id === modal.id) ?? null : null
  const isEditing = draft.version != null || draft.localRevision != null
 
  const startEdit = (r: Purchase) => {
@@ -125,14 +127,14 @@ export function PurchaseReport() {
   try {
    const { error } = await supabase.rpc('add_purchase_deposit', { p_purchase: r.id, p_amount: amount, p_date: dep.date, p_note: '' })
    if (error) throw error
-   setDep({ amount: '', date: today() })
+   setDep({ amount: '', date: today() }); setModal(null)
    setMessage(`Deposit of ${rs(amount)} saved for ${r.party}. Remaining: ${rs(Math.max(0, remainingFor(r) - amount))}.`)
    await load()
   } catch (e) { setMessage(friendlyError(e)) }
   finally { saving.current = false; setBusy(false) }
  }
  const removeDeposit = async (d: Deposit) => {
-  if (!supabase || saving.current || !window.confirm(`Remove the deposit of ${rs(d.amount)} on ${d.date}? (It is kept in the database history.)`)) return
+  if (!supabase || saving.current || !window.confirm(`Remove the deposit of ${rs(d.amount)} on ${ddmmyyyy(d.date)}? (It is kept in the database history.)`)) return
   saving.current = true; setBusy(true)
   try { const { error } = await supabase.rpc('remove_purchase_deposit', { p_id: d.id }); if (error) throw error; setMessage('Deposit removed.'); await load() }
   catch (e) { setMessage(friendlyError(e)) }
@@ -143,7 +145,7 @@ export function PurchaseReport() {
   const warn = remaining > 0 ? `
 
 Warning: ${rs(remaining)} is still remaining on this bill.` : ''
-  if (!supabase || saving.current || !window.confirm(`Delete ${r.party} (${rs(Number(r.amount))}, ${r.date}) from the list?${warn}
+  if (!supabase || saving.current || !window.confirm(`Delete ${r.party} (${rs(Number(r.amount))}, ${ddmmyyyy(r.date)}) from the list?${warn}
 
 It stays saved in the database and in Activity history.`)) return
   saving.current = true; setBusy(true)
@@ -153,7 +155,7 @@ It stays saved in the database and in Activity history.`)) return
    if (error?.code === 'PGRST202') ({ error } = await supabase.rpc('archive_settled_purchase', { p_id: r.id }))
    if (error) throw error
    if (draft.id === r.id) { setDraft(blank()); setDirty(false) }
-   setOpen(null); setMessage(`${r.party} deleted from the list (kept in the database).`); await load()
+   setModal(null); setMessage(`${r.party} deleted from the list (kept in the database).`); await load()
   }
   catch (e) { setMessage(friendlyError(e)) }
   finally { saving.current = false; setBusy(false) }
@@ -182,7 +184,7 @@ It stays saved in the database and in Activity history.`)) return
 
 
   <form ref={formRef} className="purchase-form" onSubmit={e => { e.preventDefault(); void save() }}>
-   {(['party', 'area', 'item', 'quantity', 'amount', 'date'] as const).map(k => <label className="field" key={k}><span className="field-label">{labels[k]}</span><input className="field-input" disabled={busy} placeholder={k === 'quantity' ? 'e.g. 50 bags / 1200 kg' : undefined} type={k === 'date' ? 'date' : k === 'amount' ? 'number' : 'text'} min={k === 'amount' ? 0 : undefined} step={k === 'amount' ? '.01' : undefined} required={['party', 'amount', 'date'].includes(k)} value={draft[k] ?? ''} onChange={e => { setDraft({ ...draft, [k]: e.target.value }); setDirty(true) }} /></label>)}
+   {(['party', 'item', 'quantity', 'amount', 'date'] as const).map(k => <label className="field" key={k}><span className="field-label">{labels[k]}</span><input className="field-input" disabled={busy} placeholder={k === 'quantity' ? 'e.g. 50 bags / 1200 kg' : undefined} type={k === 'date' ? 'date' : k === 'amount' ? 'number' : 'text'} min={k === 'amount' ? 0 : undefined} step={k === 'amount' ? '.01' : undefined} required={['party', 'amount', 'date'].includes(k)} value={draft[k] ?? ''} onChange={e => { setDraft({ ...draft, [k]: e.target.value }); setDirty(true) }} /></label>)}
    <button type="submit" className="btn-submit" disabled={busy}>{busy ? 'Saving…' : isEditing ? 'Save changes' : 'Add Purchase'}</button>
    {isEditing && <button type="button" className="btn-secondary" disabled={busy} onClick={() => { setDraft(blank()); setDirty(false); setMessage('') }}>Cancel</button>}
   </form>
@@ -190,47 +192,53 @@ It stays saved in the database and in Activity history.`)) return
   {message && <p role="status" className="form-message">{message}</p>}
 
   <label className="field"><span className="field-label">Search supplier</span><input className="field-input" value={search} placeholder="Supplier, area or item" onChange={e => { setSearch(e.target.value); setPage(0) }} /></label>
-  <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Supplier</th><th>Area</th><th>Item</th><th>Quantity</th><th>Amount</th><th>Deposited</th><th>Remaining</th><th>Date</th><th>Action</th></tr></thead><tbody>
+  <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Supplier</th><th>Item</th><th>Quantity</th><th>Amount</th><th>Deposited</th><th>Remaining</th><th>Date</th><th>Action</th></tr></thead><tbody>
    {rows.map(r => {
     const local = r.localRevision != null
     const paid = paidFor(r.id), remaining = remainingFor(r), settled = !local && depositsReady && remaining === 0
-    const list = deposits.filter(d => d.purchase_id === r.id)
-    const expanded = open === r.id
-    return <Fragment key={`${r.id}-${local ? 'device' : 'database'}`}>
-     <tr className={settled ? 'purchase-settled' : undefined}>
-      <td>{r.party}{local && <small> · This device</small>}</td><td>{r.area}</td><td>{r.item}</td><td>{r.quantity || '—'}</td>
-      <td>{rs(Number(r.amount))}</td>
-      <td>{local || !depositsReady ? '—' : rs(paid)}</td>
-      <td><strong className={remaining > 0 ? 'money-negative' : 'money-positive'}>{local || !depositsReady ? '—' : settled ? 'Settled' : rs(remaining)}</strong></td>
-      <td>{r.date}</td>
-      <td className="purchase-actions">
-       <div className="purchase-actions-row">
-        <button className="btn-secondary" onClick={() => startEdit(r)}>Edit</button>
-        <button className="ledger-delete-btn" disabled={busy || local} title={local ? 'Import this purchase to the database first' : undefined} onClick={() => void deletePurchase(r)}>Delete</button>
-       </div>
-       {!local && depositsReady && <button className="btn-secondary purchase-deposits-btn" onClick={() => { setOpen(expanded ? null : r.id); setDep({ amount: '', date: today() }) }}>{expanded ? 'Close' : `Deposits (${list.length})`}</button>}
-      </td>
-     </tr>
-     {expanded && <tr className="purchase-deposits-row"><td colSpan={9}>
-      <div className="purchase-deposits">
-       <div className="purchase-deposit-summary"><span>Bill <strong>{rs(Number(r.amount))}</strong></span><span>Deposited <strong>{rs(paid)}</strong></span><span>Remaining <strong className={remaining > 0 ? 'money-negative' : 'money-positive'}>{rs(remaining)}</strong></span></div>
-       {list.length ? <table className="report-table"><thead><tr><th>Date</th><th>Deposit</th><th>Remaining after</th><th aria-label="Remove" /></tr></thead><tbody>
-        {list.reduce<{ el: ReactNode[]; left: number }>((acc, d) => {
-         const left = acc.left - cents(d.amount)
-         acc.el.push(<tr key={d.id}><td>{d.date}</td><td>{rs(d.amount)}</td><td>{rs(Math.max(0, left) / 100)}</td><td><button className="ledger-delete-btn" disabled={busy} onClick={() => void removeDeposit(d)}>Remove</button></td></tr>)
-         return { el: acc.el, left }
-        }, { el: [], left: cents(Number(r.amount)) }).el}
-       </tbody></table> : <p className="empty-state">No deposits yet.</p>}
-       {remaining > 0 ? <form className="purchase-deposit-form" onSubmit={e => { e.preventDefault(); void addDeposit(r) }}>
-        <label className="field"><span className="field-label">Deposit amount</span><input className="field-input" type="number" min={0} step=".01" max={remaining} value={dep.amount} onChange={e => setDep({ ...dep, amount: e.target.value })} placeholder={`Up to ${remaining.toLocaleString('en-PK')}`} /></label>
-        <label className="field"><span className="field-label">Date</span><input className="field-input" type="date" value={dep.date} onChange={e => setDep({ ...dep, date: e.target.value })} /></label>
-        <button type="submit" className="btn-submit" disabled={busy}>Add deposit</button>
-       </form> : <p className="form-message">Bill settled — remaining balance is 0. You can delete it from the list.</p>}
+    const canDeposit = !local && depositsReady
+    return <tr key={`${r.id}-${local ? 'device' : 'database'}`} className={settled ? 'purchase-settled' : undefined}>
+     <td>{r.party}{r.area && <small className="purchase-area">{r.area}</small>}{local && <small> · This device</small>}</td><td>{r.item}</td><td>{r.quantity || '—'}</td>
+     <td>{rs(Number(r.amount))}</td>
+     <td>{canDeposit ? rs(paid) : '—'}</td>
+     <td><strong className={remaining > 0 ? 'money-negative' : 'money-positive'}>{!canDeposit ? '—' : settled ? 'Settled' : rs(remaining)}</strong></td>
+     <td>{ddmmyyyy(r.date)}</td>
+     <td className="purchase-actions">
+      <div className="purchase-actions-row">
+       <button className="btn-secondary" onClick={() => startEdit(r)}>Edit</button>
+       <button className="ledger-delete-btn" disabled={busy || local} title={local ? 'Import this purchase to the database first' : undefined} onClick={() => void deletePurchase(r)}>Delete</button>
       </div>
-     </td></tr>}
-    </Fragment>
+      {canDeposit && <div className="purchase-actions-row">
+       <button className="btn-submit purchase-small-btn" disabled={busy || settled} title={settled ? 'Bill is fully paid' : undefined} onClick={() => { setDep({ amount: '', date: today() }); setModal({ id: r.id, kind: 'deposit' }) }}>Deposit</button>
+       <button className="btn-secondary" onClick={() => setModal({ id: r.id, kind: 'details' })}>Details</button>
+      </div>}
+     </td>
+    </tr>
    })}
   </tbody></table>{!rows.length && <p className="empty-state">No purchases found.</p>}</div>
+  {modalRow && (() => {
+   const r = modalRow, paid = paidFor(r.id), remaining = remainingFor(r)
+   const list = deposits.filter(d => d.purchase_id === r.id)
+   const close = () => { if (!busy) setModal(null) }
+   return <div className="purchase-modal-backdrop" role="presentation" onClick={close}>
+    <div className="purchase-modal" role="dialog" aria-modal="true" aria-labelledby="purchase-modal-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') close() }}>
+     <div className="purchase-modal-head"><h3 id="purchase-modal-title">{modal!.kind === 'deposit' ? 'Add deposit' : 'Deposit details'} — {r.party}</h3><button type="button" className="btn-secondary" onClick={close} aria-label="Close">✕</button></div>
+     <div className="purchase-deposit-summary"><span>Bill <strong>{rs(Number(r.amount))}</strong></span><span>Deposited <strong>{rs(paid)}</strong></span><span>Remaining <strong className={remaining > 0 ? 'money-negative' : 'money-positive'}>{rs(remaining)}</strong></span></div>
+     {modal!.kind === 'deposit' ? (remaining > 0 ? <form className="purchase-deposit-form" onSubmit={e => { e.preventDefault(); void addDeposit(r) }}>
+      <label className="field"><span className="field-label">Deposit amount</span><input className="field-input" autoFocus type="number" min={0} step=".01" max={remaining} value={dep.amount} onChange={e => setDep({ ...dep, amount: e.target.value })} placeholder={`Up to ${remaining.toLocaleString('en-PK')}`} /></label>
+      <label className="field"><span className="field-label">Date</span><input className="field-input" type="date" value={dep.date} onChange={e => setDep({ ...dep, date: e.target.value })} /></label>
+      <button type="submit" className="btn-submit" disabled={busy}>{busy ? 'Saving…' : 'Save deposit'}</button>
+     </form> : <p className="form-message">This bill is fully paid — remaining balance is 0.</p>)
+     : list.length ? <table className="report-table"><thead><tr><th>#</th><th>Date</th><th>Deposit</th><th>Remaining after</th><th aria-label="Remove" /></tr></thead><tbody>
+      {list.reduce<{ el: ReactNode[]; left: number }>((acc, d, i) => {
+       const left = acc.left - cents(d.amount)
+       acc.el.push(<tr key={d.id}><td>{i + 1}</td><td>{ddmmyyyy(d.date)}</td><td>{rs(d.amount)}</td><td>{rs(Math.max(0, left) / 100)}</td><td><button className="ledger-delete-btn" disabled={busy} onClick={() => void removeDeposit(d)}>Remove</button></td></tr>)
+       return { el: acc.el, left }
+      }, { el: [], left: cents(Number(r.amount)) }).el}
+     </tbody></table> : <p className="empty-state">No deposits yet.</p>}
+    </div>
+   </div>
+  })()}
   <div className="pagination"><button className="btn-secondary" disabled={!page} onClick={() => setPage(p => p - 1)}>Previous</button><span>{count} purchases · Page {page + 1}</span><button className="btn-secondary" disabled={(page + 1) * PAGE >= count} onClick={() => setPage(p => p + 1)}>Next</button></div>
   {!deviceMode && <ActivityLog entity="purchases" revision={logRevision} />}
  </section>
