@@ -3,7 +3,6 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
 import { supabase } from '../lib/supabase'
 import { friendlyError } from '../lib/errors'
 import { ddmmyyyy } from '../lib/dates'
-import { ActivityLog } from './ActivityLog'
 import { persistPurchase, purchaseSchemaMissing, readLocalPurchases, samePurchase, saveLocalPurchase, syncLocalPurchases, validPurchase as valid, type Purchase } from '../lib/purchases'
 
 type Row = Purchase & { archived_at?: string | null }
@@ -240,6 +239,5 @@ It stays saved in the database and in Activity history.`)) return
    </div>
   })()}
   <div className="pagination"><button className="btn-secondary" disabled={!page} onClick={() => setPage(p => p - 1)}>Previous</button><span>{count} purchases · Page {page + 1}</span><button className="btn-secondary" disabled={(page + 1) * PAGE >= count} onClick={() => setPage(p => p + 1)}>Next</button></div>
-  {!deviceMode && <ActivityLog entity="purchases" revision={logRevision} />}
  </section>
 }
