@@ -3193,3 +3193,18 @@ button:disabled { cursor:not-allowed; opacity:.55; }
 }
 .transfer-into { font-size:13px; color:#286044; }
 .transfer-into strong { color:#073d25; }
+
+/* ---- Purchase Report: modes, deposits ---- */
+.purchase-mode { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; padding:6px; margin:14px 0 12px; background:#eef6f1; border:1px solid #d6e9dd; border-radius:14px; }
+.purchase-mode-tab { display:flex; flex-direction:column; align-items:flex-start; gap:2px; min-height:54px; padding:9px 16px; border:0; border-radius:10px; background:transparent; color:#286044; font:inherit; text-align:left; cursor:pointer; }
+.purchase-mode-tab small { font-size:12px; color:#5d806c; }
+.purchase-mode-tab.is-active { background:#fff; color:#073d25; box-shadow:0 1px 3px rgba(7,61,37,.15); }
+.purchase-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.purchase-settled td { background:#f3fbf6; }
+.purchase-deposits-row > td { background:#fbfdfc; padding:12px !important; }
+.purchase-deposits { display:flex; flex-direction:column; gap:10px; }
+.purchase-deposit-summary { display:flex; flex-wrap:wrap; gap:8px 22px; font-size:14px; color:#286044; }
+.purchase-deposit-summary strong { color:#073d25; }
+.purchase-deposit-form { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; }
+.purchase-deposit-form .field { margin:0; min-width:160px; }
+@media (max-width: 700px) { .purchase-deposit-form > * { flex:1 1 100%; } }
