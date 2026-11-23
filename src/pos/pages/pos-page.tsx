@@ -114,10 +114,14 @@ export function PosPage({ active = true }: { active?: boolean }) {
   }, [active])
 
   function pick(item: Item) {
-    setPicked(item)
+    setCart((c) => {
+      const i = c.findIndex((l) => l.itemId === item.id)
+      if (i === -1) return [...c, { itemId: item.id, name: item.name, nameUr: item.nameUr, rate: item.rate, qty: 1, weight: item.unitWeight }]
+      return c.map((l, k) => (k === i ? { ...l, qty: l.qty + 1 } : l))
+    })
+    setPicked(null)
     setSearch("")
-    setQty("1")
-    setTimeout(() => qtyRef.current?.select(), 0)
+    focusSearch()
   }
 
   function addLine() {
@@ -132,6 +136,10 @@ export function PosPage({ active = true }: { active?: boolean }) {
     setPicked(null)
     setQty("")
     focusSearch()
+  }
+
+  function setLineWeight(itemId: string, kg: number) {
+    setCart((c) => c.map((l) => (l.itemId === itemId && l.qty > 0 ? { ...l, weight: Math.round((kg / l.qty) * 1e6) / 1e6 } : l)))
   }
 
   function setLineQty(itemId: string, q: number) {
@@ -254,9 +262,9 @@ export function PosPage({ active = true }: { active?: boolean }) {
 
       {draftMessage && <p role="status" className="rounded-xl border bg-muted/40 px-4 py-2 text-sm">{draftMessage}</p>}
       <div className="flex min-h-0 flex-1 flex-col gap-4">
-        {/* Search + selected item + qty + add — one row above the full-width cart */}
+        {/* Wide search bar above the full-width cart (click = Select item picker) */}
         <div className={cn("relative z-20 flex flex-wrap items-center gap-3 rounded-2xl border bg-gradient-to-r from-accent/60 to-card p-3 shadow-panel transition-colors", picked && "from-gold/20")}>
-          <div className="min-w-64 flex-[2]" onMouseDown={(e) => { if (e.button !== 0) return; e.preventDefault(); setPickerOpen(true) }} title="Click to open Select item">
+          <div className="min-w-0 flex-1" onMouseDown={(e) => { if (e.button !== 0) return; e.preventDefault(); setPickerOpen(true) }} title="Click to open Select item">
           <ItemCommand
             dropdown
             inputRef={searchRef}
@@ -269,38 +277,6 @@ export function PosPage({ active = true }: { active?: boolean }) {
             placeholder="Search items…  (Enter on empty = checkout)"
           />
           </div>
-          <div className="min-w-40 flex-1">
-            <div className="text-[11px] font-semibold tracking-wider text-primary uppercase">Selected item</div>
-            {picked ? (
-              <div className="truncate text-base font-semibold">
-                {picked.name} <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">@ {fmt(picked.rate)}</span>
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">Type to search, ↑ ↓ to choose, Enter</div>
-            )}
-          </div>
-          <Input
-            ref={qtyRef}
-            type="number"
-            min={0}
-            step="any"
-            inputMode="decimal"
-            placeholder="Qty"
-            value={qty}
-            disabled={!picked}
-            onChange={(e) => setQty(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") addLine()
-              if (e.key === "Escape") {
-                setPicked(null)
-                focusSearch()
-              }
-            }}
-            className="h-12 w-32 rounded-xl bg-card text-right font-mono text-lg"
-          />
-          <Button size="lg" className="h-12 min-w-40 rounded-xl px-6 text-base shadow-sm" disabled={!picked} onClick={addLine}>
-            Add to cart <EnterKbd inverted />
-          </Button>
         </div>
 
         <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-2xl py-0 shadow-panel">
@@ -313,7 +289,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
                     <TableHead className="w-10 pl-4">#</TableHead>
                     <TableHead>Item Name</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead className="text-right">Rate per KG/gm/ltr</TableHead>
                     <TableHead className="text-right">Weight</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="w-12" />
@@ -328,10 +304,10 @@ export function PosPage({ active = true }: { active?: boolean }) {
                         {l.nameUr && <div dir="rtl" lang="ur" className="font-urdu text-left text-sm text-muted-foreground">{l.nameUr}</div>}
                       </TableCell>
                       <TableCell className="text-right">
-                        <QtyCell value={l.qty} onCommit={(q) => setLineQty(l.itemId, q)} onDone={focusSearch} />
+                        <NumCell label={`Quantity of ${l.name}`} value={l.qty} onCommit={(q) => setLineQty(l.itemId, q)} onDone={focusSearch} />
                       </TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground tabular-nums">{fmt(l.rate)}</TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground tabular-nums">{fmtKg(lineWeight(l))}</TableCell>
+                      <TableCell className="text-right"><NumCell label={`Weight (kg) of ${l.name}`} value={Math.round(lineWeight(l) * 1000) / 1000} onCommit={(kg) => setLineWeight(l.itemId, kg)} onDone={focusSearch} suffix="kg" /></TableCell>
                       <TableCell className="text-right font-mono font-medium tabular-nums">{fmt(l.qty * l.rate)}</TableCell>
                       <TableCell>
                         <Button
@@ -577,52 +553,31 @@ export function PosPage({ active = true }: { active?: boolean }) {
 }
 
 /** Quantity that turns into an input on click; commits on Enter/blur, Esc cancels, 0 removes. */
-function QtyCell({ value, onCommit, onDone }: { value: number; onCommit: (q: number) => void; onDone: () => void }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState("")
-
-  if (!editing)
-    return (
-      <button
-        type="button"
-        title="Click to edit quantity"
-        onClick={() => {
-          setDraft(String(value))
-          setEditing(true)
-        }}
-        className="rounded-md border border-transparent px-2 py-1 font-mono tabular-nums transition-colors hover:border-border hover:bg-muted"
-      >
-        {value}
-      </button>
-    )
-
+/** Always-visible number box in the cart. Saves on Enter or when leaving the box; Esc puts the old value back. */
+function NumCell({ value, onCommit, onDone, label, suffix }: { value: number; onCommit: (v: number) => void; onDone: () => void; label: string; suffix?: string }) {
+  const [draft, setDraft] = useState(String(value))
+  const [focused, setFocused] = useState(false)
+  useEffect(() => { if (!focused) setDraft(String(value)) }, [value, focused])
   const commit = () => {
-    const q = parseFloat(draft)
-    if (draft.trim() !== "" && q >= 0) onCommit(q)
-    setEditing(false)
+    const v = parseFloat(draft)
+    if (draft.trim() !== "" && Number.isFinite(v) && v >= 0 && v <= 1000000) { if (v !== value) onCommit(v) }
+    else setDraft(String(value))
   }
-
   return (
-    <Input
-      autoFocus
-      type="number"
-      min={0}
-      step="any"
-      inputMode="decimal"
-      value={draft}
-      onFocus={(e) => e.target.select()}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          commit()
-          onDone()
-        } else if (e.key === "Escape") {
-          setEditing(false)
-          onDone()
-        }
-      }}
-      className="ml-auto h-8 w-24 text-right font-mono"
-    />
+    <span className="inline-flex items-center justify-end gap-1">
+      <Input
+        type="number" min={0} step="any" inputMode="decimal" aria-label={label}
+        value={draft}
+        onFocus={(e) => { setFocused(true); e.target.select() }}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => { commit(); setFocused(false) }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { commit(); (e.target as HTMLInputElement).blur(); onDone() }
+          else if (e.key === "Escape") { setDraft(String(value)); (e.target as HTMLInputElement).blur(); onDone() }
+        }}
+        className="h-9 w-24 rounded-lg text-right font-mono tabular-nums"
+      />
+      {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
+    </span>
   )
 }
