@@ -142,8 +142,13 @@ export function PosPage({ active = true }: { active?: boolean }) {
     setCart((c) => c.map((l) => (l.itemId === itemId && l.qty > 0 ? { ...l, weight: Math.round((kg / l.qty) * 1e6) / 1e6 } : l)))
   }
 
+  // Quantity change: weight follows it, using the item's weight per unit (kg; 1 ltr counts as 1 kg; 500 g = 0.5).
+  const catalog = useStore((s) => s.items)
   function setLineQty(itemId: string, q: number) {
-    setCart((c) => (q > 0 ? c.map((l) => (l.itemId === itemId ? { ...l, qty: q } : l)) : c.filter((l) => l.itemId !== itemId)))
+    const unit = catalog.find((i) => i.id === itemId)?.unitWeight
+    setCart((c) => (q > 0
+      ? c.map((l) => (l.itemId === itemId ? { ...l, qty: q, weight: unit && unit > 0 ? unit : (l.weight ?? 1) } : l))
+      : c.filter((l) => l.itemId !== itemId)))
   }
 
   function onSearchKey(e: React.KeyboardEvent) {
@@ -557,8 +562,13 @@ export function PosPage({ active = true }: { active?: boolean }) {
 function NumCell({ value, onCommit, onDone, label, suffix }: { value: number; onCommit: (v: number) => void; onDone: () => void; label: string; suffix?: string }) {
   const [draft, setDraft] = useState(String(value))
   const [focused, setFocused] = useState(false)
+  // Only a value the user actually typed is saved. Without this, tabbing from Quantity into Weight
+  // re-saved the old weight shown in the box and undid the automatic weight update.
+  const typed = useRef(false)
   useEffect(() => { if (!focused) setDraft(String(value)) }, [value, focused])
   const commit = () => {
+    if (!typed.current) { setDraft(String(value)); return }
+    typed.current = false
     const v = parseFloat(draft)
     if (draft.trim() !== "" && Number.isFinite(v) && v >= 0 && v <= 1000000) { if (v !== value) onCommit(v) }
     else setDraft(String(value))
@@ -568,12 +578,12 @@ function NumCell({ value, onCommit, onDone, label, suffix }: { value: number; on
       <Input
         type="number" min={0} step="any" inputMode="decimal" aria-label={label}
         value={draft}
-        onFocus={(e) => { setFocused(true); e.target.select() }}
-        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => { setFocused(true); typed.current = false; setDraft(String(value)); const el = e.target; setTimeout(() => el.select(), 0) }}
+        onChange={(e) => { typed.current = true; setDraft(e.target.value) }}
         onBlur={() => { commit(); setFocused(false) }}
         onKeyDown={(e) => {
           if (e.key === "Enter") { commit(); (e.target as HTMLInputElement).blur(); onDone() }
-          else if (e.key === "Escape") { setDraft(String(value)); (e.target as HTMLInputElement).blur(); onDone() }
+          else if (e.key === "Escape") { typed.current = false; setDraft(String(value)); (e.target as HTMLInputElement).blur(); onDone() }
         }}
         className="h-9 w-24 rounded-lg text-right font-mono tabular-nums"
       />
