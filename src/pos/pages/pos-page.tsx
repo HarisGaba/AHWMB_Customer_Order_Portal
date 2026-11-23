@@ -138,10 +138,6 @@ export function PosPage({ active = true }: { active?: boolean }) {
     focusSearch()
   }
 
-  function setLineWeight(itemId: string, kg: number) {
-    setCart((c) => c.map((l) => (l.itemId === itemId && l.qty > 0 ? { ...l, weight: Math.round((kg / l.qty) * 1e6) / 1e6 } : l)))
-  }
-
   // Quantity change: weight follows it, using the item's weight per unit (kg; 1 ltr counts as 1 kg; 500 g = 0.5).
   const catalog = useStore((s) => s.items)
   function setLineQty(itemId: string, q: number) {
@@ -312,7 +308,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
                         <NumCell label={`Quantity of ${l.name}`} value={l.qty} onCommit={(q) => setLineQty(l.itemId, q)} onDone={focusSearch} />
                       </TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground tabular-nums">{fmt(l.rate)}</TableCell>
-                      <TableCell className="text-right"><NumCell label={`Weight (kg) of ${l.name}`} value={Math.round(lineWeight(l) * 1000) / 1000} onCommit={(kg) => setLineWeight(l.itemId, kg)} onDone={focusSearch} suffix="kg" /></TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">{fmtKg(lineWeight(l))}</TableCell>
                       <TableCell className="text-right font-mono font-medium tabular-nums">{fmt(l.qty * l.rate)}</TableCell>
                       <TableCell>
                         <Button
