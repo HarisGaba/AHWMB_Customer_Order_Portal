@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
 import { supabase } from '../lib/supabase'
 import { friendlyError } from '../lib/errors'
@@ -222,7 +223,7 @@ It stays saved in the database and in Activity history.`)) return
    const r = modalRow, paid = paidFor(r.id), remaining = remainingFor(r)
    const list = deposits.filter(d => d.purchase_id === r.id)
    const close = () => { if (!busy) setModal(null) }
-   return <div className="purchase-modal-backdrop" role="presentation" onClick={close}>
+   return createPortal(<div className="portal-embed purchase-portal"><div className="purchase-modal-backdrop" role="presentation" onClick={close}>
     <div className="purchase-modal" role="dialog" aria-modal="true" aria-labelledby="purchase-modal-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') close() }}>
      <div className="purchase-modal-head"><h3 id="purchase-modal-title">{modal!.kind === 'deposit' ? 'Add deposit' : 'Deposit details'} — {r.party}</h3><button type="button" className="btn-secondary" onClick={close} aria-label="Close">✕</button></div>
      <div className="purchase-deposit-summary"><span>Bill <strong>{rs(Number(r.amount))}</strong></span><span>Deposited <strong>{rs(paid)}</strong></span><span>Remaining <strong className={remaining > 0 ? 'money-negative' : 'money-positive'}>{rs(remaining)}</strong></span></div>
@@ -240,7 +241,7 @@ It stays saved in the database and in Activity history.`)) return
       }, { el: [], left: cents(Number(r.amount)) }).el}
      </tbody></table> : <p className="empty-state">No deposits yet.</p>}
     </div>
-   </div>
+   </div></div>, document.body)
   })()}
   <div className="pagination"><button className="btn-secondary" disabled={!page} onClick={() => setPage(p => p - 1)}>Previous</button><span>{count} purchases · Page {page + 1}</span><button className="btn-secondary" disabled={(page + 1) * PAGE >= count} onClick={() => setPage(p => p + 1)}>Next</button></div>
  </section>

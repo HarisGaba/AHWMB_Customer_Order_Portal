@@ -2791,13 +2791,13 @@ export function AdminProducts({ onChanged }: { onChanged: () => void }) {
         </tr>
       })}
     </tbody></table></div>
-    {toDelete && <div className="purchase-modal-backdrop" role="presentation" onClick={() => { if (!saving) setToDelete(null) }}>
+    {toDelete && createPortal(<div className="portal-embed purchase-portal"><div className="purchase-modal-backdrop" role="presentation" onClick={() => { if (!saving) setToDelete(null) }}>
       <div className="purchase-modal" role="alertdialog" aria-modal="true" aria-labelledby="product-delete-title" onClick={e => e.stopPropagation()}>
         <div className="purchase-modal-head"><h3 id="product-delete-title">Are you sure you want to delete?</h3></div>
         <p><strong>{toDelete.name}</strong> ({toDelete.category}) will be removed from the product list. Past orders keep their item names.</p>
         <div className="product-actions"><button type="button" className="btn-secondary" disabled={saving} onClick={() => setToDelete(null)}>Cancel</button><button type="button" className="ledger-delete-btn" disabled={saving} onClick={() => void confirmDelete()}>{saving ? 'Deleting…' : 'Yes, delete'}</button></div>
       </div>
-    </div>}
+    </div></div>, document.body)}
   </section>
 }
 

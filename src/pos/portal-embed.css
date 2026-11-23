@@ -2210,7 +2210,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .header-title { letter-spacing:-.035em; }
 .header-eyebrow, .portal-shop-name, .admin-eyebrow { letter-spacing:.16em; text-transform:uppercase; }
 .page-wrap { max-width:1280px; margin:0 auto; padding:clamp(18px,3vw,36px); }
-.card, .panel, .submit-card { border:1px solid rgba(184,215,198,.8); background:rgba(255,255,255,.92); box-shadow:var(--premium-shadow); backdrop-filter:blur(10px); }
+.card, .panel, .submit-card { border:1px solid rgba(184,215,198,.8); background:rgba(255,255,255,.96); box-shadow:var(--premium-shadow); }
 .card { border-radius:22px; }
 .card-header { padding-bottom:18px; border-bottom:1px solid var(--premium-line); }
 .card-title, .admin-heading { color:var(--premium-ink); letter-spacing:-.025em; }
@@ -2843,5 +2843,6 @@ button:disabled { cursor:not-allowed; opacity:.55; }
 a.admin-home-btn { display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
 .product-actions { display:inline-flex; flex-wrap:wrap; gap:6px; align-items:center; }
 .customer-az { margin-top:22px; padding-top:18px; border-top:1px solid #d6e9dd; display:flex; flex-direction:column; gap:10px; }
+.purchase-portal { position:static !important; min-height:0 !important; background:transparent !important; }
 & { min-height: 0; overflow-x: visible; background: transparent; }
 }
