@@ -29,6 +29,28 @@ import { PushBanner } from './components/PushBanner'
 import { AccessDenied, UsersAdmin } from './components/UsersAdmin'
 
 let runtimeCatalog: CatalogProduct[] = [...PRODUCT_CATALOG]
+/** Products saved in the database (added, edited, or hidden by Delete). */
+type DbProduct = { id: string; name: string; category: string; archived_at?: string | null; original_name?: string | null }
+let dbProducts: DbProduct[] = []
+const readLocalProducts = (): CatalogProduct[] => { try { return JSON.parse(localStorage.getItem('ahwmb-extra-products') || '[]') as CatalogProduct[] } catch { return [] } }
+/** Built-in list + products added on this device + database products; edits replace and deletes hide built-in ones. */
+const buildCatalog = (local: CatalogProduct[] = readLocalProducts(), rows: DbProduct[] = dbProducts): CatalogProduct[] => {
+  const hidden = new Set<string>()
+  for (const r of rows) { if (r.original_name) hidden.add(r.original_name.toLowerCase()); if (r.archived_at) hidden.add(r.name.toLowerCase()) }
+  const active = rows.filter(r => !r.archived_at).map(r => ({ name: r.name, category: r.category }))
+  return [...[...PRODUCT_CATALOG, ...local].filter(p => !hidden.has(p.name.toLowerCase())), ...active]
+    .filter((p, i, all) => all.findIndex(x => x.name.toLowerCase() === p.name.toLowerCase()) === i)
+}
+/** Load database products (with edit/delete info when the 20261130 update is installed). */
+const loadDbProducts = async (): Promise<boolean> => {
+  if (!supabase) return false
+  let result: { data: unknown[] | null; error: unknown } = await supabase.from('products').select('id,name,category,archived_at,original_name').order('name')
+  if (result.error) result = await supabase.from('products').select('id,name,category').order('name')
+  if (result.error) return false
+  dbProducts = (result.data || []) as DbProduct[]
+  runtimeCatalog = buildCatalog()
+  return true
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SHOPKEEPER_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || import.meta.env.VITE_SHOPKEEPER_WHATSAPP || '923001234567'
@@ -2234,8 +2256,7 @@ export function DailyReports({ language, onBack, showOrdersButton = true }: { la
   // Load all dates that have expense data (for calendar dots)
   useEffect(() => {
     try {
-      const localProducts = JSON.parse(localStorage.getItem('ahwmb-extra-products') || '[]') as CatalogProduct[]
-      if (localProducts.length) { runtimeCatalog = [...PRODUCT_CATALOG, ...localProducts].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index) }
+      runtimeCatalog = buildCatalog()
     } catch { /* storage unavailable */ }
     if (!supabase) return
     const twoMonthsAgo = (() => {
@@ -2646,6 +2667,24 @@ export function AdminAddCustomer({ language }: { language: Language }) {
   const [draft, setDraft] = useState({ name: '', phone: '', address: '' })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  // All saved customers, A–Z (reloaded after every save).
+  const [all, setAll] = useState<{ name: string; phone: string | null; address: string | null }[]>([])
+  const [listError, setListError] = useState('')
+  const [filter, setFilter] = useState('')
+  const loadAll = useCallback(async () => {
+    if (!supabase) return
+    const rows: { name: string; phone: string | null; address: string | null }[] = []
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase.from('customers').select('name,phone,address').order('name').range(offset, offset + 999)
+      if (error) { setListError(readableError(error)); return }
+      rows.push(...(data || []))
+      if (!data || data.length < 1000) break
+    }
+    setListError('')
+    setAll(rows.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })))
+  }, [])
+  useEffect(() => { void loadAll() }, [loadAll])
+  const shown = all.filter(c => `${c.name} ${c.phone || ''} ${c.address || ''}`.toLowerCase().includes(filter.trim().toLowerCase()))
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
     if (saving) return
@@ -2658,6 +2697,7 @@ export function AdminAddCustomer({ language }: { language: Language }) {
       if (error) throw error
       setDraft({ name: '', phone: '', address: '' })
       setMessage(ur ? 'گاہک محفوظ ہو گیا۔' : 'Customer saved successfully.')
+      await loadAll()
     } catch (error) { setMessage(readableError(error)) }
     finally { setSaving(false) }
   }
@@ -2667,7 +2707,15 @@ export function AdminAddCustomer({ language }: { language: Language }) {
       <label className="field"><span className="field-label">{ur ? 'فون نمبر' : 'Phone number'}</span><input className="field-input" type="tel" value={draft.phone} onChange={e => setDraft({ ...draft, phone: e.target.value })} /></label>
       <label className="field"><span className="field-label">{ur ? 'پتہ' : 'Address'}</span><textarea className="field-textarea" value={draft.address} onChange={e => setDraft({ ...draft, address: e.target.value })} /></label>
       <p role="status">{message}</p><button className="btn-submit" type="submit" disabled={saving}>{saving ? (ur ? 'محفوظ ہو رہا ہے…' : 'Saving…') : (ur ? 'گاہک محفوظ کریں' : 'Save Customer')}</button>
-    </form></section>
+    </form>
+    <div className="customer-az">
+      <div className="report-heading"><div><h3 className="panel-title">{ur ? 'تمام گاہک (الف تا ی)' : 'All Customers (A–Z)'}</h3><p className="panel-sub">{ur ? 'محفوظ شدہ تمام گاہک، نام کی ترتیب سے۔' : 'Every saved customer, in alphabetical order.'}</p></div><span className="report-count">{all.length} {ur ? 'گاہک' : 'customers'}</span></div>
+      <input className="report-search" value={filter} onChange={e => setFilter(e.target.value)} placeholder={ur ? 'نام، فون یا پتہ تلاش کریں…' : 'Search name, phone or address…'} />
+      {listError && <p className="form-message" role="alert">{listError}</p>}
+      <div className="report-table-wrap"><table className="report-table"><thead><tr><th>#</th><th>{ur ? 'نام' : 'Customer name'}</th><th>{ur ? 'فون' : 'Phone'}</th><th>{ur ? 'پتہ' : 'Address'}</th></tr></thead><tbody>
+        {shown.map((c, i) => <tr key={c.name}><td>{i + 1}</td><td data-label="Customer name"><strong>{c.name}</strong></td><td data-label="Phone">{c.phone || '—'}</td><td data-label="Address">{c.address || '—'}</td></tr>)}
+      </tbody></table>{!shown.length && <p className="empty-state">{all.length ? (ur ? 'کوئی گاہک نہیں ملا۔' : 'No customer matches.') : (ur ? 'ابھی کوئی گاہک محفوظ نہیں۔' : 'No customers saved yet.')}</p>}</div>
+    </div></section>
 }
 
 export function AdminProducts({ onChanged }: { onChanged: () => void }) {
@@ -2676,33 +2724,81 @@ export function AdminProducts({ onChanged }: { onChanged: () => void }) {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [query, setQuery] = useState('')
+  const [editing, setEditing] = useState<{ original: CatalogProduct; name: string; category: string } | null>(null)
+  const [toDelete, setToDelete] = useState<CatalogProduct | null>(null)
+  const [, setVersion] = useState(0)
   const categories = [...new Set(runtimeCatalog.map(product => product.category))]
   const matches = runtimeCatalog.filter(product => `${product.name} ${product.category}`.toLowerCase().includes(query.toLowerCase()))
+  const dbIdOf = (p: CatalogProduct) => dbProducts.find(r => !r.archived_at && r.name.toLowerCase() === p.name.toLowerCase())?.id ?? null
+  const refresh = async () => { await loadDbProducts(); runtimeCatalog = buildCatalog(); setVersion(v => v + 1); onChanged() }
+  const needsUpdate = (error: { code?: string } | null) => error?.code === 'PGRST202'
+  const UPDATE_MSG = 'Edit/Delete needs a database update: run supabase/migrations/20261130_products_edit.sql in Supabase.'
+
   const addProduct = async () => {
     const trimmedName = name.trim()
     if (!trimmedName) { setMessage('Enter a product name first.'); return }
-    setSaving(true)
-    setMessage('')
+    if (runtimeCatalog.some(p => p.name.toLowerCase() === trimmedName.toLowerCase())) { setMessage('This product already exists.'); return }
+    setSaving(true); setMessage('')
     const product = { name: trimmedName, category }
     if (!supabase) {
-      runtimeCatalog = [...runtimeCatalog, product].filter((item, index, all) => all.findIndex(existing => existing.name.toLowerCase() === item.name.toLowerCase()) === index)
-      try { localStorage.setItem('ahwmb-extra-products', JSON.stringify(runtimeCatalog.filter(item => !PRODUCT_CATALOG.some(base => base.name.toLowerCase() === item.name.toLowerCase())))) } catch { /* storage unavailable */ }
+      runtimeCatalog = [...runtimeCatalog, product]
+      try { localStorage.setItem('ahwmb-extra-products', JSON.stringify([...readLocalProducts(), product])) } catch { /* storage unavailable */ }
       setName(''); setMessage('Product added locally. Connect Supabase to save it permanently.'); onChanged(); setSaving(false); return
     }
-    const { error } = await supabase.from('products').insert(product)
-    if (error) {
-      if (error.message.toLowerCase().includes('could not find the table') || error.message.toLowerCase().includes('relation') && error.message.toLowerCase().includes('products')) {
-        runtimeCatalog = [...runtimeCatalog, product].filter((item, index, all) => all.findIndex(existing => existing.name.toLowerCase() === item.name.toLowerCase()) === index)
-        try { localStorage.setItem('ahwmb-extra-products', JSON.stringify(runtimeCatalog.filter(item => !PRODUCT_CATALOG.some(base => base.name.toLowerCase() === item.name.toLowerCase())))) } catch { /* storage unavailable */ }
-        setName(''); setMessage('Product added on this device. Run the products SQL migration to save it permanently.'); onChanged(); setSaving(false); return
-      }
-      setMessage(error.message.includes('duplicate') ? 'This product already exists.' : `Could not save product: ${error.message}`); setSaving(false); return
-    }
-    runtimeCatalog = [...runtimeCatalog, product].filter((item, index, all) => all.findIndex(existing => existing.name.toLowerCase() === item.name.toLowerCase()) === index).sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
-    setName(''); setMessage('Product added successfully.'); onChanged()
-    setSaving(false)
+    let { error } = await supabase.rpc('save_product', { p_id: null, p_name: trimmedName, p_category: category, p_original: null })
+    if (needsUpdate(error)) ({ error } = await supabase.from('products').insert(product))
+    if (error) { setMessage(friendlyError(error)); setSaving(false); return }
+    await refresh()
+    setName(''); setMessage(`✓ ${trimmedName} added.`); setSaving(false)
   }
-  return <section className="panel report-panel products-panel"><div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Products</h2><p className="panel-sub">Add products to the shared customer and admin product menu.</p></div><span className="report-count">{runtimeCatalog.length} products</span></div><div className="report-form product-form"><input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="Product name" /><select className="field-input" value={category} onChange={e => setCategory(e.target.value)}>{categories.map(value => <option key={value}>{value}</option>)}</select><button type="button" className="btn-submit report-add" onClick={() => void addProduct()} disabled={saving}><Plus size={17} /> {saving ? 'Saving...' : 'Add Product'}</button></div>{message && <p className="form-message">{message}</p>}<input className="report-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search products..." /><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Product Name</th><th>Category</th></tr></thead><tbody>{matches.map(product => <tr key={`${product.category}-${product.name}`}><td data-label="Product Name"><strong>{product.name}</strong></td><td data-label="Category">{product.category}</td></tr>)}</tbody></table></div></section>
+
+  const saveEdit = async () => {
+    if (!editing || !supabase) return
+    const newName = editing.name.trim()
+    if (!newName) { setMessage('Enter a product name.'); return }
+    if (newName.toLowerCase() !== editing.original.name.toLowerCase() && runtimeCatalog.some(p => p.name.toLowerCase() === newName.toLowerCase())) { setMessage(`A product named "${newName}" already exists.`); return }
+    setSaving(true); setMessage('')
+    const id = dbIdOf(editing.original)
+    const { error } = await supabase.rpc('save_product', { p_id: id, p_name: newName, p_category: editing.category, p_original: id ? null : editing.original.name })
+    if (error) { setMessage(needsUpdate(error) ? UPDATE_MSG : friendlyError(error)); setSaving(false); return }
+    await refresh()
+    setMessage(`✓ ${editing.original.name} saved as ${newName} (${editing.category}).`); setEditing(null); setSaving(false)
+  }
+
+  const confirmDelete = async () => {
+    if (!toDelete || !supabase) return
+    setSaving(true); setMessage('')
+    const { error } = await supabase.rpc('delete_product', { p_id: dbIdOf(toDelete), p_name: toDelete.name, p_category: toDelete.category })
+    if (error) { setMessage(needsUpdate(error) ? UPDATE_MSG : friendlyError(error)); setSaving(false); setToDelete(null); return }
+    await refresh()
+    setMessage(`✓ ${toDelete.name} deleted from the product list.`); setToDelete(null); setSaving(false)
+  }
+
+  return <section className="panel report-panel products-panel">
+    <div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Products</h2><p className="panel-sub">Add, edit or delete products in the shared customer and admin product menu.</p></div><span className="report-count">{runtimeCatalog.length} products</span></div>
+    <div className="report-form product-form"><input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="Product name" /><select className="field-input" value={category} onChange={e => setCategory(e.target.value)}>{categories.map(value => <option key={value}>{value}</option>)}</select><button type="button" className="btn-submit report-add" onClick={() => void addProduct()} disabled={saving}><Plus size={17} /> {saving ? 'Saving...' : 'Add Product'}</button></div>
+    {message && <p className="form-message" role="status">{message}</p>}
+    <input className="report-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search products..." />
+    <div className="report-table-wrap"><table className="report-table"><thead><tr><th>Product Name</th><th>Category</th><th>Action</th></tr></thead><tbody>
+      {matches.map(product => {
+        const isEditing = editing?.original.name === product.name
+        return <tr key={`${product.category}-${product.name}`}>
+          <td data-label="Product Name">{isEditing && editing ? <input className="report-cell-input" autoFocus value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') void saveEdit(); if (e.key === 'Escape') setEditing(null) }} /> : <strong>{product.name}</strong>}</td>
+          <td data-label="Category">{isEditing && editing ? <select className="report-cell-input" value={editing.category} onChange={e => setEditing({ ...editing, category: e.target.value })}>{categories.map(value => <option key={value}>{value}</option>)}</select> : product.category}</td>
+          <td data-label="Action"><span className="product-actions">{isEditing
+            ? <><button type="button" className="ledger-edit-btn" disabled={saving} onClick={() => void saveEdit()}><Check size={14} /> Save</button><button type="button" className="btn-secondary" disabled={saving} onClick={() => setEditing(null)}>Cancel</button></>
+            : <><button type="button" className="ledger-edit-btn" disabled={saving} onClick={() => setEditing({ original: product, name: product.name, category: product.category })}>Edit</button><button type="button" className="ledger-delete-btn" disabled={saving} onClick={() => setToDelete(product)}>Delete</button></>}</span></td>
+        </tr>
+      })}
+    </tbody></table></div>
+    {toDelete && <div className="purchase-modal-backdrop" role="presentation" onClick={() => { if (!saving) setToDelete(null) }}>
+      <div className="purchase-modal" role="alertdialog" aria-modal="true" aria-labelledby="product-delete-title" onClick={e => e.stopPropagation()}>
+        <div className="purchase-modal-head"><h3 id="product-delete-title">Are you sure you want to delete?</h3></div>
+        <p><strong>{toDelete.name}</strong> ({toDelete.category}) will be removed from the product list. Past orders keep their item names.</p>
+        <div className="product-actions"><button type="button" className="btn-secondary" disabled={saving} onClick={() => setToDelete(null)}>Cancel</button><button type="button" className="ledger-delete-btn" disabled={saving} onClick={() => void confirmDelete()}>{saving ? 'Deleting…' : 'Yes, delete'}</button></div>
+      </div>
+    </div>}
+  </section>
 }
 
 // ─── Admin Page ───────────────────────────────────────────────────────────────
@@ -3822,19 +3918,9 @@ export default function App() {
   }, [language])
 
   useEffect(() => {
-    let localProducts: CatalogProduct[] = []
-    try { localProducts = JSON.parse(localStorage.getItem('ahwmb-extra-products') || '[]') as CatalogProduct[] } catch { /* storage unavailable */ }
-    if (localProducts.length) {
-      runtimeCatalog = [...PRODUCT_CATALOG, ...localProducts].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index)
-      setCatalogVersion(value => value + 1)
-    }
-    if (!supabase) return
-    supabase.from('products').select('name,category').order('name').then(({ data }) => {
-      if (data?.length || localProducts.length) {
-        runtimeCatalog = [...PRODUCT_CATALOG, ...localProducts, ...(data || [])].filter((product, index, all) => all.findIndex(item => item.name.toLowerCase() === product.name.toLowerCase()) === index)
-        setCatalogVersion(value => value + 1)
-      }
-    })
+    runtimeCatalog = buildCatalog()
+    setCatalogVersion(value => value + 1)
+    void loadDbProducts().then(ok => { if (ok) setCatalogVersion(value => value + 1) })
   }, [])
 
   const onAuth = useCallback(async () => {
