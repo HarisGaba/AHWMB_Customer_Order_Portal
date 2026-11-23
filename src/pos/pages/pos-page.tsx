@@ -227,55 +227,55 @@ export function PosPage({ active = true }: { active?: boolean }) {
       </PageHeader>
 
       {draftMessage && <p role="status" className="rounded-xl border bg-muted/40 px-4 py-2 text-sm">{draftMessage}</p>}
-      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(300px,400px)_1fr]">
-        <ItemCommand
-          inputRef={searchRef}
-          search={search}
-          onSearchChange={setSearch}
-          onPick={pick}
-          onKeyDown={onSearchKey}
-          selectedId={picked?.id}
-          className="min-h-80 rounded-2xl! shadow-panel"
-          placeholder="Search items…  (Enter on empty = checkout)"
-        />
-
-        <Card className="flex min-h-0 flex-col gap-0 overflow-hidden rounded-2xl py-0 shadow-panel">
-          {/* Quantity entry bar */}
-          <div className={cn("flex flex-wrap items-center gap-3 border-b bg-gradient-to-r from-accent/70 to-card px-4 py-3.5 transition-colors", picked && "from-gold/20")}>
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-semibold tracking-wider text-primary uppercase">Selected item</div>
-              {picked ? (
-                <div className="truncate text-base font-semibold">
-                  {picked.name} <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">@ {fmt(picked.rate)}</span>
-                </div>
-              ) : (
-                <div className="text-base text-muted-foreground">Pick an item from the list</div>
-              )}
-            </div>
-            <Input
-              ref={qtyRef}
-              type="number"
-              min={0}
-              step="any"
-              inputMode="decimal"
-              placeholder="Qty"
-              value={qty}
-              disabled={!picked}
-              onChange={(e) => setQty(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") addLine()
-                if (e.key === "Escape") {
-                  setPicked(null)
-                  focusSearch()
-                }
-              }}
-              className="h-12 w-32 rounded-xl bg-card text-right font-mono text-lg"
-            />
-            <Button size="lg" className="h-12 min-w-40 rounded-xl px-6 text-base shadow-sm" disabled={!picked} onClick={addLine}>
-              Add to cart <EnterKbd inverted />
-            </Button>
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        {/* Search + selected item + qty + add — one row above the full-width cart */}
+        <div className={cn("relative z-20 flex flex-wrap items-center gap-3 rounded-2xl border bg-gradient-to-r from-accent/60 to-card p-3 shadow-panel transition-colors", picked && "from-gold/20")}>
+          <ItemCommand
+            dropdown
+            inputRef={searchRef}
+            search={search}
+            onSearchChange={setSearch}
+            onPick={pick}
+            onKeyDown={onSearchKey}
+            selectedId={picked?.id}
+            className="min-w-64 flex-[2] rounded-xl!"
+            placeholder="Search items…  (Enter on empty = checkout)"
+          />
+          <div className="min-w-40 flex-1">
+            <div className="text-[11px] font-semibold tracking-wider text-primary uppercase">Selected item</div>
+            {picked ? (
+              <div className="truncate text-base font-semibold">
+                {picked.name} <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">@ {fmt(picked.rate)}</span>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">Type to search, ↑ ↓ to choose, Enter</div>
+            )}
           </div>
+          <Input
+            ref={qtyRef}
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            placeholder="Qty"
+            value={qty}
+            disabled={!picked}
+            onChange={(e) => setQty(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addLine()
+              if (e.key === "Escape") {
+                setPicked(null)
+                focusSearch()
+              }
+            }}
+            className="h-12 w-32 rounded-xl bg-card text-right font-mono text-lg"
+          />
+          <Button size="lg" className="h-12 min-w-40 rounded-xl px-6 text-base shadow-sm" disabled={!picked} onClick={addLine}>
+            Add to cart <EnterKbd inverted />
+          </Button>
+        </div>
 
+        <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-2xl py-0 shadow-panel">
           {/* Cart */}
           <div className="min-h-0 flex-1 overflow-auto">
             {cart.length ? (

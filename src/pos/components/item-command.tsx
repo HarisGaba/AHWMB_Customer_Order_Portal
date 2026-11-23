@@ -21,6 +21,8 @@ type Props = {
   className?: string
   listClassName?: string
   placeholder?: string
+  /** Show the list as a drop-down under the search box, only while typing (POS). */
+  dropdown?: boolean
 }
 
 /** Searchable, keyboard-driven item list shared by POS and Rate Changing. */
@@ -34,17 +36,18 @@ export function ItemCommand({
   className,
   listClassName,
   placeholder = "Search items…",
+  dropdown = false,
 }: Props) {
   const all = useStore((s) => s.items)
   const items = useMemo(() => all.filter((i) => !i.archivedAt), [all])
   return (
     <Command
       onKeyDown={onKeyDown}
-      className={cn("rounded-xl! border bg-card", className)}
+      className={cn("rounded-xl! border bg-card", dropdown && "relative overflow-visible!", className)}
       filter={(_value, q, keywords) => ((keywords?.[0] ?? "").toLowerCase().includes(q.trim().toLowerCase()) ? 1 : 0)}
     >
       <CommandInput ref={inputRef} value={search} onValueChange={onSearchChange} placeholder={placeholder} className="h-11" />
-      <CommandList className={cn("max-h-none flex-1", listClassName)}>
+      {(!dropdown || search.trim()) && <CommandList className={cn(dropdown ? "absolute top-full right-0 left-0 z-30 mt-1 max-h-[min(60vh,420px)] overflow-auto rounded-xl border bg-popover shadow-xl" : "max-h-none flex-1", listClassName)}>
         <CommandEmpty>
           {items.length ? "No matching items." : "No items yet — add some in Item Addition."}
         </CommandEmpty>
@@ -69,7 +72,7 @@ export function ItemCommand({
             </CommandItem>
           ))}
         </CommandGroup>
-      </CommandList>
+      </CommandList>}
     </Command>
   )
 }
