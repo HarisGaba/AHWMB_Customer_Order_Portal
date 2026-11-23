@@ -66,6 +66,32 @@ export function PosPage({ active = true }: { active?: boolean }) {
   )
   const [search, setSearch] = useState("")
   const [picked, setPicked] = useState<Item | null>(null)
+  // "Select item" picker (opens when the search box is clicked): tick several items, set each quantity, add all.
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerSearch, setPickerSearch] = useState("")
+  const [chosen, setChosen] = useState<{ item: Item; qty: string }[]>([])
+  const chosenIds = useMemo(() => new Set(chosen.map((c) => c.item.id)), [chosen])
+  function toggleChosen(item: Item) {
+    setChosen((c) => (c.some((x) => x.item.id === item.id) ? c.filter((x) => x.item.id !== item.id) : [...c, { item, qty: "1" }]))
+  }
+  function addChosen() {
+    const bad = chosen.find((c) => { const q = parseFloat(c.qty); return !Number.isFinite(q) || !(q > 0) || q > 1000000 })
+    if (bad) return void toast.error("Enter a valid quantity", { description: bad.item.name })
+    setCart((cart) => {
+      let next = cart
+      for (const { item, qty } of chosen) {
+        const q = parseFloat(qty)
+        const i = next.findIndex((l) => l.itemId === item.id)
+        next = i === -1
+          ? [...next, { itemId: item.id, name: item.name, nameUr: item.nameUr, rate: item.rate, qty: q, weight: item.unitWeight }]
+          : next.map((l, k) => (k === i ? { ...l, qty: l.qty + q } : l))
+      }
+      return next
+    })
+    toast.success(`${chosen.length} item${chosen.length === 1 ? "" : "s"} added to cart`)
+    setChosen([]); setPickerSearch(""); setPickerOpen(false)
+    focusSearch()
+  }
   const [qty, setQty] = useState("")
   const [stage, setStage] = useState<Stage>(null)
   const [payment, setPayment] = useState<PaymentMethod>("Cash")
@@ -230,6 +256,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
       <div className="flex min-h-0 flex-1 flex-col gap-4">
         {/* Search + selected item + qty + add — one row above the full-width cart */}
         <div className={cn("relative z-20 flex flex-wrap items-center gap-3 rounded-2xl border bg-gradient-to-r from-accent/60 to-card p-3 shadow-panel transition-colors", picked && "from-gold/20")}>
+          <div className="min-w-64 flex-[2]" onMouseDown={(e) => { if (e.button !== 0) return; e.preventDefault(); setPickerOpen(true) }} title="Click to open Select item">
           <ItemCommand
             dropdown
             inputRef={searchRef}
@@ -238,9 +265,10 @@ export function PosPage({ active = true }: { active?: boolean }) {
             onPick={pick}
             onKeyDown={onSearchKey}
             selectedId={picked?.id}
-            className="min-w-64 flex-[2] rounded-xl!"
+            className="rounded-xl!"
             placeholder="Search items…  (Enter on empty = checkout)"
           />
+          </div>
           <div className="min-w-40 flex-1">
             <div className="text-[11px] font-semibold tracking-wider text-primary uppercase">Selected item</div>
             {picked ? (
@@ -371,6 +399,43 @@ export function PosPage({ active = true }: { active?: boolean }) {
           </div>
         </Card>
       </div>
+
+      {/* Select item picker: tick several items, set quantities, add all to the cart */}
+      <Dialog open={pickerOpen} onOpenChange={(o) => { setPickerOpen(o); if (!o) focusSearch() }}>
+        <DialogContent className="gap-3 p-3 sm:max-w-2xl">
+          <DialogHeader className="px-1 pt-1">
+            <DialogTitle>Select item</DialogTitle>
+            <DialogDescription>Click items to tick them (click again to untick), set each quantity, then add them all to the cart.</DialogDescription>
+          </DialogHeader>
+          <ItemCommand search={pickerSearch} onSearchChange={setPickerSearch} onPick={toggleChosen} selectedIds={chosenIds} listClassName="max-h-72" placeholder="Search items…" />
+          {chosen.length > 0 && (
+            <div className="rounded-xl border">
+              <div className="border-b bg-muted/40 px-3 py-2 text-xs font-semibold tracking-wider text-primary uppercase">Selected ({chosen.length})</div>
+              <div className="max-h-56 overflow-auto">
+                {chosen.map((c) => (
+                  <div key={c.item.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{c.item.name}</div>
+                      <div className="font-mono text-xs text-muted-foreground">@ {fmt(c.item.rate)}{Number(c.qty) > 0 ? ` · ${fmt(Number(c.qty) * c.item.rate)}` : ""}</div>
+                    </div>
+                    <Input type="number" min={0} step="any" inputMode="decimal" aria-label={`Quantity of ${c.item.name}`} value={c.qty}
+                      onChange={(e) => setChosen((list) => list.map((x) => (x.item.id === c.item.id ? { ...x, qty: e.target.value } : x)))}
+                      onKeyDown={(e) => { if (e.key === "Enter") addChosen() }}
+                      className="h-10 w-24 rounded-lg text-right font-mono" />
+                    <Button variant="ghost" size="icon-sm" aria-label={`Remove ${c.item.name}`} onClick={() => toggleChosen(c.item)}><XIcon /></Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={() => { setChosen([]); setPickerOpen(false) }}>Cancel</Button>
+            <Button size="lg" className="h-11 min-w-48" disabled={!chosen.length} onClick={addChosen}>
+              Add {chosen.length || ""} item{chosen.length === 1 ? "" : "s"} to cart
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Step 1: total amount */}
       <Dialog open={stage === "total"} onOpenChange={(o) => !o && closeDialogs()}>

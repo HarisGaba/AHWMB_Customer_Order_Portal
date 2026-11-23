@@ -18,6 +18,8 @@ type Props = {
   inputRef?: React.Ref<HTMLInputElement>
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
   selectedId?: string
+  /** Several ticked items (POS multi-select picker). */
+  selectedIds?: ReadonlySet<string>
   className?: string
   listClassName?: string
   placeholder?: string
@@ -33,6 +35,7 @@ export function ItemCommand({
   inputRef,
   onKeyDown,
   selectedId,
+  selectedIds,
   className,
   listClassName,
   placeholder = "Search items…",
@@ -58,7 +61,7 @@ export function ItemCommand({
               value={`${item.name}__${item.id}`}
               keywords={[`${item.name} ${item.nameUr ?? ""}`]}
               onSelect={() => onPick(item)}
-              data-checked={item.id === selectedId}
+              data-checked={item.id === selectedId || !!selectedIds?.has(item.id)}
               className="py-2.5"
             >
               <div className="flex size-8 items-center justify-center rounded-lg bg-accent text-primary">
