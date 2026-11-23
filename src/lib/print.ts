@@ -27,6 +27,7 @@ export type PrintOptions = {
 export function openPrintTab(): Window | null { return null }
 
 export function printDocument(html: string, _preparedTab?: Window | null, options: PrintOptions = {}) {
+  if (!isMobileDevice() && options.format === 'receipt') return void printReceiptPdf(html, options)
   if (!isMobileDevice()) return printInHiddenFrame(html, options)
   showMobilePreview(html, options)
 }
@@ -43,6 +44,38 @@ function frameReady(doc: Document | null | undefined) {
   const urdu = doc?.fonts ? Promise.all([doc.fonts.load('700 16px "Noto Naskh Arabic"', 'اردو'), doc.fonts.load('700 16px "Noto Nastaliq Urdu"', 'اردو')]).catch(() => undefined) : Promise.resolve()
   const fonts = Promise.resolve(urdu).then(() => doc?.fonts?.ready)
   return Promise.race([Promise.all([...images, fonts]), new Promise(resolve => setTimeout(resolve, 4000))])
+}
+
+/**
+ * Desktop receipts print as a PDF: Chrome never adds its own date/time header or URL + "1/1"
+ * footer to a PDF, whatever the "Headers and footers" setting is. If the PDF cannot be made,
+ * the receipt prints the old way (nothing is lost; the sale is already saved).
+ */
+async function printReceiptPdf(html: string, options: PrintOptions) {
+  let url = ''
+  try {
+    const blob = await htmlToPdf(html, 'receipt')
+    url = URL.createObjectURL(blob)
+    const frame = document.createElement('iframe')
+    frame.setAttribute('aria-hidden', 'true')
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'
+    frame.src = url
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('PDF viewer did not open')), 8000)
+      frame.onload = () => {
+        // Give the built-in PDF viewer a moment to render before printing.
+        setTimeout(() => {
+          clearTimeout(timer)
+          try { frame.contentWindow?.focus(); frame.contentWindow?.print(); resolve() } catch (e) { reject(e) }
+        }, 400)
+      }
+      document.body.appendChild(frame)
+    })
+    setTimeout(() => { frame.remove(); URL.revokeObjectURL(url) }, 120_000)
+  } catch {
+    if (url) URL.revokeObjectURL(url)
+    printInHiddenFrame(html, options)
+  }
 }
 
 function printInHiddenFrame(html: string, options: PrintOptions = {}) {
@@ -90,8 +123,8 @@ async function htmlToPdf(html: string, format: 'a4' | 'a5' | 'receipt'): Promise
       // that otherwise clip long receipts with dozens of item rows.
       for (let y = 0; y < height; y += 1024) {
         const tileHeight = Math.min(1024, height - y)
-        const tile = await html2canvas(doc.documentElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true, width: cssWidth, height: tileHeight, y, windowWidth: cssWidth, windowHeight: height, scrollX: 0, scrollY: 0, logging: false })
-        pdf.addImage(tile.toDataURL('image/jpeg', 0.95), 'JPEG', 0, y * 25.4 / 96, cssWidth * 25.4 / 96, tileHeight * 25.4 / 96)
+        const tile = await html2canvas(doc.documentElement, { scale: 3, backgroundColor: '#ffffff', useCORS: true, width: cssWidth, height: tileHeight, y, windowWidth: cssWidth, windowHeight: height, scrollX: 0, scrollY: 0, logging: false })
+        pdf.addImage(tile.toDataURL('image/png'), 'PNG', 0, y * 25.4 / 96, cssWidth * 25.4 / 96, tileHeight * 25.4 / 96)
         tile.width = 0; tile.height = 0
       }
       return pdf.output('blob')
