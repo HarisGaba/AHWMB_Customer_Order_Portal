@@ -69,6 +69,11 @@ export function receiptHtml(sale: Sale) {
   .grand { margin-top: 2mm; border: 2px solid #000; padding: 2mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
   .grand span:first-child { font-size: 14px; font-weight: 800; letter-spacing: 2px; }
   .grand span:last-child { font: 900 18px ui-monospace, Consolas, "Courier New", monospace; min-width:0; text-align:right; }
+  .settle { margin-top: 1.5mm; border: 1.5px solid #000; padding: 1mm 2.5mm; break-inside: avoid; }
+  .settle div { display: flex; justify-content: space-between; align-items: center; padding: 0.6mm 0; font-size: 13px; font-weight: 700; }
+  .settle div span:last-child { font: 800 13.5px ui-monospace, Consolas, "Courier New", monospace; }
+  .settle .bal { border-top: 1px dashed #000; margin-top: 0.4mm; padding-top: 1mm; font-size: 14.5px; font-weight: 800; }
+  .settle .bal span:last-child { font-size: 15.5px; font-weight: 900; }
   .weight { margin-top: 1.5mm; border: 1.5px dashed #000; padding: 1.6mm 2.5mm; display: flex; align-items: center; justify-content: space-between; }
   .weight span:first-child { font-size: 13px; font-weight: 800; letter-spacing: 1.5px; }
   .weight span:last-child { font: 900 17px ui-monospace, Consolas, "Courier New", monospace; }
@@ -93,8 +98,12 @@ export function receiptHtml(sale: Sale) {
     ${rows}
   </table>
   <div class="payrow"><span>Payment</span><span class="pay">${sale.payment.toUpperCase()}</span></div>
-  <div class="payrow"><span>Remaining Balance</span><span class="mono">${fmt(remainingBalance(sale))}</span></div>
   <div class="grand"><span>TOTAL</span><span>${fmt(sale.total)}</span></div>
+  <div class="settle">
+    <div><span>Total Amount</span><span>${fmt(sale.total)}</span></div>
+    <div><span>Paid</span><span>${fmt(sale.total - remainingBalance(sale))}</span></div>
+    <div class="bal"><span>Balance</span><span>${fmt(remainingBalance(sale))}</span></div>
+  </div>
   <div class="weight"><span>TOTAL WEIGHT</span><span>${fmtKg(totalWeight(sale.lines))}</span></div>
   <hr>
   <div class="c">
