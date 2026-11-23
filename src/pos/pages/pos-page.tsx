@@ -402,16 +402,18 @@ export function PosPage({ active = true }: { active?: boolean }) {
 
       {/* Select item picker: tick several items, set quantities, add all to the cart */}
       <Dialog open={pickerOpen} onOpenChange={(o) => { setPickerOpen(o); if (!o) focusSearch() }}>
-        <DialogContent className="gap-3 p-3 sm:max-w-2xl">
-          <DialogHeader className="px-1 pt-1">
+        <DialogContent className="flex max-h-[88vh] flex-col gap-3 overflow-hidden p-3 sm:max-h-[90vh] sm:max-w-2xl">
+          <DialogHeader className="shrink-0 px-1 pt-1">
             <DialogTitle>Select item</DialogTitle>
             <DialogDescription>Click items to tick them (click again to untick), set each quantity, then add them all to the cart.</DialogDescription>
           </DialogHeader>
-          <ItemCommand search={pickerSearch} onSearchChange={setPickerSearch} onPick={toggleChosen} selectedIds={chosenIds} listClassName="max-h-72" placeholder="Search items…" />
+          {/* Middle scrolls; the footer with "Add to cart" always stays visible. */}
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          <ItemCommand search={pickerSearch} onSearchChange={setPickerSearch} onPick={toggleChosen} selectedIds={chosenIds} className="shrink-0" listClassName="max-h-[34vh]" placeholder="Search items…" />
           {chosen.length > 0 && (
             <div className="rounded-xl border">
               <div className="border-b bg-muted/40 px-3 py-2 text-xs font-semibold tracking-wider text-primary uppercase">Selected ({chosen.length})</div>
-              <div className="max-h-56 overflow-auto">
+              <div>
                 {chosen.map((c) => (
                   <div key={c.item.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
                     <div className="min-w-0 flex-1">
@@ -428,7 +430,9 @@ export function PosPage({ active = true }: { active?: boolean }) {
               </div>
             </div>
           )}
-          <div className="flex items-center justify-end gap-2">
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t pt-3">
+            {chosen.length > 0 && <span className="mr-auto text-sm text-muted-foreground">{chosen.length} selected · <span className="font-mono font-semibold text-foreground">{fmt(chosen.reduce((s, c) => s + (Number(c.qty) > 0 ? Number(c.qty) * c.item.rate : 0), 0))}</span></span>}
             <Button variant="outline" onClick={() => { setChosen([]); setPickerOpen(false) }}>Cancel</Button>
             <Button size="lg" className="h-11 min-w-48" disabled={!chosen.length} onClick={addChosen}>
               Add {chosen.length || ""} item{chosen.length === 1 ? "" : "s"} to cart
