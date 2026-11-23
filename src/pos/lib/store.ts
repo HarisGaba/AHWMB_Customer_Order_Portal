@@ -272,8 +272,14 @@ export const actions = {
     upsertItem(toItem(data as ItemRow))
   },
 
-  async updateDetails(id: string, details: { nameUr?: string; unitWeight?: number }) {
+  async updateDetails(id: string, details: { name?: string; nameUr?: string; unitWeight?: number }) {
     const patch: Record<string, unknown> = {}
+    if (details.name !== undefined) {
+      const name = details.name.trim()
+      if (!name) throw new Error("Item name cannot be empty")
+      if (state.items.some((i) => i.id !== id && i.name.toLowerCase() === name.toLowerCase())) throw new Error(`An item named "${name}" already exists`)
+      patch.name = name // past bills keep their own copy of the old name
+    }
     if (details.nameUr !== undefined) patch.name_ur = details.nameUr.trim() || null
     if (details.unitWeight !== undefined) patch.unit_weight = details.unitWeight
     const { data, error } = await supabase.from("items").update(patch).eq("id", id).select().single()

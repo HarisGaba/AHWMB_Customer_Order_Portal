@@ -11,11 +11,13 @@ export function receiptHtml(sale: Sale) {
   // Two lines per item: English name + Qty/Rate/Amount on line 1, Urdu name on line 2.
   // "Rs" lives in the column headings so the figures fit on line 1 of an 80 mm roll.
   const num = (n: number) => fmt(n).replace(/^\S+\s/, "")
+  // Each item: full English name across the slip (row 1), then Urdu name + Qty / Rate / Amount (row 2).
+  // Names are never shortened; using the full width keeps most of them on one line.
   const rows = sale.lines
     .map(
-      (l, i) => `<tr><td class="n">${i + 1}</td><td class="name">${esc(l.name)}${
-        l.nameUr ? `<div class="ur" dir="rtl" lang="ur">${esc(l.nameUr)}</div>` : ""
-      }</td><td class="q">${l.qty}</td><td class="r">${num(l.rate)}</td><td class="r b">${num(l.qty * l.rate)}</td></tr>`,
+      (l, i) => `<tbody class="it"><tr class="nm"><td class="n" rowspan="2">${i + 1}</td><td class="name" colspan="4">${esc(l.name)}</td></tr><tr class="vals"><td class="urc">${
+        l.nameUr ? `<span class="ur" dir="rtl" lang="ur">${esc(l.nameUr)}</span>` : ""
+      }</td><td class="q">${l.qty}</td><td class="r">${num(l.rate)}</td><td class="r b">${num(l.qty * l.rate)}</td></tr></tbody>`,
     )
     .join("")
 
@@ -52,10 +54,15 @@ export function receiptHtml(sale: Sale) {
   .items { table-layout: fixed; }
   .items col.n { width: 4mm; } .items col.q { width: 7mm; } .items col.rt { width: 14mm; } .items col.am { width: 17mm; }
   .items tbody td { padding: 1.2mm 0 0.6mm; border-bottom: 1px dotted #000; }
+  .items tbody.it { break-inside: avoid; page-break-inside: avoid; }
+  .items tr.nm td { border-bottom: 0; padding-bottom: 0; }
+  .items tr.nm td.n { border-bottom: 1px dotted #000; vertical-align: top; }
+  .items tr.vals td { padding-top: 0.2mm; vertical-align: middle; }
+  .items .urc { padding-right: 1mm; }
   .items .n { font-weight: 700; }
-  .items .name { font-size: 13.5px; font-weight: 800; padding-right: 1.5mm; word-break: break-word; }
+  .items .name { font-size: 13.5px; font-weight: 800; line-height: 1.3; overflow-wrap: break-word; word-break: normal; }
   .items .ur { font: 700 14px/1.8 "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", serif;
-               text-align: left; margin-top: 0.3mm; }
+               text-align: left; display: block; }
   .items .q, .items td.r { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 11.5px; font-weight: 700; }
   .items .q { text-align: center; }
   .items th.q { text-align: center; }
@@ -83,7 +90,7 @@ export function receiptHtml(sale: Sale) {
   <table class="items" style="margin-top:2.5mm">
     <colgroup><col class="n"><col><col class="q"><col class="rt"><col class="am"></colgroup>
     <thead><tr><th class="n">#</th><th>Item</th><th class="q">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
-    <tbody>${rows}</tbody>
+    ${rows}
   </table>
   <div class="payrow"><span>Payment</span><span class="pay">${sale.payment.toUpperCase()}</span></div>
   <div class="payrow"><span>Remaining Balance</span><span class="mono">${fmt(remainingBalance(sale))}</span></div>

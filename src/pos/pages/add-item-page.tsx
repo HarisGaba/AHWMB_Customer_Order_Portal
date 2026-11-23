@@ -188,9 +188,9 @@ export function AddItemPage() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="relative ml-auto w-full max-w-xs">
+          <div className="relative ml-auto w-full max-w-md">
             <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter items…" className="pl-9" />
+            <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search items by English or Urdu name…" aria-label="Search items" className="h-10 pl-9 text-base" />
           </div>
         </div>
         <Table>
@@ -207,7 +207,7 @@ export function AddItemPage() {
             {visible.map((item) => (
               <TableRow key={item.id} className="group/row">
                 <TableCell className="pl-4 font-medium">
-                  {item.name}
+                  <EditableCell plain value={item.name} placeholder="Item name" onSave={(v) => actions.updateDetails(item.id, { name: v })} />
                   {item.id === lastAdded && (
                     <Badge className="ml-2" variant="secondary">
                       New
@@ -301,6 +301,7 @@ function EditableCell({
   suffix = "",
   urdu,
   numeric,
+  plain,
 }: {
   value: string
   onSave: (v: string) => Promise<void>
@@ -308,6 +309,8 @@ function EditableCell({
   suffix?: string
   urdu?: boolean
   numeric?: boolean
+  /** Ordinary text (English item name): left-aligned, normal font. */
+  plain?: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -333,7 +336,7 @@ function EditableCell({
         }}
         dir={urdu ? "rtl" : undefined}
         lang={urdu ? "ur" : undefined}
-        className={`rounded-md border border-transparent px-2 py-1 transition-colors hover:border-border hover:bg-muted ${urdu ? "font-urdu" : "font-mono tabular-nums"} ${value ? "" : "text-muted-foreground"}`}
+        className={`rounded-md border border-transparent px-2 py-1 transition-colors hover:border-border hover:bg-muted ${urdu ? "font-urdu" : plain ? "text-left font-medium" : "font-mono tabular-nums"} ${value ? "" : "text-muted-foreground"}`}
       >
         {value ? `${value}${suffix}` : placeholder}
       </button>
@@ -354,7 +357,7 @@ function EditableCell({
         if (e.key === "Enter") void commit()
         else if (e.key === "Escape") setEditing(false)
       }}
-      className={`h-9 ${urdu ? "font-urdu w-44" : "ml-auto w-24 text-right font-mono"}`}
+      className={`h-9 ${urdu ? "font-urdu w-44" : plain ? "w-full max-w-xs font-medium" : "ml-auto w-24 text-right font-mono"}`}
     />
   )
 }
