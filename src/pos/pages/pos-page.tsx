@@ -97,6 +97,25 @@ export function PosPage({ active = true }: { active?: boolean }) {
   const [payment, setPayment] = useState<PaymentMethod>("Cash")
   // Optional cash received now on a Balance (credit) sale; the rest stays as remaining balance.
   const [paidNow, setPaidNow] = useState("")
+  // Remaining balance typed at checkout (blank/0 = fully paid in cash).
+  const [remainingInput, setRemainingInput] = useState("")
+  const remainingRef = useRef<HTMLInputElement>(null)
+  /** Go to the payment step, set up from the remaining balance: 0/blank -> Cash; an amount -> Balance with cash received = total - remaining. */
+  function continueToPayment() {
+    const rem = Number(remainingInput)
+    if (remainingInput.trim() !== "" && (!Number.isFinite(rem) || rem < 0 || rem > total)) {
+      toast.error("Check the remaining balance", { description: `It must be between 0 and ${fmt(total)}.` })
+      return void remainingRef.current?.select()
+    }
+    if (remainingInput.trim() !== "" && rem > 0) {
+      setPayment("Balance")
+      setPaidNow(String(Math.round((total - rem) * 100) / 100))
+    } else {
+      setPayment("Cash")
+      setPaidNow("")
+    }
+    setStage("pay")
+  }
   const [lastSale, setLastSale] = useState<Sale | null>(null)
   const [printed, setPrinted] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -176,6 +195,7 @@ export function PosPage({ active = true }: { active?: boolean }) {
       setPrinted(false)
       setCart([])
       setCustomer("")
+      setRemainingInput("")
       setStage("done")
     } catch (e) {
       toast.error("Sale not confirmed", { description: saveError(e), duration: 10000 })
@@ -213,8 +233,9 @@ export function PosPage({ active = true }: { active?: boolean }) {
     }
     if (stage === "total" && e.key === "Enter") {
       handled()
-      setPayment("Cash")
-      setStage("pay")
+      // Enter in Customer Name moves to Remaining Balance; Enter there (or anywhere else) continues.
+      if ((e.target as HTMLElement | null)?.id === "pos-customer") remainingRef.current?.select()
+      else continueToPayment()
     } else if (stage === "pay") {
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Tab"].includes(e.key)) {
         handled()
@@ -442,13 +463,21 @@ export function PosPage({ active = true }: { active?: boolean }) {
             </div>
             <datalist id="pos-customers">{knownCustomers.map((n) => <option key={n} value={n} />)}</datalist>
           </label>
+          <label htmlFor="pos-remaining" className="grid gap-1.5 text-sm font-medium">
+            <span className="text-[11px] font-semibold tracking-wider text-primary uppercase">Remaining Balance</span>
+            <Input id="pos-remaining" ref={remainingRef} type="number" inputMode="decimal" min={0} max={total} step="any" placeholder="0 (fully paid)"
+              value={remainingInput} onChange={(e) => setRemainingInput(e.target.value)} onFocus={(e) => e.target.select()}
+              className="h-11 rounded-xl text-right font-mono text-base" />
+            <span className="text-xs text-muted-foreground">
+              {Number(remainingInput) > 0 && Number(remainingInput) <= total
+                ? <>Cash received now: <span className="font-mono font-semibold text-foreground">{fmt(total - Number(remainingInput))}</span> · saved as Balance</>
+                : "Leave 0 if the customer pays the full amount."}
+            </span>
+          </label>
           <Button
             size="lg"
             className="h-11"
-            onClick={() => {
-              setPayment("Cash")
-              setStage("pay")
-            }}
+            onClick={continueToPayment}
           >
             Continue to payment <EnterKbd inverted />
           </Button>
