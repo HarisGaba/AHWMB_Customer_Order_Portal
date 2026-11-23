@@ -44,7 +44,25 @@ export const clientFor = (target: '/admin' | '/pos') => (target === '/pos' ? pos
 // cloned tabs may carry old sessionStorage markers; those must not select an identity.
 export const openPosFromPortal = () => window.location.assign('/pos')
 export const openPortalFromPos = () => window.location.assign('/admin')
-export const supabase = isPosContext() ? posClient() : portalClient()
+// One login works everywhere: each area prefers its own saved login; if it has none but the other area
+// does (e.g. signed in on the POS, then the Admin Portal opened in a new tab), that login is used, so a
+// new tab never asks to log in again. Only "Logout" ends it (signOutEverywhere).
+const PORTAL_STORAGE_KEY = (() => { try { return `sb-${new URL(String(supabaseUrl)).hostname.split('.')[0]}-auth-token` } catch { return '' } })()
+const hasSavedLogin = (key: string) => {
+  try { const v = key && typeof window !== 'undefined' ? window.localStorage.getItem(key) : null; return !!v && v.includes('refresh_token') } catch { return false }
+}
+const useOwnLogin = () => {
+  const pos = isPosContext()
+  const own = hasSavedLogin(pos ? POS_STORAGE_KEY : PORTAL_STORAGE_KEY)
+  const other = hasSavedLogin(pos ? PORTAL_STORAGE_KEY : POS_STORAGE_KEY)
+  return own || !other ? pos : !pos
+}
+export const supabase = useOwnLogin() ? posClient() : portalClient()
+
+/** Logout: ends the login for the portal and the POS together, in every tab. */
+export async function signOutEverywhere() {
+  await Promise.all([portalClient(), posClient()].map(c => c?.auth.signOut({ scope: 'local' }).catch(() => undefined)))
+}
 
 /** A throw-away client (nothing saved) to check an account before choosing which portal to sign in to. */
 export const checkClient = (): SupabaseClient | null =>

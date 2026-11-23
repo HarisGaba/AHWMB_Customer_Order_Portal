@@ -3220,3 +3220,4 @@ button:disabled { cursor:not-allowed; opacity:.55; }
 .deposit-methods { display:flex; gap:6px; }
 .deposit-method { min-height:44px; padding:0 16px; border:1px solid #cfe4d8; border-radius:10px; background:#fff; color:#286044; font:inherit; font-weight:700; cursor:pointer; }
 .deposit-method.is-active { background:#0d6b40; border-color:#0d6b40; color:#fff; }
+a.admin-home-btn { display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }

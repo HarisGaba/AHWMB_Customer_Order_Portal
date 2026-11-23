@@ -6,7 +6,7 @@ import {
   MapPin, MessageCircle, Navigation, PackageCheck, Phone, Plus,
   ReceiptText, RefreshCw, Send, ShoppingBag, Trash2, UserRound, X,
 } from 'lucide-react'
-import { checkClient, clientFor, openPosFromPortal, supabase } from './lib/supabase'
+import { checkClient, clientFor, openPosFromPortal, signOutEverywhere, supabase } from './lib/supabase'
 import { isMobileDevice, openPrintTab, printDocument } from './lib/print'
 import { can, fetchAccess, hasPortalAccess, hasPosAccess, homePathFor, useLiveAccess, type Access, type Permission } from './lib/access'
 import { calculateFinancials, calculateLineTotal, multiplyCurrency, roundCurrency, PRODUCT_CATALOG, sumLineTotals, type CatalogProduct } from './lib/pricing'
@@ -20,6 +20,8 @@ import { ActivityLog } from './components/ActivityLog'
 import { PurchaseReport } from './components/PurchaseReport'
 export { PurchaseReport } from './components/PurchaseReport'
 import { useUrlView } from './hooks/useUrlView'
+/** A normal left click stays in this tab; Ctrl/Cmd/Shift-click and middle-click open a new tab as usual. */
+const plainClick = (e: React.MouseEvent) => !(e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0)
 import { canLeaveScreen, useUnsavedChanges } from './hooks/useUnsavedChanges'
 import { useDraftOrder } from './hooks/useDraftOrder'
 import { InstallBanner } from './components/InstallBanner'
@@ -3098,12 +3100,12 @@ function AdminPage({
     // Stock, customers, catalog and users live in the POS / Admin System (/pos).
     return <main className={`app-shell admin-shell ${isRtl ? 'rtl-mode' : 'ltr-mode'}`} dir={isRtl ? 'rtl' : 'ltr'}><PortalHeader language={language} setLanguage={setLanguage} onAdmin={onAuth} isAuthenticated={isAuthenticated} adminEmail={adminEmail} />{can(access, 'orders') && <PushBanner language={language} adminEmail={adminEmail} onToast={addToast} />}<ToastContainer toasts={toasts} dismiss={dismiss} /><div className="admin-wrap"><section className="admin-home-screen"><p className="admin-eyebrow">AHWMB</p><h1 className="admin-heading">{t.adminTitle}</h1>
       {access && !access.admin && access.name && <p className="panel-sub">{isRtl ? 'خوش آمدید' : 'Welcome'}, {access.name}</p>}
-      {tiles.filter(tile => allowed(tile.view)).map(tile => <button key={tile.view} type="button" className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={() => setAdminView(tile.view)}>{tile.label}</button>)}
-      {access?.admin && <><button type="button" className="admin-home-btn admin-home-btn--users" onClick={() => setAdminView('users')}>{isRtl ? 'صارفین' : 'Users'}</button>
+      {tiles.filter(tile => allowed(tile.view)).map(tile => <a key={tile.view} href={`/admin?view=${tile.view}`} className={`admin-home-btn${tile.primary ? ' admin-home-btn--primary' : ''}`} onClick={e => { if (!plainClick(e)) return; e.preventDefault(); setAdminView(tile.view) }}>{tile.label}</a>)}
+      {access?.admin && <><a href="/admin?view=users" className="admin-home-btn admin-home-btn--users" onClick={e => { if (!plainClick(e)) return; e.preventDefault(); setAdminView('users') }}>{isRtl ? 'صارفین' : 'Users'}</a>
 
       <p className="admin-backup-note">{isRtl ? 'بڑی تبدیلیوں سے پہلے تصدیق شدہ بیک اپ محفوظ رکھیں۔' : 'Keep a verified backup before making major changes.'}</p>
 </>}
-      {['ahmedyounus1978@gmail.com', 'ahwmb1965@gmail.com'].includes(adminEmail.toLowerCase()) && <button type="button" className="admin-home-btn admin-home-btn--primary" onClick={openPosFromPortal}>{isRtl ? 'POS پر جائیں' : 'Go to POS'}</button>}
+      {['ahmedyounus1978@gmail.com', 'ahwmb1965@gmail.com'].includes(adminEmail.toLowerCase()) && <a href="/pos" className="admin-home-btn admin-home-btn--primary" onClick={e => { if (!plainClick(e)) return; e.preventDefault(); openPosFromPortal() }}>{isRtl ? 'POS پر جائیں' : 'Go to POS'}</a>}
 
     </section></div></main>
   }
@@ -3837,7 +3839,7 @@ export default function App() {
 
   const onAuth = useCallback(async () => {
     if (isAuthenticated) {
-      await supabase?.auth.signOut({ scope: 'local' })
+      await signOutEverywhere()
       window.location.assign('/')
       return
     }

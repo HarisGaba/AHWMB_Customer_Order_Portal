@@ -28,7 +28,8 @@ function tab(url, shared, markers = storage()) {
   const requestedOptions = []
   const requests = []
   let destination
-  const result = runInNewContext(`${compiled}\n;({supabase, clientFor, openPosFromPortal, openPortalFromPos})`, {
+  const result = runInNewContext(`${compiled}\n;({supabase, clientFor, openPosFromPortal, openPortalFromPos, signOutEverywhere})`, {
+    URL,
     env: { VITE_SUPABASE_URL: 'https://example.supabase.co', VITE_SUPABASE_ANON_KEY: 'test-public-key' },
     URLSearchParams,
     window: { localStorage: shared, location: { pathname: location.pathname, search: location.search, assign: p => { destination = p } } },
@@ -71,13 +72,17 @@ test('portal logout leaves POS session untouched', async () => {
   assert.equal(shared.getItem(posKey), before)
 })
 
-test('missing portal session never borrows the other login or a cloned-tab marker', async () => {
-  for (const [route, savedKey, marker] of [['/admin', posKey, 'pos'], ['/pos', portalKey, 'portal']]) {
-    const shared = storage([[savedKey, session('other')]])
-    const page = tab(route, shared, storage([['ahwmb-tab-login', marker]]))
-    assert.equal((await page.supabase.auth.getSession()).data.session, null)
-    assert.equal(shared.getItem(savedKey), session('other'))
+test('a new tab uses the login from the other area instead of asking again; Logout ends both', async () => {
+  for (const [route, savedKey] of [['/admin', posKey], ['/pos', portalKey]]) {
+    const shared = storage([[savedKey, session('owner')]])
+    const page = tab(route, shared)
+    assert.equal((await page.supabase.auth.getSession()).data.session.user.id, 'owner')
   }
+  const shared = storage([[portalKey, session('admin')], [posKey, session('cashier')], ['ahwmb-saved-customers', '["preserve"]']])
+  const page = tab('/pos', shared)
+  await page.signOutEverywhere()
+  assert.equal(shared.getItem(portalKey), null); assert.equal(shared.getItem(posKey), null)
+  assert.equal(shared.getItem('ahwmb-saved-customers'), '["preserve"]')
 })
 
 test('portal switching changes only the URL, and POS login uses its existing key', async () => {

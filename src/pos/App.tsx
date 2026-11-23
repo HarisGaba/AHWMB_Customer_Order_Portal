@@ -43,6 +43,8 @@ const SummaryPage = lazy(() => import("@/pages/summary-page").then((m) => ({ def
 const sys = (name: "DailyReportPage" | "StockReportPage" | "CustomerReportPage" | "PurchaseReportPage") =>
   lazy(() => import("@/pages/system-pages").then((m) => ({ default: m[name] })))
 
+/** A normal left click stays in this tab; Ctrl/Cmd/Shift-click and middle-click open a new tab as usual. */
+const plainClick = (e: React.MouseEvent) => !(e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0)
 const anyOf = (...perms: Permission[]) => (a: Access | null) => perms.some((p) => can(a, p))
 // Set future to false when a module is ready to join the main sidebar menu.
 const ALL_NAV = [
@@ -125,7 +127,7 @@ export default function App() {
               <SidebarMenu>
                 {MAIN.map((n, i) => (
                   <SidebarMenuItem key={n.id}>
-                    <SidebarMenuButton isActive={page === n.id} tooltip={n.label} onClick={() => setPage(n.id)} className="h-11 rounded-xl font-medium text-sidebar-foreground/80 transition-colors hover:text-sidebar-accent-foreground data-active:bg-sidebar-primary data-active:font-semibold data-active:text-sidebar-primary-foreground data-active:shadow-md data-active:hover:bg-sidebar-primary data-active:hover:text-sidebar-primary-foreground">
+                    <SidebarMenuButton render={<a href={`/pos?view=${n.id}`} />} isActive={page === n.id} tooltip={n.label} onClick={(e: React.MouseEvent) => { if (!plainClick(e)) return; e.preventDefault(); setPage(n.id) }} className="h-11 rounded-xl font-medium text-sidebar-foreground/80 transition-colors hover:text-sidebar-accent-foreground data-active:bg-sidebar-primary data-active:font-semibold data-active:text-sidebar-primary-foreground data-active:shadow-md data-active:hover:bg-sidebar-primary data-active:hover:text-sidebar-primary-foreground">
                       <n.icon />
                       <span>{n.label}</span>
                       <span className="ml-auto rounded-md bg-black/15 px-1.5 py-0.5 font-mono text-[10px] opacity-70">Alt+{NAV.indexOf(n) + 1}</span>
@@ -146,7 +148,7 @@ export default function App() {
                 <SidebarMenu id="future-modules" className="mt-1 border-l border-sidebar-border pl-3 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:pl-0">
                   {FUTURE.map((n) => (
                     <SidebarMenuItem key={n.id}>
-                      <SidebarMenuButton tooltip={n.label} isActive={page === n.id} onClick={() => setPage(n.id)} className="h-10 rounded-xl text-sidebar-foreground/80 data-active:bg-sidebar-primary data-active:text-sidebar-primary-foreground">
+                      <SidebarMenuButton render={<a href={`/pos?view=${n.id}`} />} tooltip={n.label} isActive={page === n.id} onClick={(e: React.MouseEvent) => { if (!plainClick(e)) return; e.preventDefault(); setPage(n.id) }} className="h-10 rounded-xl text-sidebar-foreground/80 data-active:bg-sidebar-primary data-active:text-sidebar-primary-foreground">
                         <n.icon />
                         <span>{n.label}</span>
                         <span className="ml-auto font-mono text-[10px] opacity-70">Alt+{NAV.indexOf(n) + 1}</span>
@@ -173,7 +175,7 @@ export default function App() {
           <div className="ml-auto flex items-center gap-2">
             {/* Both owner accounts can switch to the Customer Order Portal with the same login. */}
             {showAdminPanel && (
-              <a href="/admin" onClick={(e) => { e.preventDefault(); openPortalFromPos() }} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary hover:bg-primary/20">
+              <a href="/admin" onClick={(e) => { if (!plainClick(e)) return; e.preventDefault(); openPortalFromPos() }} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 text-sm font-semibold text-primary hover:bg-primary/20">
                 <LayoutDashboardIcon className="size-4" /> Admin Panel
               </a>
             )}
