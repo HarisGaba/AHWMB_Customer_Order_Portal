@@ -14,7 +14,7 @@ for(const count of [1,30,75])test(`${count} receipt items remain sequential with
  assert.equal((html.match(/class="name"/g)||[]).length,count)
  assert.equal((html.match(/خریدا ہوا مال واپس ہو جائے گا/g)||[]).length,1)
  assert.ok(html.indexOf('Item-1 ')<=html.indexOf(`Item-${count} `));assert.ok(html.includes('&lt;rice&gt;'))
- assert.ok(!html.includes('Receipt No'));assert.ok(html.includes('Total Amount') && html.includes('Paid') && html.includes('>Balance<'));assert.ok(!html.includes('80mm auto'));assert.ok(!html.includes('واپس نہیں'))
+ assert.ok(!html.includes('Receipt No'));assert.ok(html.includes('Total Amount') && html.includes('Paid') && html.includes('Balance '));assert.ok(!html.includes('80mm auto'));assert.ok(!html.includes('واپس نہیں'))
 })
 test('long thermal content uses an explicit one-page height instead of A4 or clipping',()=>{
  const styles=[]
