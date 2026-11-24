@@ -6,7 +6,7 @@ import { ActivityLog } from "../../components/ActivityLog"
  */
 import "../portal-embed.css"
 import { StockReport } from "../../components/StockReport"
-import { CustomerReport, DailyReports, PurchaseReport } from "../../App"
+import { CustomerReport, DailyReports, PurchaseAccounts } from "../../App"
 import { UsersAdmin } from "../../components/UsersAdmin"
 import { can } from "../../lib/access"
 import { usePosAccess } from "@/components/auth-gate"
@@ -19,7 +19,7 @@ export function StockReportPage() {
 }
 export const CustomerReportPage = () => <Embed><CustomerReport /></Embed>
 export const DailyReportPage = () => <Embed><DailyReports language="en" onBack={() => undefined} showOrdersButton={false} /></Embed>
-export const PurchaseReportPage = () => <Embed><PurchaseReport /></Embed>
+export const PurchaseReportPage = () => <Embed><PurchaseAccounts /></Embed>
 export const UsersPage = () => <Embed><UsersAdmin /></Embed>
 
 export const ActivityPage = () => <Embed><ActivityLog /></Embed>
