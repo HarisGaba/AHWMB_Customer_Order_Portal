@@ -44,6 +44,16 @@ export function PurchaseReport() {
  const [legacy, setLegacy] = useState<Purchase[]>([])
  const [logRevision, setLogRevision] = useState(0) // refreshes Activity history after each change
 
+ const [suppliers, setSuppliers] = useState<string[] | null>(null) // null = Accounts not set up yet (no check)
+ const [suggestOpen, setSuggestOpen] = useState(false)
+ const [suggestIndex, setSuggestIndex] = useState(0)
+ const [originalParty, setOriginalParty] = useState('')
+ const loadSuppliers = useCallback(async () => {
+  if (!supabase) return
+  const { data, error } = await supabase.from('purchase_accounts').select('name').is('archived_at', null).order('name')
+  setSuppliers(error ? null : (data || []).map(r => String(r.name)))
+ }, [])
+ useEffect(() => { void loadSuppliers() }, [loadSuppliers])
  const load = useCallback(async () => {
   const sequence = ++querySequence.current
   try {
@@ -97,11 +107,18 @@ export function PurchaseReport() {
 
  const startEdit = (r: Purchase) => {
   if (dirty && !window.confirm('Discard unsaved purchase changes?')) return
-  setDraft({ quantity: '', ...r }); setDirty(false); setMessage(`Editing ${r.party}. Change the details above and press Save changes.`)
+  setDraft({ quantity: '', ...r }); setOriginalParty(r.party); setDirty(false); setMessage(`Editing ${r.party}. Change the details above and press Save changes.`)
   formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
  }
 
  const save = async () => {
+  // A new purchase (or a changed supplier) must belong to an account created under Accounts.
+  if (suppliers && draft.party.trim()) {
+   const match = suppliers.find(n => n.trim().toLowerCase() === draft.party.trim().toLowerCase())
+   const unchanged = isEditing && draft.party.trim().toLowerCase() === originalParty.trim().toLowerCase()
+   if (!match && !unchanged) { setMessage(`Supplier not found: "${draft.party.trim()}". Choose a supplier from the list, or add the account under Accounts first.`); return }
+   if (match && match !== draft.party) draft.party = match // use the account's exact spelling
+  }
   if (saving.current) return
   if (!valid(draft)) { setMessage('Enter supplier, date and a nonnegative amount.'); return }
   saving.current = true; setBusy(true); setMessage('')
@@ -187,7 +204,25 @@ It stays saved in the database and in Activity history.`)) return
 
 
   <form ref={formRef} className="purchase-form" onSubmit={e => { e.preventDefault(); void save() }}>
-   {(['party', 'item', 'quantity', 'amount', 'date'] as const).map(k => <label className="field" key={k}><span className="field-label">{labels[k]}</span><input className="field-input" disabled={busy} placeholder={k === 'quantity' ? 'e.g. 50 bags / 1200 kg' : undefined} type={k === 'date' ? 'date' : k === 'amount' ? 'number' : 'text'} min={k === 'amount' ? 0 : undefined} step={k === 'amount' ? '.01' : undefined} required={['party', 'amount', 'date'].includes(k)} value={draft[k] ?? ''} onChange={e => { setDraft({ ...draft, [k]: e.target.value }); setDirty(true) }} /></label>)}
+   {(() => {
+    const term = draft.party.trim().toLowerCase()
+    const matches = (suppliers || []).filter(n => !term || n.toLowerCase().includes(term)).slice(0, 8)
+    const pickSupplier = (n: string) => { setDraft({ ...draft, party: n }); setDirty(true); setSuggestOpen(false) }
+    return <label className="field supplier-field"><span className="field-label">Supplier</span><input className="field-input" disabled={busy} required autoComplete="off" role="combobox" aria-expanded={suggestOpen && matches.length > 0} aria-controls="supplier-list" value={draft.party}
+      placeholder={suppliers && !suppliers.length ? 'Add accounts under Accounts first' : 'Type or choose a supplier'}
+      onFocus={() => { setSuggestOpen(true); setSuggestIndex(0) }} onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
+      onChange={e => { setDraft({ ...draft, party: e.target.value }); setDirty(true); setSuggestOpen(true); setSuggestIndex(0) }}
+      onKeyDown={e => {
+       if (!suggestOpen || !matches.length) return
+       if (e.key === 'ArrowDown') { e.preventDefault(); setSuggestIndex(i => (i + 1) % matches.length) }
+       else if (e.key === 'ArrowUp') { e.preventDefault(); setSuggestIndex(i => (i - 1 + matches.length) % matches.length) }
+       else if (e.key === 'Enter') { e.preventDefault(); pickSupplier(matches[suggestIndex] ?? matches[0]) }
+       else if (e.key === 'Escape') setSuggestOpen(false)
+      }} />
+     {suggestOpen && matches.length > 0 && <ul id="supplier-list" role="listbox" className="supplier-suggest">{matches.map((n, i) => <li key={n} role="option" aria-selected={i === suggestIndex} className={i === suggestIndex ? 'is-active' : undefined} onMouseDown={e => { e.preventDefault(); pickSupplier(n) }}>{n}</li>)}</ul>}
+    </label>
+   })()}
+   {(['item', 'quantity', 'amount', 'date'] as const).map(k => <label className="field" key={k}><span className="field-label">{labels[k]}</span><input className="field-input" disabled={busy} placeholder={k === 'quantity' ? 'e.g. 50 bags / 1200 kg' : undefined} type={k === 'date' ? 'date' : k === 'amount' ? 'number' : 'text'} min={k === 'amount' ? 0 : undefined} step={k === 'amount' ? '.01' : undefined} required={['party', 'amount', 'date'].includes(k)} value={draft[k] ?? ''} onChange={e => { setDraft({ ...draft, [k]: e.target.value }); setDirty(true) }} /></label>)}
    <button type="submit" className="btn-submit" disabled={busy}>{busy ? 'Saving…' : isEditing ? 'Save changes' : 'Add Purchase'}</button>
    {isEditing && <button type="button" className="btn-secondary" disabled={busy} onClick={() => { setDraft(blank()); setDirty(false); setMessage('') }}>Cancel</button>}
   </form>

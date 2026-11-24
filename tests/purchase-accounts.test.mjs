@@ -49,4 +49,22 @@ test('purchase accounts start empty; earlier auto-made accounts are hidden (kept
  assert.deepEqual([r.lines, r.deposits], [1, 1])
  await assert.rejects(db.query('delete from purchase_lines where account_id=$1',[acc.id]), /permission denied/)
  await db.exec('reset role')
+
+ // Purchase Report -> Accounts link
+ await db.exec(read("migrations/20261203_purchase_account_link.sql")); await db.exec(read("migrations/20261203_purchase_account_link.sql"))
+ await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:"authenticated",email:"ahwmb1965@gmail.com"})])
+ await db.exec("set role authenticated")
+ const pid = "aaaaaaaa-1111-2222-3333-444444444444"
+ const { rows: [p] } = await db.query("select * from save_purchase($1,null)",[JSON.stringify({ id: pid, party: "haji traders ", area: "", item: "Moong Dal", quantity: "100", amount: 30000, date: "2026-11-24" })])
+ let ln = (await db.query("select account_id, amount, quantity, rate from purchase_lines where id=$1",[pid])).rows[0]
+ assert.equal(ln.account_id, mine.id); assert.equal(Number(ln.amount), 30000); assert.equal(Number(ln.rate), 300)
+ await db.query("select * from save_purchase($1,$2)",[JSON.stringify({ id: pid, party: "Haji Traders", area: "", item: "Moong Dal", quantity: "100", amount: 31000, date: "2026-11-24" }), p.version])
+ assert.equal(Number((await db.query("select amount from purchase_lines where id=$1",[pid])).rows[0].amount), 31000)
+ const { rows: [dp] } = await db.query("select * from add_purchase_deposit($1,$2,$3,$4,$5)",[pid, 5000, "2026-11-24", "", "Cheque"])
+ assert.equal((await db.query("select method from purchase_account_deposits where id=$1",[dp.id])).rows[0].method, "Cheque")
+ await db.query("select remove_purchase_deposit($1)",[dp.id])
+ assert.ok((await db.query("select archived_at from purchase_account_deposits where id=$1",[dp.id])).rows[0].archived_at)
+ await db.query("select archive_purchase($1)",[pid])
+ assert.ok((await db.query("select archived_at from purchase_lines where id=$1",[pid])).rows[0].archived_at)
+ await db.exec("reset role")
 })

@@ -52,9 +52,28 @@ function frameReady(doc: Document | null | undefined) {
  * the receipt prints the old way (nothing is lost; the sale is already saved).
  */
 async function printReceiptPdf(html: string, options: PrintOptions) {
+  try {
+    await printPdfBlob(await htmlToPdf(html, 'receipt'))
+  } catch {
+    printInHiddenFrame(html, options)
+  }
+}
+
+/**
+ * Prints a ready PDF. Desktop: hidden frame with the browser's PDF viewer (no browser header/footer).
+ * Phones: the PDF is shared or downloaded (mobile browsers cannot print from hidden frames).
+ */
+export async function printPdfBlob(blob: Blob, filename = 'document.pdf') {
+  if (isMobileDevice()) {
+    const file = new File([blob], filename, { type: 'application/pdf' })
+    const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean }
+    if (nav.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: filename }); return } catch { /* fall through to download */ } }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 60_000)
+    return
+  }
   let url = ''
   try {
-    const blob = await htmlToPdf(html, 'receipt')
     url = URL.createObjectURL(blob)
     const frame = document.createElement('iframe')
     frame.setAttribute('aria-hidden', 'true')
@@ -72,9 +91,9 @@ async function printReceiptPdf(html: string, options: PrintOptions) {
       document.body.appendChild(frame)
     })
     setTimeout(() => { frame.remove(); URL.revokeObjectURL(url) }, 120_000)
-  } catch {
+  } catch (e) {
     if (url) URL.revokeObjectURL(url)
-    printInHiddenFrame(html, options)
+    throw e
   }
 }
 

@@ -124,6 +124,15 @@ export function PurchaseAccounts({ onBack }: { onBack: () => void }) {
     if (!window.confirm(`Remove the deposit of ${rs(d.amount)} on ${ddmmyyyy(d.date)}? It stays saved in the database history.`)) return
     void run(() => supabase!.from('purchase_account_deposits').update({ archived_at: new Date().toISOString() }).eq('id', d.id), 'Deposit removed.')
   }
+  const printLedger = async (acc: Account, ls: Line[], ds: Deposit[], t: { bill: number; paid: number }) => {
+    setBusy(true); setMessage('')
+    try {
+      const [{ buildLedgerPdf }, { printPdfBlob }] = await Promise.all([import('../lib/ledgerPdf'), import('../lib/print')])
+      const blob = await buildLedgerPdf({ account: acc.name, area: acc.area, lines: ls, deposits: ds, totalBill: t.bill, totalDeposited: t.paid })
+      await printPdfBlob(blob, `${acc.name.replace(/[^w -]+/g, '').replace(/s+/g, '_')}_Ledger.pdf`)
+    } catch (e) { setMessage(`Ledger could not print: ${friendlyError(e)}`) }
+    finally { setBusy(false) }
+  }
   const clearBills = async () => {
     if (!open) return
     const ok = await run(() => supabase!.rpc('clear_purchase_account', { p_account: open.id }), `✓ ${open.name}: bills cleared — fresh cycle started. Old entries are kept in the database.`)
@@ -172,6 +181,7 @@ export function PurchaseAccounts({ onBack }: { onBack: () => void }) {
       </tbody><tfoot><tr><td colSpan={2}><strong>Total Deposited</strong></td><td colSpan={3}><strong>{rs(t.paid)}</strong></td></tr></tfoot></table>{!myDeps.length && <p className="empty-state">No deposits in this cycle yet.</p>}</div>
 
       <div className="acct-totals"><span>Total Amount <strong>{rs(t.bill)}</strong></span><span>Total Deposited <strong>{rs(t.paid)}</strong></span><span>Remaining Balance <strong className={remaining > 0 ? 'money-negative' : 'money-positive'}>{rs(remaining)}</strong></span>
+        <button type="button" className="btn-secondary acct-print" disabled={busy} onClick={() => void printLedger(open, myLines, myDeps, t)}>🖨 Print Ledger</button>
         <button type="button" className="ledger-delete-btn" disabled={busy || (!myLines.length && !myDeps.length)} onClick={() => setConfirmClear(true)}>Clear Bills (fresh cycle)</button></div>
 
       {confirmClear && createPortal(<div className="portal-embed purchase-portal"><div className="purchase-modal-backdrop" role="presentation" onClick={() => { if (!busy) setConfirmClear(false) }}>
