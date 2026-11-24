@@ -67,4 +67,25 @@ test('purchase accounts start empty; earlier auto-made accounts are hidden (kept
  await db.query("select archive_purchase($1)",[pid])
  assert.ok((await db.query("select archived_at from purchase_lines where id=$1",[pid])).rows[0].archived_at)
  await db.exec("reset role")
+
+ // Sync existing Purchase Report suppliers into Accounts
+ await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:"authenticated",email:"ahwmb1965@gmail.com"})])
+ await db.exec("set role authenticated")
+ const hb = "bbbbbbbb-1111-2222-3333-444444444444"
+ await db.exec("drop trigger if exists purchases_to_account on purchases; drop trigger if exists purchase_deposits_to_account on purchase_deposits").catch(() => {})
+ await db.exec("reset role")
+ await db.exec("drop trigger if exists purchases_to_account on purchases; drop trigger if exists purchase_deposits_to_account on purchase_deposits")
+ await db.exec("set role authenticated")
+ await db.query("select * from save_purchase($1,null)",[JSON.stringify({ id: hb, party: "hanif broker", area: "", item: "Sugar", amount: 64500, date: "2026-11-10" })])
+ await db.query("select * from add_purchase_deposit($1,$2,$3,$4,$5)",[hb, 20000, "2026-11-12", "", "Online"])
+ await db.exec("reset role")
+ await db.exec(read("migrations/20261204_sync_suppliers_to_accounts.sql")); await db.exec(read("migrations/20261204_sync_suppliers_to_accounts.sql"))
+ const vis = (await db.query("select name from purchase_accounts where archived_at is null order by name")).rows.map(r => r.name)
+ assert.deepEqual(vis, ["Haji Traders", "hanif broker", "Leela Foods"].sort((a, b) => a.localeCompare(b)).sort())
+ const hacc = (await db.query("select id from purchase_accounts where name='hanif broker'")).rows[0].id
+ assert.equal(Number((await db.query("select sum(amount) s from purchase_lines where account_id=$1 and archived_at is null",[hacc])).rows[0].s), 64500)
+ assert.equal((await db.query("select method from purchase_account_deposits where account_id=$1",[hacc])).rows[0].method, "Online")
+ const leelaLine = (await db.query("select account_id, archived_at from purchase_lines where id=$1",[leela])).rows[0]
+ assert.equal(leelaLine.account_id, acc.id); assert.equal(leelaLine.archived_at, null)   // joined the visible Leela Foods account
+ assert.equal((await db.query("select count(*)::int n from purchase_lines where id in ($1,$2)",[hb, leela])).rows[0].n, 2) // no duplicates
 })

@@ -20,5 +20,6 @@ from (values
   ('product edit + delete',                    exists(select 1 from pg_proc where proname = 'save_product'), '20261130_products_edit.sql'),
   ('purchase supplier accounts',               exists(select 1 from information_schema.tables where table_schema = 'public' and table_name = 'purchase_accounts'), '20261201_purchase_accounts.sql'),
   ('purchase report -> accounts link',         exists(select 1 from pg_proc where proname = 'sync_purchase_to_account'), '20261203_purchase_account_link.sql'),
+  ('suppliers synced into accounts',           exists(select 1 from pg_proc where proname = 'sync_purchase_to_account' and prosrc like '%insert into public.purchase_accounts%'), '20261204_sync_suppliers_to_accounts.sql'),
   ('sales.paid_amount column',                 exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'sales' and column_name = 'paid_amount'), '20261120_sale_payment_edit.sql')
 ) as t(item, ok, fix);

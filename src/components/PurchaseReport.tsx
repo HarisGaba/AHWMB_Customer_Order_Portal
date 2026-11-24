@@ -46,6 +46,8 @@ export function PurchaseReport() {
 
  const [suppliers, setSuppliers] = useState<string[] | null>(null) // null = Accounts not set up yet (no check)
  const [suggestOpen, setSuggestOpen] = useState(false)
+ // Suppliers already used in Purchase Report also count (they are synced into Accounts).
+ const [knownParties, setKnownParties] = useState<string[]>([])
  const [suggestIndex, setSuggestIndex] = useState(0)
  const [originalParty, setOriginalParty] = useState('')
  const loadSuppliers = useCallback(async () => {
@@ -89,6 +91,7 @@ export function PurchaseReport() {
     if (sequence === querySequence.current) void load()
     return
    }
+   setKnownParties([...new Map([...remote.filter(r => !r.archived_at), ...pending].map(r => [String(r.party || '').trim().toLowerCase(), String(r.party || '').trim()])).values()].filter(Boolean))
    setLegacy(pending); setDeviceMode(missing); setDeposits(deps.filter(d => !d.archived_at)); setDepositsReady(depsOk)
    const term = search.trim().toLowerCase()
    const matches = [...remote.filter(r => !r.archived_at), ...pending]
@@ -111,10 +114,11 @@ export function PurchaseReport() {
   formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
  }
 
+ const allSuppliers = suppliers == null ? null : [...new Map([...knownParties, ...suppliers].map(n => [n.trim().toLowerCase(), n.trim()])).values()].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }))
  const save = async () => {
   // A new purchase (or a changed supplier) must belong to an account created under Accounts.
   if (suppliers && draft.party.trim()) {
-   const match = suppliers.find(n => n.trim().toLowerCase() === draft.party.trim().toLowerCase())
+   const match = (allSuppliers || []).find(n => n.trim().toLowerCase() === draft.party.trim().toLowerCase())
    const unchanged = isEditing && draft.party.trim().toLowerCase() === originalParty.trim().toLowerCase()
    if (!match && !unchanged) { setMessage(`Supplier not found: "${draft.party.trim()}". Choose a supplier from the list, or add the account under Accounts first.`); return }
    if (match && match !== draft.party) draft.party = match // use the account's exact spelling
@@ -206,10 +210,10 @@ It stays saved in the database and in Activity history.`)) return
   <form ref={formRef} className="purchase-form" onSubmit={e => { e.preventDefault(); void save() }}>
    {(() => {
     const term = draft.party.trim().toLowerCase()
-    const matches = (suppliers || []).filter(n => !term || n.toLowerCase().includes(term)).slice(0, 8)
+    const matches = (allSuppliers || []).filter(n => !term || n.toLowerCase().includes(term)).slice(0, 8)
     const pickSupplier = (n: string) => { setDraft({ ...draft, party: n }); setDirty(true); setSuggestOpen(false) }
     return <label className="field supplier-field"><span className="field-label">Supplier</span><input className="field-input" disabled={busy} required autoComplete="off" role="combobox" aria-expanded={suggestOpen && matches.length > 0} aria-controls="supplier-list" value={draft.party}
-      placeholder={suppliers && !suppliers.length ? 'Add accounts under Accounts first' : 'Type or choose a supplier'}
+      placeholder={allSuppliers && !allSuppliers.length ? 'Add accounts under Accounts first' : 'Type or choose a supplier'}
       onFocus={() => { setSuggestOpen(true); setSuggestIndex(0) }} onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
       onChange={e => { setDraft({ ...draft, party: e.target.value }); setDirty(true); setSuggestOpen(true); setSuggestIndex(0) }}
       onKeyDown={e => {
