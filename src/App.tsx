@@ -19,8 +19,8 @@ import { encodeOrderTag } from './lib/commission'
 import { ActivityLog } from './components/ActivityLog'
 import { PurchaseReport } from './components/PurchaseReport'
 export { PurchaseReport } from './components/PurchaseReport'
-import { PurchaseAccounts } from './components/PurchaseAccounts'
-export { PurchaseAccounts } from './components/PurchaseAccounts'
+import { PurchaseSection } from './components/PurchaseAccounts'
+export { PurchaseSection } from './components/PurchaseAccounts'
 import { useUrlView } from './hooks/useUrlView'
 /** A normal left click stays in this tab; Ctrl/Cmd/Shift-click and middle-click open a new tab as usual. */
 const plainClick = (e: React.MouseEvent) => !(e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0)
@@ -3241,7 +3241,7 @@ function AdminPage({
           : adminView === 'reports'
           ? <DailyReports language={language} onBack={() => setAdminView('home')} />
           : adminView === 'purchase-report'
-          ? <PurchaseAccounts />
+          ? <PurchaseSection />
           : adminView === 'newOrder'
           ? <AdminCreateOrder language={language} onSuccess={() => { setAdminView('orders'); void refresh() }} onBack={() => setAdminView('orders')} />
           : <div className={`admin-grid ${selected ? 'has-open-order' : ''}`}>

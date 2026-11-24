@@ -35,7 +35,17 @@ async function fetchAll<T>(table: string): Promise<{ rows: T[]; error: { code?: 
  * quantity, rate, bags, amount) and deposits (date, amount, Cash/Cheque/Online). Remaining =
  * total bill − total deposited. "Clear Bills" starts a fresh cycle for one account (old rows kept).
  */
-export function PurchaseAccounts() {
+/** Purchase Report: the normal purchase list, with an "Accounts" button that opens supplier accounts. */
+export function PurchaseSection() {
+  const [view, setView] = useState<'report' | 'accounts'>('report')
+  if (view === 'accounts') return <PurchaseAccounts onBack={() => setView('report')} />
+  return <>
+    <div className="purchase-top-bar"><button type="button" className="btn-submit purchase-accounts-btn" onClick={() => setView('accounts')}>Accounts →</button></div>
+    <PurchaseReport />
+  </>
+}
+
+export function PurchaseAccounts({ onBack }: { onBack: () => void }) {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [lines, setLines] = useState<Line[]>([])
   const [deposits, setDeposits] = useState<Deposit[]>([])
@@ -44,7 +54,6 @@ export function PurchaseAccounts() {
   const [busy, setBusy] = useState(false)
   const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
-  const [showOld, setShowOld] = useState(false)
   const [newAcc, setNewAcc] = useState({ name: '', area: '' })
   const [line, setLine] = useState(blankLine)
   const [dep, setDep] = useState<{ date: string; amount: string; method: typeof METHODS[number] }>({ date: today(), amount: '', method: 'Cash' })
@@ -121,8 +130,8 @@ export function PurchaseAccounts() {
     if (ok) setConfirmClear(false)
   }
 
-  if (showOld) return <><div className="purchase-old-bar"><button type="button" className="btn-secondary" onClick={() => setShowOld(false)}>← Back to accounts</button></div><PurchaseReport /></>
-  if (state === 'missing') return <><p className="notice-card">Supplier accounts need a database update: run <strong>supabase/migrations/20261201_purchase_accounts.sql</strong> in Supabase. Until then the previous purchase list is shown below.</p><PurchaseReport /></>
+  const backBar = <div className="purchase-top-bar"><button type="button" className="btn-secondary" onClick={onBack}>← Back to Purchase Report</button></div>
+  if (state === 'missing') return <>{backBar}<p className="notice-card">Accounts need a database update: run <strong>supabase/migrations/20261201_purchase_accounts.sql</strong> (then <strong>20261202_accounts_start_empty.sql</strong>) in Supabase.</p></>
 
   // ── One account's ledger sheet ──
   if (open) {
@@ -130,7 +139,7 @@ export function PurchaseAccounts() {
     const remaining = Math.round((t.bill - t.paid) * 100) / 100
     const myLines = lines.filter(l => l.account_id === open.id).sort((a, b) => a.date.localeCompare(b.date))
     const myDeps = deposits.filter(d => d.account_id === open.id).sort((a, b) => a.date.localeCompare(b.date))
-    return <section className="panel report-panel">
+    return <>{backBar}<section className="panel report-panel">
       <div className="report-heading">
         <div><button type="button" className="btn-secondary" onClick={() => { setOpenId(null); setMessage('') }}>← All accounts</button><h2 className="admin-heading" style={{ marginTop: 10 }}>{open.name}</h2>{open.area && <p className="panel-sub">{open.area}</p>}</div>
         <div className="acct-summary"><span>Total Bill <strong>{rs(t.bill)}</strong></span><span>Deposited <strong>{rs(t.paid)}</strong></span><span>Remaining <strong className={remaining > 0 ? 'money-negative' : 'money-positive'}>{rs(remaining)}</strong></span></div>
@@ -173,13 +182,13 @@ export function PurchaseAccounts() {
           <div className="product-actions"><button type="button" className="btn-secondary" disabled={busy} onClick={() => setConfirmClear(false)}>Cancel</button><button type="button" className="ledger-delete-btn" disabled={busy} onClick={() => void clearBills()}>{busy ? 'Clearing…' : 'Yes, clear bills'}</button></div>
         </div>
       </div></div>, document.body)}
-    </section>
+    </section></>
   }
 
   // ── Accounts list ──
   const shown = accounts.filter(a => `${a.name} ${a.area}`.toLowerCase().includes(search.trim().toLowerCase()))
-  return <section className="panel report-panel">
-    <div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Purchase Report</h2><p className="panel-sub">Supplier accounts — open an account to add bill lines and deposits.</p></div><button type="button" className="btn-secondary" onClick={() => setShowOld(true)}>Old bill list</button></div>
+  return <>{backBar}<section className="panel report-panel">
+    <div className="report-heading"><div><p className="admin-eyebrow">AHWMB</p><h2 className="admin-heading">Accounts</h2><p className="panel-sub">Supplier / party accounts — add an account, then open it to add bill lines and deposits.</p></div></div>
     <form className="acct-add" onSubmit={e => { e.preventDefault(); void addAccount() }}>
       <input className="field-input" value={newAcc.name} onChange={e => setNewAcc({ ...newAcc, name: e.target.value })} placeholder="New account: supplier / party name" />
       <input className="field-input" value={newAcc.area} onChange={e => setNewAcc({ ...newAcc, area: e.target.value })} placeholder="Area (optional)" />
@@ -200,6 +209,6 @@ export function PurchaseAccounts() {
         </button>
       })}
     </div>
-    {state === 'ready' && !shown.length && <p className="empty-state">{accounts.length ? 'No account matches.' : 'No accounts yet — add one above.'}</p>}
-  </section>
+    {state === 'ready' && !shown.length && <p className="empty-state">{accounts.length ? 'No account matches.' : 'No accounts yet — add your first account above.'}</p>}
+  </section></>
 }

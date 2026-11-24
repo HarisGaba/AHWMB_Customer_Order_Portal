@@ -1,8 +1,7 @@
 -- Purchase Report as supplier ACCOUNTS: each party has one ledger sheet with bill lines and deposits.
 -- Additive only and safe to run more than once:
 --   * new tables purchase_accounts, purchase_lines, purchase_account_deposits
---   * existing purchases + deposits are COPIED into the matching account (same ids, so re-running
---     never duplicates); the old purchases / purchase_deposits tables are not changed
+--   * accounts start empty; the existing purchases / purchase_deposits tables are not changed
 --   * nothing is ever deleted: removing a line/deposit sets archived_at; "Clear Bills" sets cleared_at
 begin;
 
@@ -13,7 +12,7 @@ create table if not exists public.purchase_accounts (
   created_at timestamptz not null default now(),
   archived_at timestamptz
 );
-create unique index if not exists purchase_accounts_name_key on public.purchase_accounts (lower(trim(name)));
+create unique index if not exists purchase_accounts_active_name_key on public.purchase_accounts (lower(trim(name))) where archived_at is null;
 
 create table if not exists public.purchase_lines (
   id uuid primary key default gen_random_uuid(),
@@ -65,43 +64,7 @@ begin
   end loop;
 end $$;
 
--- Starting accounts.
-insert into public.purchase_accounts (name)
-select v.name from (values ('Leela Foods'), ('Shahbaz Dal Mill'), ('Wahab Dal Mill'), ('Farhan Dal Mill'), ('Kinjar Dal Mill'), ('Hamdan Dal Mill')) as v(name)
-where not exists (select 1 from public.purchase_accounts a where lower(trim(a.name)) = lower(trim(v.name)));
-
--- Copy existing purchases into accounts (one account per supplier name).
-do $$
-begin
-  if to_regclass('public.purchases') is null then return; end if;
-  insert into public.purchase_accounts (name, area)
-  select distinct on (lower(trim(p.party))) trim(p.party), coalesce(p.area, '')
-    from public.purchases p
-   where p.archived_at is null and length(trim(p.party)) > 0
-     and not exists (select 1 from public.purchase_accounts a where lower(trim(a.name)) = lower(trim(p.party)));
-
-  insert into public.purchase_lines (id, account_id, date, item, quantity, rate, bags, amount, note, created_at)
-  select p.id, a.id, p.date, coalesce(p.item, ''),
-         case when coalesce(to_jsonb(p)->>'quantity', '') ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' then (to_jsonb(p)->>'quantity')::numeric end,
-         null, null, p.amount,
-         case when coalesce(to_jsonb(p)->>'quantity', '') <> '' and coalesce(to_jsonb(p)->>'quantity', '') !~ '^\s*[0-9]+(\.[0-9]+)?\s*$'
-              then 'Quantity: ' || (to_jsonb(p)->>'quantity') else '' end,
-         p.created_at
-    from public.purchases p
-    join public.purchase_accounts a on lower(trim(a.name)) = lower(trim(p.party))
-   where p.archived_at is null
-  on conflict (id) do nothing;
-
-  if to_regclass('public.purchase_deposits') is not null then
-    insert into public.purchase_account_deposits (id, account_id, date, amount, method, created_at)
-    select d.id, a.id, d.date, d.amount, coalesce(to_jsonb(d)->>'method', 'Cash'), d.created_at
-      from public.purchase_deposits d
-      join public.purchases p on p.id = d.purchase_id and p.archived_at is null
-      join public.purchase_accounts a on lower(trim(a.name)) = lower(trim(p.party))
-     where d.archived_at is null
-    on conflict (id) do nothing;
-  end if;
-end $$;
+-- Accounts start empty: the user adds their own (no pre-made accounts, no copied bills).
 
 -- "Clear Bills": start a fresh cycle for ONE account. Lines and deposits are marked cleared (kept).
 create or replace function public.clear_purchase_account(p_account uuid) returns jsonb

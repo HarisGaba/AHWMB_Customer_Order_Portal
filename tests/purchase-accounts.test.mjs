@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 
 // An ephemeral PostgreSQL instance: never connects to Supabase or production.
-test('purchase accounts: existing bills copied once, lines + deposits per account, clear keeps history', async t => {
+test('purchase accounts start empty; earlier auto-made accounts are hidden (kept); lines, deposits, clear', async t => {
  const db = new PGlite()
  t.after(() => db.close())
  await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
@@ -26,28 +26,27 @@ test('purchase accounts: existing bills copied once, lines + deposits per accoun
  await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',email:'ahwmb1965@gmail.com'})])
  await db.exec('set role authenticated')
  const leela = 'd45386fd-f81b-4caf-aca5-194abb50380c'
- await db.query('select * from save_purchase($1,null)',[JSON.stringify({ id: leela, party: 'leela foods', area: 'nooriyabad', item: 'chana dal', quantity: '50 bags', amount: 382200, date: '2026-11-15' })])
- await db.query('select * from save_purchase($1,null)',[JSON.stringify({ id: '3c2423b8-b7c6-4b93-8092-f008e6ca46a9', party: 'journal impex', area: '', item: 'kali mirch', amount: 241000, date: '2026-11-16' })])
- for (const [amt, d] of [[82800,'2026-11-17'],[100000,'2026-11-19']]) await db.query('select * from add_purchase_deposit($1,$2,$3,$4,$5)',[leela, amt, d, '', 'Cash'])
+ await db.query('select * from save_purchase($1,null)',[JSON.stringify({ id: leela, party: 'leela foods', area: '', item: 'chana dal', amount: 382200, date: '2026-11-15' })])
  await db.exec('reset role')
- await db.exec(read('migrations/20261201_purchase_accounts.sql')); await db.exec(read('migrations/20261201_purchase_accounts.sql'))
- const accounts = (await db.query('select name from purchase_accounts order by name')).rows.map(r => r.name)
- assert.deepEqual(accounts, ['Farhan Dal Mill','Hamdan Dal Mill','journal impex','Kinjar Dal Mill','Leela Foods','Shahbaz Dal Mill','Wahab Dal Mill'].sort((a,b)=>a.localeCompare(b)).filter(() => true).sort())
- const acc = (await db.query("select id from purchase_accounts where lower(name)='leela foods'")).rows[0].id
- const sum = async (tbl) => Number((await db.query(`select coalesce(sum(amount),0) s from ${tbl} where account_id=$1 and archived_at is null and cleared_at is null`,[acc])).rows[0].s)
- assert.equal(await sum('purchase_lines'), 382200); assert.equal(await sum('purchase_account_deposits'), 182800)
- const line = (await db.query('select note from purchase_lines where id=$1',[leela])).rows[0]
- assert.equal(line.note, 'Quantity: 50 bags')
+ await db.exec(read('migrations/20261201_purchase_accounts.sql'))
+ assert.equal((await db.query('select count(*)::int n from purchase_accounts')).rows[0].n, 0) // fresh install: empty
+ // Simulate the earlier version: a pre-made account with a copy of the old bill, plus one account the user made.
+ const { rows: [old] } = await db.query("insert into purchase_accounts(name) values('Leela Foods') returning id")
+ await db.query("insert into purchase_lines(id,account_id,date,item,amount) values($1,$2,'2026-11-15','chana dal',382200)",[leela, old.id])
+ const { rows: [mine] } = await db.query("insert into purchase_accounts(name) values('Haji Traders') returning id")
+ await db.query("insert into purchase_lines(account_id,date,item,amount) values($1,'2026-11-20','Mash Dal',43000)",[mine.id])
+ await db.exec(read('migrations/20261202_accounts_start_empty.sql')); await db.exec(read('migrations/20261202_accounts_start_empty.sql'))
+ const visible = (await db.query('select name from purchase_accounts where archived_at is null')).rows.map(r => r.name)
+ assert.deepEqual(visible, ['Haji Traders'])
+ assert.equal((await db.query('select count(*)::int n from purchase_lines')).rows[0].n, 2) // nothing deleted
+ assert.equal((await db.query('select count(*)::int n from purchases')).rows[0].n, 1) // main Purchase Report untouched
  await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'authenticated',email:'ahwmb1965@gmail.com'})])
  await db.exec('set role authenticated')
- await db.query('insert into purchase_lines(account_id,date,item,quantity,rate,bags,amount) values($1,$2,$3,$4,$5,$6,$7)',[acc,'2026-11-20','Mash Dal',100,430,4,43000])
- await db.query('insert into purchase_account_deposits(account_id,date,amount,method) values($1,$2,$3,$4)',[acc,'2026-11-21',50000,'Cheque'])
- assert.equal(await sum('purchase_lines') - await sum('purchase_account_deposits'), 382200 + 43000 - 232800)
- const r = (await db.query('select clear_purchase_account($1) r',[acc])).rows[0].r
- assert.deepEqual([r.lines, r.deposits], [2, 3])
- assert.equal(await sum('purchase_lines'), 0)
- await assert.rejects(db.query('delete from purchase_lines where account_id=$1',[acc]), /permission denied/)
+ const { rows: [acc] } = await db.query("insert into purchase_accounts(name) values('Leela Foods') returning id") // same name reusable
+ await db.query('insert into purchase_lines(account_id,date,item,quantity,rate,bags,amount) values($1,$2,$3,$4,$5,$6,$7)',[acc.id,'2026-11-24','Chana Dal',100,280,4,28000])
+ await db.query('insert into purchase_account_deposits(account_id,date,amount,method) values($1,$2,$3,$4)',[acc.id,'2026-11-24',8000,'Online'])
+ const r = (await db.query('select clear_purchase_account($1) r',[acc.id])).rows[0].r
+ assert.deepEqual([r.lines, r.deposits], [1, 1])
+ await assert.rejects(db.query('delete from purchase_lines where account_id=$1',[acc.id]), /permission denied/)
  await db.exec('reset role')
- assert.equal((await db.query('select count(*)::int n from purchase_lines')).rows[0].n, 3)
- assert.equal((await db.query('select count(*)::int n from purchases')).rows[0].n, 2) // old table untouched
 })
