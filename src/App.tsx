@@ -2845,7 +2845,9 @@ function AdminPage({
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [adminView, changeAdminView] = useUrlView<AdminView>(['home','orders','newOrder','add-customer','reports','customer-report','purchase-report','stock-report','products','users'], 'home')
-  const invoiceDirty = !!selected && JSON.stringify([pricedItems, balance, deposit]) !== JSON.stringify([safeItems(selected.items), Number(selected.balance) || 0, Number(selected.deposit) || 0])
+  // Compare both sides in the same normalised shape (field order and extra fields differ after a save,
+  // which used to leave "Unsaved changes" on and the PDF buttons disabled right after Save Invoice).
+  const invoiceDirty = !!selected && JSON.stringify([safeItems(pricedItems), Number(balance) || 0, Number(deposit) || 0]) !== JSON.stringify([safeItems(selected.items), Number(selected.balance) || 0, Number(selected.deposit) || 0])
   const setAdminView = changeAdminView
   useUnsavedChanges(adminView === 'orders' && invoiceDirty, 'Leave the invoice screen with unsaved changes? Your edits remain here while this panel stays open.')
   useEffect(() => { setLastPdf(null) }, [pricedItems, balance, deposit])
